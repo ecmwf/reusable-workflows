@@ -2,13 +2,12 @@ name: ci
 
 # Controls when the workflow will run
 on:
-
   # Trigger the workflow on all pushes, except on tag creation
   push:
     branches:
-    - '**'
+      - "**"
     tags-ignore:
-    - '**'
+      - "**"
 
   # Trigger the workflow on all pull requests
   pull_request: ~
@@ -17,12 +16,11 @@ on:
   workflow_dispatch: ~
 
 jobs:
-
   # Calls a reusable CI workflow to build & test the current repository.
   #   We skip jobs that will result in duplicate artifacts, since the code does not depend on the compiler.
   ci:
     name: ci
-    uses: ecmwf-actions/reusable-workflows/.github/workflows/ci.yml@v1
+    uses: ecmwf/reusable-workflows/.github/workflows/ci.yml@v1
     with:
       skip_matrix_jobs: |
         clang-16@ubuntu-24.04

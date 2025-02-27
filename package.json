@@ -15,7 +15,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ecmwf-actions/reusable-workflows"
+    "url": "git+https://github.com/ecmwf/reusable-workflows"
   },
   "devDependencies": {
     "@vercel/git-hooks": "^1.0.0",

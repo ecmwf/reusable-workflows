@@ -1,28 +1,28 @@
 # reusable-workflows
 
-[![Changelog](https://img.shields.io/github/package-json/v/ecmwf-actions/reusable-workflows)](CHANGELOG.md)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/ecmwf-actions/reusable-workflows/test.yml?branch=main)](https://github.com/ecmwf-actions/reusable-workflows/actions/workflows/test.yml)
-[![Licence](https://img.shields.io/github/license/ecmwf-actions/reusable-workflows)](https://github.com/ecmwf-actions/reusable-workflows/blob/develop/LICENSE)
+[![Changelog](https://img.shields.io/github/package-json/v/ecmwf/reusable-workflows)](CHANGELOG.md)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/ecmwf/reusable-workflows/test.yml?branch=main)](https://github.com/ecmwf/reusable-workflows/actions/workflows/test.yml)
+[![Licence](https://img.shields.io/github/license/ecmwf/reusable-workflows)](https://github.com/ecmwf/reusable-workflows/blob/develop/LICENSE)
 
 A collection of [reusable GitHub workflows] for ECMWF repositories.
 
 ## Workflows
 
--   [ci.yml](#ciyml): Continuous Integration workflow for ecbuild/CMake-based projects
--   [ci-hpc.yml](#ci-hpcyml): Continuous Integration workflow for ecbuild/CMake-based projects on HPC
--   [ci-python.yml](#ci-pythonyml): Continuous Integration and Continuous Deployment workflow for Python-based projects
--   [ci-node.yml](#ci-nodeyml): Continuous Integration workflow for NodeJS-based projects
--   [docs.yml](#docsyml): Workflow for testing Sphinx-based documentation
--   [qa-precommit-run.yml](#qa-precommit): Runs the pre-commit hooks on all files server-side as a QA drop-in.
--   [qa-pytest-pyproject.yml](#qa-pytest-pyproject): Runs pytest after a `pyproject.toml` install with a markdown report.
--   [sync.yml](#syncyml): Workflow for syncing a Git repository
+- [ci.yml](#ciyml): Continuous Integration workflow for ecbuild/CMake-based projects
+- [ci-hpc.yml](#ci-hpcyml): Continuous Integration workflow for ecbuild/CMake-based projects on HPC
+- [ci-python.yml](#ci-pythonyml): Continuous Integration and Continuous Deployment workflow for Python-based projects
+- [ci-node.yml](#ci-nodeyml): Continuous Integration workflow for NodeJS-based projects
+- [docs.yml](#docsyml): Workflow for testing Sphinx-based documentation
+- [qa-precommit-run.yml](#qa-precommit): Runs the pre-commit hooks on all files server-side as a QA drop-in.
+- [qa-pytest-pyproject.yml](#qa-pytest-pyproject): Runs pytest after a `pyproject.toml` install with a markdown report.
+- [sync.yml](#syncyml): Workflow for syncing a Git repository
 
 [Samples]
 
 ## Supported Operating Systems
 
--   Linux
--   macOS
+- Linux
+- macOS
 
 ## ci.yml
 
@@ -30,22 +30,22 @@ A collection of [reusable GitHub workflows] for ECMWF repositories.
 
 ```yaml
 jobs:
-    # Calls a reusable CI workflow to build & test current repository.
-    #   It will pull in all needed dependencies and produce a code coverage report on success.
-    #   In case the job fails, a message will be posted to a Microsoft Teams channel.
-    ci:
-        name: ci
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/ci.yml@v1
-        with:
-            codecov_upload: true
-            notify_teams: true
-            build_package_inputs: |
-                dependencies: |
-                  ecmwf/ecbuild
-                  ecmwf/eckit
-                dependency_branch: develop
-        secrets:
-            incoming_webhook: ${{ secrets.MS_TEAMS_INCOMING_WEBHOOK }}
+  # Calls a reusable CI workflow to build & test current repository.
+  #   It will pull in all needed dependencies and produce a code coverage report on success.
+  #   In case the job fails, a message will be posted to a Microsoft Teams channel.
+  ci:
+    name: ci
+    uses: ecmwf/reusable-workflows/.github/workflows/ci.yml@v1
+    with:
+      codecov_upload: true
+      notify_teams: true
+      build_package_inputs: |
+        dependencies: |
+          ecmwf/ecbuild
+          ecmwf/eckit
+        dependency_branch: develop
+    secrets:
+      incoming_webhook: ${{ secrets.MS_TEAMS_INCOMING_WEBHOOK }}
 ```
 
 ### Inputs
@@ -111,21 +111,21 @@ Public URL of the Microsoft Teams incoming webhook. To get the value, make sure 
 
 ```yaml
 jobs:
-    ci-hpc:
-        name: ci-hpc
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/ci-hpc.yml@v2
-        with:
-            name-prefix: metkit-
-            build-inputs: |
-                --package: ecmwf/metkit@develop
-                --modules: |
-                  ecbuild
-                  ninja
-                --dependencies: |
-                  ecmwf/eccodes@develop
-                  ecmwf/eckit@develop
-                --parallel: 64
-        secrets: inherit\
+  ci-hpc:
+    name: ci-hpc
+    uses: ecmwf/reusable-workflows/.github/workflows/ci-hpc.yml@v2
+    with:
+      name-prefix: metkit-
+      build-inputs: |
+        --package: ecmwf/metkit@develop
+        --modules: |
+          ecbuild
+          ninja
+        --dependencies: |
+          ecmwf/eccodes@develop
+          ecmwf/eckit@develop
+        --parallel: 64
+    secrets: inherit\
 ```
 
 ### Inputs
@@ -154,27 +154,27 @@ Whether to build using development runner which contains latest version of `buil
 
 ```yaml
 jobs:
-    # Calls a reusable CI workflow to qa, test & deploy the current repository.
-    #   It will pull in all needed dependencies and produce a code coverage report on success.
-    #   If all checks were successful and a new release tag pushed, the package will be published on PyPI.
-    #   In case the job fails, a message will be posted to a Microsoft Teams channel.
-    ci:
-        name: ci
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/ci-python.yml@v1
-        with:
-            codecov_upload: true
-            notify_teams: true
-            build_package_inputs: |
-                dependencies: |
-                  ecmwf/ecbuild
-                  ecmwf/eckit
-                  ecmwf/odc
-                dependency_branch: develop
-                self_build: false
-        secrets:
-            pypi_username: ${{ secrets.PYPI_USERNAME }}
-            pypi_password: ${{ secrets.PYPI_PASSWORD }}
-            incoming_webhook: ${{ secrets.MS_TEAMS_INCOMING_WEBHOOK }}
+  # Calls a reusable CI workflow to qa, test & deploy the current repository.
+  #   It will pull in all needed dependencies and produce a code coverage report on success.
+  #   If all checks were successful and a new release tag pushed, the package will be published on PyPI.
+  #   In case the job fails, a message will be posted to a Microsoft Teams channel.
+  ci:
+    name: ci
+    uses: ecmwf/reusable-workflows/.github/workflows/ci-python.yml@v1
+    with:
+      codecov_upload: true
+      notify_teams: true
+      build_package_inputs: |
+        dependencies: |
+          ecmwf/ecbuild
+          ecmwf/eckit
+          ecmwf/odc
+        dependency_branch: develop
+        self_build: false
+    secrets:
+      pypi_username: ${{ secrets.PYPI_USERNAME }}
+      pypi_password: ${{ secrets.PYPI_PASSWORD }}
+      incoming_webhook: ${{ secrets.MS_TEAMS_INCOMING_WEBHOOK }}
 ```
 
 ### Inputs
@@ -244,17 +244,17 @@ Public URL of the Microsoft Teams incoming webhook. To get the value, make sure 
 
 ```yaml
 jobs:
-    # Calls a reusable CI NodeJS workflow to qa & test & deploy the current repository.
-    #   It will install dependencies and produce a code coverage report on success.
-    #   In case the job fails, a message will be posted to a Microsoft Teams channel.
-    ci:
-        name: ci
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/ci-node.yml@v1
-        with:
-            codecov_upload: true
-            notify_teams: true
-        secrets:
-            incoming_webhook: ${{ secrets.MS_TEAMS_INCOMING_WEBHOOK }}
+  # Calls a reusable CI NodeJS workflow to qa & test & deploy the current repository.
+  #   It will install dependencies and produce a code coverage report on success.
+  #   In case the job fails, a message will be posted to a Microsoft Teams channel.
+  ci:
+    name: ci
+    uses: ecmwf/reusable-workflows/.github/workflows/ci-node.yml@v1
+    with:
+      codecov_upload: true
+      notify_teams: true
+    secrets:
+      incoming_webhook: ${{ secrets.MS_TEAMS_INCOMING_WEBHOOK }}
 ```
 
 ### Inputs
@@ -320,13 +320,13 @@ Public URL of the Microsoft Teams incoming webhook. To get the value, make sure 
 
 ```yaml
 jobs:
-    # Calls a reusable CI workflow to build & check the documentation in the current repository.
-    #   It will install required system dependencies and test Read the Docs build process.
-    docs:
-        name: docs
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/docs.yml@v1
-        with:
-            system_dependencies: doxygen pandoc
+  # Calls a reusable CI workflow to build & check the documentation in the current repository.
+  #   It will install required system dependencies and test Read the Docs build process.
+  docs:
+    name: docs
+    uses: ecmwf/reusable-workflows/.github/workflows/docs.yml@v1
+    with:
+      system_dependencies: doxygen pandoc
 ```
 
 ### Inputs
@@ -373,15 +373,15 @@ The source repository reference, in case it differs from the current one.
 
 ```yaml
 on:
-    push:
-    pull_request_target:
-        types: [opened, synchronize, reopened]
+  push:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
 
 jobs:
-    quality:
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
-        with:
-            skip_hooks: 'no-commit-to-branch'
+  quality:
+    uses: ecmwf/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
+    with:
+      skip_hooks: "no-commit-to-branch"
 ```
 
 ### Inputs
@@ -406,18 +406,18 @@ Optional, a comma-separated string of pre-commit hooks to skip.
 
 ```yaml
 on:
-    push:
-    pull_request_target:
-        types: [opened, synchronize, reopened]
+  push:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
 
 jobs:
-    checks:
-        strategy:
-            matrix:
-                python-version: ['3.9', '3.10']
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
-        with:
-            python-version: ${{ matrix.python-version }}
+  checks:
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10"]
+    uses: ecmwf/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
+    with:
+      python-version: ${{ matrix.python-version }}
 ```
 
 ### Inputs
@@ -483,26 +483,26 @@ Expands in `pytest -v -m "${{ inputs.skip-tests }}"` to coordinate marked tests.
 ```yaml
 # Controls when the workflow will run
 on:
-    # Trigger the workflow on all pushes
-    push:
-        branches:
-            - '**'
-        tags:
-            - '**'
+  # Trigger the workflow on all pushes
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
 
-    # Trigger the workflow when a branch or tag is deleted
-    delete: ~
+  # Trigger the workflow when a branch or tag is deleted
+  delete: ~
 
 jobs:
-    # Calls a reusable CI workflow to sync the current with a remote repository.
-    #   It will correctly handle addition of any new and removal of existing Git objects.
-    sync:
-        name: sync
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/sync.yml@v1
-        secrets:
-            target_repository: ${{ secrets.BITBUCKET_REPOSITORY }}
-            target_username: ${{ secrets.BITBUCKET_USERNAME }}
-            target_token: ${{ secrets.BITBUCKET_PAT }}
+  # Calls a reusable CI workflow to sync the current with a remote repository.
+  #   It will correctly handle addition of any new and removal of existing Git objects.
+  sync:
+    name: sync
+    uses: ecmwf/reusable-workflows/.github/workflows/sync.yml@v1
+    secrets:
+      target_repository: ${{ secrets.BITBUCKET_REPOSITORY }}
+      target_username: ${{ secrets.BITBUCKET_USERNAME }}
+      target_token: ${{ secrets.BITBUCKET_PAT }}
 ```
 
 ### Inputs
@@ -544,13 +544,13 @@ Manages labels on public pull requests. `contributor` label is added when a PR f
 
 ```yaml
 on:
-    # trigger the pull request is opened or pushed to
-    pull_request_target:
-        types: [opened, synchronize]
+  # trigger the pull request is opened or pushed to
+  pull_request_target:
+    types: [opened, synchronize]
 
 jobs:
-    label:
-        uses: ecmwf-actions/reusable-workflows/.github/workflows/pr-label.yml@v2
+  label:
+    uses: ecmwf/reusable-workflows/.github/workflows/pr-label.yml@v2
 ```
 
 ## Development
@@ -574,7 +574,7 @@ This software is licensed under the terms of the Apache License Version 2.0 whic
 In applying this licence, ECMWF does not waive the privileges and immunities granted to it by virtue of its status as an intergovernmental organisation nor does it submit to any jurisdiction.
 
 [reusable GitHub workflows]: https://docs.github.com/en/actions/learn-github-actions/reusing-workflows
-[Samples]: https://github.com/ecmwf-actions/reusable-workflows/tree/develop/samples
+[Samples]: https://github.com/ecmwf/reusable-workflows/tree/develop/samples
 [codecov service]: https://codecov.io
 [inputs for the build-package]: https://github.com/ecmwf-actions/build-package#inputs
 [inputs for the sync-repository]: https://github.com/ecmwf/sync-repository#inputs

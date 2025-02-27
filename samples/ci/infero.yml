@@ -2,13 +2,12 @@ name: ci
 
 # Controls when the workflow will run
 on:
-
   # Trigger the workflow on all pushes, except on tag creation
   push:
     branches:
-    - '**'
+      - "**"
     tags-ignore:
-    - '**'
+      - "**"
 
   # Trigger the workflow on all pull requests
   pull_request: ~
@@ -17,17 +16,16 @@ on:
   workflow_dispatch: ~
 
 jobs:
-
   # Prepares dependency cache for subsequent job.
   deps:
     name: deps
     strategy:
       matrix:
         name:
-        - gnu-11@ubuntu-22.04
-        - clang-12@ubuntu-22.04
-        - gnu-10@ubuntu-18.04
-        - clang-9@ubuntu-18.04
+          - gnu-11@ubuntu-22.04
+          - clang-12@ubuntu-22.04
+          - gnu-10@ubuntu-18.04
+          - clang-9@ubuntu-18.04
         # Currently disabled due to ONNX Runtime build issue (flatbuffers dependency):
         #   - g++-10: error: unrecognized command-line option '-stdlib=libc++'
         # - gnu-10@macos-10.15
@@ -35,30 +33,30 @@ jobs:
         #  - Undefined symbols for architecture x86_64: "eckit::mpi::comm(char const*)"
         # - clang-12@macos-10.15
         include:
-        - name: gnu-11@ubuntu-22.04
-          os: ubuntu-22.04
-          compiler: gnu-10
-          compiler_cc: gcc-10
-          compiler_cxx: g++-10
-          compiler_fc: gfortran-10
-        - name: clang-12@ubuntu-22.04
-          os: ubuntu-22.04
-          compiler: clang-12
-          compiler_cc: clang-12
-          compiler_cxx: clang++-12
-          compiler_fc: gfortran-10
-        - name: gnu-10@ubuntu-18.04
-          os: ubuntu-18.04
-          compiler: gnu-10
-          compiler_cc: gcc-10
-          compiler_cxx: g++-10
-          compiler_fc: gfortran-10
-        - name: clang-9@ubuntu-18.04
-          os: ubuntu-18.04
-          compiler: clang-9
-          compiler_cc: clang-9
-          compiler_cxx: clang++-9
-          compiler_fc: gfortran-9
+          - name: gnu-11@ubuntu-22.04
+            os: ubuntu-22.04
+            compiler: gnu-10
+            compiler_cc: gcc-10
+            compiler_cxx: g++-10
+            compiler_fc: gfortran-10
+          - name: clang-12@ubuntu-22.04
+            os: ubuntu-22.04
+            compiler: clang-12
+            compiler_cc: clang-12
+            compiler_cxx: clang++-12
+            compiler_fc: gfortran-10
+          - name: gnu-10@ubuntu-18.04
+            os: ubuntu-18.04
+            compiler: gnu-10
+            compiler_cc: gcc-10
+            compiler_cxx: g++-10
+            compiler_fc: gfortran-10
+          - name: clang-9@ubuntu-18.04
+            os: ubuntu-18.04
+            compiler: clang-9
+            compiler_cc: clang-9
+            compiler_cxx: clang++-9
+            compiler_fc: gfortran-9
         # Currently disabled due to ONNX Runtime build issue (flatbuffers dependency):
         #   - g++-10: error: unrecognized command-line option '-stdlib=libc++'
         # - name: gnu-10@macos-10.15
@@ -85,83 +83,83 @@ jobs:
     outputs:
       deps-cache-key: ${{ steps.setup-environment.outputs.deps-cache-key }}
     steps:
-    - name: Setup Environment
-      id: setup-environment
-      shell: bash -eux {0}
-      run: |
-        DEPS_PATH="${{ runner.temp }}/deps"
-        ONNXRUNTIME_PATH="$DEPS_PATH/onnxruntime"
-        TENSORFLOW_PATH="$DEPS_PATH/tensorflow"
-        TFLITE_PATH="$DEPS_PATH/tensorflow/tensorflow/lite/build"
-        DEPS_ENV="DEPS_PATH=$DEPS_PATH"$'\n'"ONNXRUNTIME_PATH=$ONNXRUNTIME_PATH"$'\n'"TENSORFLOW_PATH=$TENSORFLOW_PATH"$'\n'"TFLITE_PATH=$TFLITE_PATH"
-        mkdir -p $DEPS_PATH
-        echo "$DEPS_ENV" > $DEPS_PATH/.env
-        echo "$DEPS_ENV" >> $GITHUB_ENV
-        echo deps-cache-key="deps-onnxruntime-${{ env.ONNXRUNTIME_VERSION }}-tensorflow-${{ env.TENSORFLOW_VERSION }}-" >> $GITHUB_OUTPUT
+      - name: Setup Environment
+        id: setup-environment
+        shell: bash -eux {0}
+        run: |
+          DEPS_PATH="${{ runner.temp }}/deps"
+          ONNXRUNTIME_PATH="$DEPS_PATH/onnxruntime"
+          TENSORFLOW_PATH="$DEPS_PATH/tensorflow"
+          TFLITE_PATH="$DEPS_PATH/tensorflow/tensorflow/lite/build"
+          DEPS_ENV="DEPS_PATH=$DEPS_PATH"$'\n'"ONNXRUNTIME_PATH=$ONNXRUNTIME_PATH"$'\n'"TENSORFLOW_PATH=$TENSORFLOW_PATH"$'\n'"TFLITE_PATH=$TFLITE_PATH"
+          mkdir -p $DEPS_PATH
+          echo "$DEPS_ENV" > $DEPS_PATH/.env
+          echo "$DEPS_ENV" >> $GITHUB_ENV
+          echo deps-cache-key="deps-onnxruntime-${{ env.ONNXRUNTIME_VERSION }}-tensorflow-${{ env.TENSORFLOW_VERSION }}-" >> $GITHUB_OUTPUT
 
-    - name: Check for Dependency Cache
-      id: deps-cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ env.DEPS_PATH }}
-        key: ${{ steps.setup-environment.outputs.deps-cache-key }}${{ matrix.compiler }}@${{ matrix.os }}
+      - name: Check for Dependency Cache
+        id: deps-cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.DEPS_PATH }}
+          key: ${{ steps.setup-environment.outputs.deps-cache-key }}${{ matrix.compiler }}@${{ matrix.os }}
 
-    - name: Checkout ONNX Runtime Repository
-      if: steps.deps-cache.outputs.cache-hit != 'true'
-      uses: actions/checkout@v3
-      with:
-        repository: Microsoft/onnxruntime
-        ref: ${{ env.ONNXRUNTIME_VERSION }}
-        path: ${{ env.ONNXRUNTIME_SRC_DIR }}
+      - name: Checkout ONNX Runtime Repository
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: Microsoft/onnxruntime
+          ref: ${{ env.ONNXRUNTIME_VERSION }}
+          path: ${{ env.ONNXRUNTIME_SRC_DIR }}
 
-    - name: Build ONNX Runtime
-      if: steps.deps-cache.outputs.cache-hit != 'true'
-      env:
-        CC: ${{ matrix.compiler_cc }}
-        CXX: ${{ matrix.compiler_cxx }}
-        FC: ${{ matrix.compiler_fc }}
-      working-directory: ${{ env.ONNXRUNTIME_SRC_DIR }}
-      shell: bash -eux {0}
-      run: |
-        ./build.sh --config Release --build_shared_lib --parallel 2
-        mkdir -p ${{ env.ONNXRUNTIME_PATH }}
-        mv build include ${{ env.ONNXRUNTIME_PATH }}
+      - name: Build ONNX Runtime
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        env:
+          CC: ${{ matrix.compiler_cc }}
+          CXX: ${{ matrix.compiler_cxx }}
+          FC: ${{ matrix.compiler_fc }}
+        working-directory: ${{ env.ONNXRUNTIME_SRC_DIR }}
+        shell: bash -eux {0}
+        run: |
+          ./build.sh --config Release --build_shared_lib --parallel 2
+          mkdir -p ${{ env.ONNXRUNTIME_PATH }}
+          mv build include ${{ env.ONNXRUNTIME_PATH }}
 
-    - name: Checkout TensorFlow Repository
-      if: steps.deps-cache.outputs.cache-hit != 'true'
-      uses: actions/checkout@v3
-      with:
-        repository: tensorflow/tensorflow
-        ref: ${{ env.TENSORFLOW_VERSION }}
-        path: ${{ env.TENSORFLOW_SRC_DIR }}
+      - name: Checkout TensorFlow Repository
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: tensorflow/tensorflow
+          ref: ${{ env.TENSORFLOW_VERSION }}
+          path: ${{ env.TENSORFLOW_SRC_DIR }}
 
-    - name: Build TensorFlow Lite
-      if: steps.deps-cache.outputs.cache-hit != 'true'
-      env:
-        CC: ${{ matrix.compiler_cc }}
-        CXX: ${{ matrix.compiler_cxx }}
-        FC: ${{ matrix.compiler_fc }}
-      working-directory: ${{ env.TENSORFLOW_SRC_DIR }}
-      shell: bash -eux {0}
-      run: |
-        INSTALL_DIR=${{ env.TENSORFLOW_PATH }}
-        mkdir -p $INSTALL_DIR
-        mv tensorflow third_party $INSTALL_DIR
-        cd $INSTALL_DIR/tensorflow/lite
-        SRC_DIR=$(pwd)
-        BUILD_DIR=build
-        rm -rf $BUILD_DIR && mkdir -p $BUILD_DIR && cd $BUILD_DIR
-        cmake -DCMAKE_PREFIX_PATH=$INSTALL_DIR -DBUILD_SHARED_LIBS=ON $SRC_DIR
-        cmake --build . -j2
+      - name: Build TensorFlow Lite
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        env:
+          CC: ${{ matrix.compiler_cc }}
+          CXX: ${{ matrix.compiler_cxx }}
+          FC: ${{ matrix.compiler_fc }}
+        working-directory: ${{ env.TENSORFLOW_SRC_DIR }}
+        shell: bash -eux {0}
+        run: |
+          INSTALL_DIR=${{ env.TENSORFLOW_PATH }}
+          mkdir -p $INSTALL_DIR
+          mv tensorflow third_party $INSTALL_DIR
+          cd $INSTALL_DIR/tensorflow/lite
+          SRC_DIR=$(pwd)
+          BUILD_DIR=build
+          rm -rf $BUILD_DIR && mkdir -p $BUILD_DIR && cd $BUILD_DIR
+          cmake -DCMAKE_PREFIX_PATH=$INSTALL_DIR -DBUILD_SHARED_LIBS=ON $SRC_DIR
+          cmake --build . -j2
 
   # Calls a reusable CI workflow to build & test the current repository.
   #   It will pull in all needed dependencies and produce a code coverage report on success.
   #   We also pass the cache key of additional dependencies which were built in the previous job.
   ci:
     name: ci
-    uses: ecmwf-actions/reusable-workflows/.github/workflows/ci.yml@v1
+    uses: ecmwf/reusable-workflows/.github/workflows/ci.yml@v1
     needs:
-    - deps
+      - deps
     with:
       skip_matrix_jobs: |
         gnu-10@macos-10.15

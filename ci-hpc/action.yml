@@ -77,7 +77,7 @@ runs:
   using: composite
   steps:
     - name: Check upstream build status
-      uses: ecmwf-actions/reusable-workflows/check-upstream-conclusion@v2
+      uses: ecmwf/reusable-workflows/check-upstream-conclusion@v2
       with:
         token: ${{ inputs.github_token }}
         deps: |
