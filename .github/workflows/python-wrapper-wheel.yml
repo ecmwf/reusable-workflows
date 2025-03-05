@@ -40,7 +40,7 @@ jobs:
     steps:
         # NOTE we dont use action checkout because it doesnt cleanup after itself correctly
       - run: git clone --depth=1 --branch="${GITHUB_REF#refs/heads/}" https://github.com/$GITHUB_REPOSITORY /src/proj
-      - run: cd /src/proj && /buildscripts/prepare_deps.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
+      - run: cd /src/proj && GITHUB_BRANCH="${GITHUB_REF}" /buildscripts/prepare_deps.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
       - run: cd /src/proj && if [[ -f ./${{ inputs.wheel_directory }}/pre-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/pre-compile.sh ; fi
       - run: cd /src/proj && /buildscripts/compile.sh ./${{ inputs.wheel_directory }}/buildconfig
       - run: cd /src/proj && if [[ -f ./${{ inputs.wheel_directory }}/post-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/post-compile.sh ; fi
@@ -78,7 +78,7 @@ jobs:
       - run: rm -rf proj && git clone --depth=1 --branch="${GITHUB_REF#refs/heads/}" https://github.com/$GITHUB_REPOSITORY proj
       - run: |
           uv python install python"${{ matrix.python_version }}"
-          cd proj && $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/prepare_deps.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
+          cd proj && GITHUB_BRANCH="${GITHUB_REF}" $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/prepare_deps.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
       - run: |
           cd proj
           if [[ -f ./${{ inputs.wheel_directory }}/pre-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/pre-compile.sh ; fi
