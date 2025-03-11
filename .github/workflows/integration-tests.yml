@@ -27,6 +27,11 @@ on:
           required: false
           default: "."
           type: string
+        pytest_options:
+          description: Additional options to pass to pytest.
+          required: false
+          default: "--longtests"
+          type: string
     
   jobs:
     check_date:
@@ -76,7 +81,7 @@ on:
             python -m pip install ${{ inputs.install-package}}
         - name: Run integration tests
           run: |
-            python -m pytest ${{ inputs.test_directory }} 
+            python -m pytest ${{ inputs.test_directory }} ${{ inputs.pytest_options }}
    
   
   
