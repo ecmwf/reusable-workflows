@@ -30,7 +30,7 @@ on:
         pytest-options:
           description: Additional options to pass to pytest.
           required: false
-          default: "--longtests"
+          default: ""
           type: string
     
 jobs:
