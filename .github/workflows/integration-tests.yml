@@ -33,7 +33,7 @@ on:
           default: "--longtests"
           type: string
     
-  jobs:
+jobs:
     check_date:
       runs-on: ubuntu-latest
       name: Check latest commit
