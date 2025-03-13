@@ -9,14 +9,10 @@ inputs:
   repository:
     description: The source repository name, in case it differs from the current one. Repository names should
       follow the standard Github `owner/name` format.
-    required: false
-    default: ${{ github.repository }}
-    type: string
+    required: true
   ref:
     description: The source repository reference, in case it differs from the current one.
-    required: false
-    default: ${{ github.ref }}
-    type: string
+    required: true
   install-package:
     description: Install package before running tests.
     required: false
@@ -37,7 +33,6 @@ inputs:
     required: false
     default: "false"
     type: string
-
 runs:
   using: "composite"
   steps:
