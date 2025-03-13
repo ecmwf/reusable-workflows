@@ -79,5 +79,5 @@ runs:
 
     - name: Run integration tests
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
-      run: cd anemoi-core && python -m pytest ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
+      run: python -m pytest ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
       shell: bash
