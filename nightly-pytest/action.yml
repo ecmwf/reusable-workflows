@@ -1,6 +1,5 @@
 name: Nightly Pytest
-description: |
-  Github action to run nightly pytests
+description: Github action to run nightly pytests
 inputs:
   python-version:
     description: The version of Python binary to use.
