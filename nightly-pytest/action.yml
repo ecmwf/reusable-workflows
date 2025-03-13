@@ -77,11 +77,7 @@ runs:
         python -m pip install ${{ inputs.install-package }}
       shell: bash
 
-    - name: Debug conftest.py
-      run: ls
-      shell: bash
-
     - name: Run integration tests
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
-      run: python -m pytest ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
+      run: cd anemoi-core && python -m pytest ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
       shell: bash
