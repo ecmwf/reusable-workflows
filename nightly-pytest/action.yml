@@ -76,6 +76,10 @@ runs:
         pip install pytest pytest-md pytest-emoji
         python -m pip install ${{ inputs.install-package }}
       shell: bash
+    
+    - name: Debug conftest.py
+      run: ls -R training/tests/integration
+      shell: bash
 
     - name: Run integration tests
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
