@@ -45,9 +45,11 @@ runs:
         fetch-tags: true
         repository: ${{ inputs.repository }}
         ref: ${{ inputs.ref }}
+      shell: bash
 
     - name: Print latest commit
       run: echo ${{ github.sha }}
+      shell: bash
 
     - id: should_run
       name: Check latest commit is less than a day
@@ -59,6 +61,7 @@ runs:
         else
           echo "should_run=false" >> $GITHUB_ENV
         fi
+      shell: bash
 
     - name: Set up Python
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
@@ -66,6 +69,7 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
+      shell: bash
 
     - name: Install dependencies
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
@@ -73,7 +77,9 @@ runs:
         python -m pip install --upgrade pip
         pip install pytest pytest-md pytest-emoji
         python -m pip install ${{ inputs.install-package }}
+      shell: bash
 
     - name: Run integration tests
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
       run: python -m pytest ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
+      shell: bash
