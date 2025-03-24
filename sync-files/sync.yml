@@ -24,8 +24,11 @@ group:
 
 # Init specific files once
 - files:
-  - source: sync-files/anemoi/.release-please-manifest.json
+  - source: sync-files/anemoi/some/.release-please-manifest.json
     dest: ./.release-please-manifest.json
+    replace: false
+  - source: sync-files/anemoi/some/.readthedocs.yaml
+    dest: ./.readthedocs.yaml
     replace: false
   repos: |
     ecmwf/anemoi-datasets
@@ -33,7 +36,6 @@ group:
     ecmwf/anemoi-registry
     ecmwf/anemoi-transform
     ecmwf/anemoi-utils
-
 
 # Anemoi Datasets specific
 - files:
