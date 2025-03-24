@@ -219,5 +219,7 @@ group:
     dest: .github/workflows/pr-conventional-commit.yml
     template:
       repo_name: anemoi-core
+  - source: sync-files/anemoi/all/.pre-commit-config.yaml
+    dest: .pre-commit-config.yaml
   repos: |
     ecmwf/anemoi-core
