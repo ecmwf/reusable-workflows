@@ -76,10 +76,6 @@ group:
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
-      repo_name: anemoi-datasets
-  - source: sync-files/anemoi/some/.github/workflows/push-to-private.yml
-    dest: .github/workflows/push-to-private.yml
-    template:
       repo_name: anemoi-plugins
   repos: |
     ecmwf/anemoi-plugins
