@@ -43,17 +43,17 @@ on:
       token_debian_12:
         description: Use other than the default token for Debian 12.
         required: false
-      url_centos_7:
-        description: Use other than the default url for CentOS 7.
-        required: false
-      token_centos_7:
-        description: Use other than the default token for CentOS 7.
-        required: false
       url_rocky_8:
         description: Use other than the default url for Rocky 8.
         required: false
       token_rocky_8:
         description: Use other than the default token for Rocky 8.
+        required: false
+      url_rocky_9:
+        description: Use other than the default url for Rocky 9.
+        required: false
+      token_rocky_9:
+        description: Use other than the default token for Rocky 9.
         required: false
 
 jobs:
@@ -100,9 +100,8 @@ jobs:
           name:
             - gnu@debian-11
             - gnu@debian-12
-            # centos 7 is not compatible with node20
-            # - gnu-8@centos-7.9
             - gnu@rocky-8.6
+            - gnu@rocky-9.5
           include:
             - name: gnu@debian-11
               labels: [self-hosted, platform-builder-debian-11]
@@ -132,20 +131,6 @@ jobs:
                 -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
               upload_url: NEXUS_TEST_REPO_URL_DEBIAN_12
-
-            # - name: gnu-8@centos-7.9
-            #   labels: [self-hosted, platform-builder-centos-7.9]
-            #   os: centos-7.9
-            #   compiler: gnu-8
-            #   compiler_cc: gcc-8
-            #   compiler_cxx: g++-8
-            #   compiler_fc: gfortran-8
-            #   cpack_generator: RPM
-            #   cpack_options: >
-            #     -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf
-            #     ${{ inputs.cpack_options_rpm }}
-            #   upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-            #   upload_url: NEXUS_TEST_REPO_URL_CENTOS_7
             - name: gnu@rocky-8.6
               labels: [self-hosted, platform-builder-rocky-8.6]
               os: rocky-8.6
@@ -159,6 +144,19 @@ jobs:
                 ${{ inputs.cpack_options_rpm }}
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
               upload_url: NEXUS_TEST_REPO_URL_ROCKY_8
+            - name: gnu@rocky-9.5
+              labels: [self-hosted, platform-builder-rocky-9.5]
+              os: rocky-9.5
+              compiler: gnu
+              compiler_cc: gcc
+              compiler_cxx: g++
+              compiler_fc: gfortran
+              cpack_generator: RPM
+              cpack_options: >
+                -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
+                ${{ inputs.cpack_options_rpm }}
+              upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
+              upload_url: NEXUS_TEST_REPO_URL_ROCKY_9
           EOS
           )
           RESTRICT_MATRIX_JOBS=$(cat << 'EOS'
@@ -274,14 +272,14 @@ jobs:
               url=${{ secrets.url_debian_12 || secrets[matrix.upload_url] }}
             ;;
 
-            "centos-7.9")
-              token=${{ secrets.token_centos_7 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_centos_7 || secrets[matrix.upload_url] }}
-            ;;
-
             "rocky-8.6")
               token=${{ secrets.token_rocky_8 || secrets[matrix.upload_token] }}
               url=${{ secrets.url_rocky_8 || secrets[matrix.upload_url] }}
+            ;;
+
+            "rocky-9.5")
+              token=${{ secrets.token_rocky_9 || secrets[matrix.upload_token] }}
+              url=${{ secrets.url_rocky_9 || secrets[matrix.upload_url] }}
             ;;
 
             *)
