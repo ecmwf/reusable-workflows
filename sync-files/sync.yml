@@ -21,6 +21,7 @@ group:
     ecmwf/anemoi-registry
     ecmwf/anemoi-transform
     ecmwf/anemoi-utils
+    ecmwf/anemoi-plugins
 
 # Init specific files once
 - files:
