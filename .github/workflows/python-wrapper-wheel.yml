@@ -44,10 +44,15 @@ jobs:
       - run: cd /src/proj && if [[ -f ./${{ inputs.wheel_directory }}/pre-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/pre-compile.sh ; fi
       - run: cd /src/proj && /buildscripts/compile.sh ./${{ inputs.wheel_directory }}/buildconfig
       - run: cd /src/proj && if [[ -f ./${{ inputs.wheel_directory }}/post-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/post-compile.sh ; fi
-      - run: cd /src/proj && GITHUB_BRANCH="${GITHUB_REF}" PYTHONPATH=/buildscripts /buildscripts/wheel-linux.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
-      - run: cd /src/proj && if [[ -f ./${{ inputs.wheel_directory }}/post-build.sh ]] ; then ./${{ inputs.wheel_directory }}/post-build.sh ; fi
-      - run: cd /src/proj && GITHUB_BRANCH="${GITHUB_REF}" /buildscripts/test-wheel.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
-      - run: cd /src/proj && PYTHONPATH=/buildscripts /buildscripts/upload-pypi.sh ./${{ inputs.wheel_directory }}/buildconfig
+      - run: |
+          # TODO move this to the dockerfile, but needs to be done per python version
+          # NOTE twine version forced due to metadata issue, cf wheelmaker Dockerfile
+          rm -rf /tmp/buildvenv && uv venv --python python"${{ matrix.python_version }}" /tmp/buildvenv && source /tmp/buildvenv/bin/activate && uv pip install build twine==6.0.1 delocate setuptools requests
+          cd /src/proj
+          GITHUB_BRANCH="${GITHUB_REF}" PYTHONPATH=/buildscripts /buildscripts/wheel-linux.sh ./${{ inputs.wheel_directory }}/buildconfig
+          if [[ -f ./${{ inputs.wheel_directory }}/post-build.sh ]] ; then ./${{ inputs.wheel_directory }}/post-build.sh ; fi
+          GITHUB_BRANCH="${GITHUB_REF}" /buildscripts/test-wheel.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
+          PYTHONPATH=/buildscripts /buildscripts/upload-pypi.sh ./${{ inputs.wheel_directory }}/buildconfig
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
