@@ -115,10 +115,8 @@ jobs:
                 -D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int 
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
-              upload_token: token_debian_11
-              upload_url: url_debian_11
-              fallback_upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              fallback_upload_url: NEXUS_TEST_REPO_URL_DEBIAN_11
+              upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
+              upload_url: NEXUS_TEST_REPO_URL_DEBIAN_11
             - name: gnu@debian-12
               labels: [self-hosted, platform-builder-debian-12]
               os: debian-12
@@ -131,10 +129,8 @@ jobs:
                 -D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int 
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
-              upload_token: token_debian_12
-              upload_url: url_debian_12
-              fallback_upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              fallback_upload_url: NEXUS_TEST_REPO_URL_DEBIAN_12
+              upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
+              upload_url: NEXUS_TEST_REPO_URL_DEBIAN_12
             - name: gnu@rocky-8.6
               labels: [self-hosted, platform-builder-rocky-8.6]
               os: rocky-8.6
@@ -146,10 +142,8 @@ jobs:
               cpack_options: >
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 ${{ inputs.cpack_options_rpm }}
-              upload_token: token_rocky_8
-              upload_url: url_rocky_8
-              fallback_upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              fallback_upload_url: NEXUS_TEST_REPO_URL_ROCKY_8
+              upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
+              upload_url: NEXUS_TEST_REPO_URL_ROCKY_8
             - name: gnu@rocky-9.5
               labels: [self-hosted, platform-builder-rocky-9.5]
               os: rocky-9.5
@@ -161,10 +155,8 @@ jobs:
               cpack_options: >
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 ${{ inputs.cpack_options_rpm }}
-              upload_token: token_rocky_9
-              upload_url: url_rocky_9
-              fallback_upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              fallback_upload_url: NEXUS_TEST_REPO_URL_ROCKY_9
+              upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
+              upload_url: NEXUS_TEST_REPO_URL_ROCKY_9
           EOS
           )
           RESTRICT_MATRIX_JOBS=$(cat << 'EOS'
@@ -175,32 +167,7 @@ jobs:
           echo $MATRIX
           SELECT_NAME_COND="1 != 1"
           SELECT_INCLUDE_COND="1 != 1"
-
-          matrix_jobs=$(echo "$MATRIX" | yq '.name[]')
-          jobs_to_skip=()
-          for job in $matrix_jobs; do
-            include=$(echo "$MATRIX" | yq ".include[] | select(.name == \"$job\")")
-            upload_token=$(echo "$include" | yq '.upload_token')
-            upload_url=$(echo "$include" | yq '.upload_url')
-            fallback_upload_token=$(echo "$include" | yq '.fallback_upload_token')
-            fallback_upload_url=$(echo "$include" | yq '.fallback_upload_url')
-
-            if [[ -z "${!upload_url}" && -z "${!fallback_upload_url}" ]]; then
-              skip="true"
-            fi
-
-            if [[ -z "${!upload_token}" && -z "${!fallback_upload_token}" ]]; then
-              skip="true"
-            fi
-
-            if [[ -n "${skip}" ]]; then
-              echo "Skipping $job"
-              jobs_to_skip+=($job)
-            fi
-          done
-
           for restrict_job in $RESTRICT_MATRIX_JOBS; do SELECT_NAME_COND="$SELECT_NAME_COND or . != \"$restrict_job\""; SELECT_INCLUDE_COND="$SELECT_INCLUDE_COND or .name != \"$restrict_job\""; done
-          for job_to_skip in $jobs_to_skip; do SELECT_NAME_COND="$SELECT_NAME_COND or . != \"$job_to_skip\""; SELECT_INCLUDE_COND="$SELECT_INCLUDE_COND or .name != \"$job_to_skip\""; done
           echo matrix=$(echo "$MATRIX" | yq eval "del(.name[] | select($SELECT_NAME_COND)) | del(.include[] | select($SELECT_INCLUDE_COND))" --output-format json --indent 0 -) >> $GITHUB_OUTPUT
           echo "GITHUB_OUTPUT:"
           echo $GITHUB_OUTPUT
@@ -294,8 +261,37 @@ jobs:
           token=""
           url=""
 
-          token=${{ secrets[matrix.upload_token] || secrets[matrix.fallback_upload_token] }}
-          url=${{ secrets[matrix.upload_url] || secrets[matrix.fallback_upload_url] }}
+          case "$os" in
+            "debian-11")
+              token=${{ secrets.token_debian_11 || secrets[matrix.upload_token] }}
+              url=${{ secrets.url_debian_11 || secrets[matrix.upload_url] }}
+            ;;
+
+            "debian-12")
+              token=${{ secrets.token_debian_12 || secrets[matrix.upload_token] }}
+              url=${{ secrets.url_debian_12 || secrets[matrix.upload_url] }}
+            ;;
+
+            "rocky-8.6")
+              token=${{ secrets.token_rocky_8 || secrets[matrix.upload_token] }}
+              url=${{ secrets.url_rocky_8 || secrets[matrix.upload_url] }}
+            ;;
+
+            "rocky-9.5")
+              token=${{ secrets.token_rocky_9 || secrets[matrix.upload_token] }}
+              url=${{ secrets.url_rocky_9 || secrets[matrix.upload_url] }}
+            ;;
+
+            *)
+              token=${{ secrets[matrix.upload_token] }}
+              url=${{ secrets[matrix.upload_url] }}
+            ;;
+          esac
+
+          if [ -z "$token" ]; then
+            echo "No upload token provided, skipping upload"
+            exit 0
+          fi
 
           if [ "${{ matrix.cpack_generator }}" == "DEB" ]; then
             response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${{ steps.build.outputs.package_path }}" "$url")
