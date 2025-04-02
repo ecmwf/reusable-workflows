@@ -288,6 +288,11 @@ jobs:
             ;;
           esac
 
+          if [ -z "$token" ]; then
+            echo "No upload token provided, skipping upload"
+            exit 0
+          fi
+
           if [ "${{ matrix.cpack_generator }}" == "DEB" ]; then
             response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${{ steps.build.outputs.package_path }}" "$url")
           elif [ "${{ matrix.cpack_generator }}" == "RPM" ]; then
