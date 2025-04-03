@@ -289,7 +289,7 @@ jobs:
           esac
 
           if [ -z "$token" ]; then
-            echo "No upload token provided, skipping upload"
+            echo "::warning::No upload token provided, skipping upload for $os"
             exit 0
           fi
 
