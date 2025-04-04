@@ -31,6 +31,9 @@ on:
         type: string
         required: false
     secrets:
+      github_token:
+        description: GitHub token
+        required: false
       url_debian_11:
         description: Use other than the default url for Debian 11.
         required: false
@@ -242,6 +245,7 @@ jobs:
             save_cache: false
             self_test: false
           build_config: ${{ inputs.build_config }}
+          github_token: ${{ inputs.github_token || secrets.GH_REPO_READ_TOKEN }}
 
       - name: Upload binary as artifact
         uses: actions/upload-artifact@v4
