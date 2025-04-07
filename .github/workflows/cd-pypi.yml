@@ -19,7 +19,7 @@ on:
 
 jobs:
   deploy:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' }}
+    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,6 +30,7 @@ jobs:
           fetch-depth: "0"
 
       - name: Test tag name pattern
+        if: ${{ !inputs.testpypi }}
         shell: python
         run: |
           import re
@@ -46,7 +47,7 @@ jobs:
             sys.exit(1)
 
       - name: Test branch name pattern
-        if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' }}
+        if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' && !inputs.testpypi }}
         run: |
           echo "Checking that this release is being made from a main/master branch ( ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }} ) - will fail if not"
           git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
@@ -62,6 +63,7 @@ jobs:
           pip install setuptools wheel twine build
 
       - name: Check version
+        if: ${{ !inputs.testpypi }}
         run: |
           if [ -f "setup.py" ]; then
             release=${{ github.ref_name }}
@@ -76,6 +78,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           python -m build
+          twine check dist/*
           twine upload dist/*
 
       - name: Build and publish to testpypi
@@ -85,4 +88,8 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
           python -m build
-          twine upload --repository testpypi dist/*
+          twine check dist/*
+          # HINT: if your upload fails here due to "unsupported local version",
+          # put `local_scheme = "no-local-version"` pyproject.toml's
+          # [tools.setuptools_scm]
+          twine upload --repository testpypi --verbose dist/*
