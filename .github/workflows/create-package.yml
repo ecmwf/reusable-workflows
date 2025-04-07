@@ -245,7 +245,7 @@ jobs:
             save_cache: false
             self_test: false
           build_config: ${{ inputs.build_config }}
-          github_token: ${{ secrets.github_pat || secrets.GH_REPO_READ_TOKEN }}
+          github_token: ${{ secrets.github_pat || secrets.GH_REPO_READ_TOKEN || github.token }}
 
       - name: Upload binary as artifact
         uses: actions/upload-artifact@v4
