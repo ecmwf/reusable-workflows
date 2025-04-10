@@ -181,7 +181,7 @@ jobs:
 
     - name: Install Dependencies
       id: install-dependencies
-      uses: ecmwf-actions/build-package@v2
+      uses: ecmwf/build-package@v2
       with: ${{ fromJSON(needs.setup.outputs.inputs) }}
 
     - name: Setup Python
@@ -250,7 +250,7 @@ jobs:
     - name: Install Dependencies
       id: install-dependencies
       if: steps.check-version.outputs.is-new-release == 'true'
-      uses: ecmwf-actions/build-package@v2
+      uses: ecmwf/build-package@v2
       with: ${{ fromJSON(needs.setup.outputs.inputs-for-ubuntu) }}
 
     - name: Build & Install
@@ -288,7 +288,7 @@ jobs:
     if: always() && inputs.notify_teams && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     steps:
     - name: Notify Teams
-      uses: ecmwf-actions/notify-teams@v1
+      uses: ecmwf/notify-teams@v1
       with:
         incoming_webhook: ${{ secrets.incoming_webhook }}
         needs_context: ${{ toJSON(needs) }}
