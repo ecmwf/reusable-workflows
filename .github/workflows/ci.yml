@@ -1,7 +1,7 @@
 # ==============================================
 # This reusable workflow is DEPRECATED
 # Refer to downstream-ci instead
-# https://github.com/ecmwf-actions/downstream-ci
+# https://github.com/ecmwf/downstream-ci
 # ==============================================
 
 
@@ -242,7 +242,7 @@ jobs:
 
       - name: Build & Collect code coverage report
         id: build
-        uses: ecmwf-actions/build-package@v2
+        uses: ecmwf/build-package@v2
         with: ${{ fromJSON(steps.prepare-inputs.outputs.inputs) }}
 
       - name: Codecov Upload
@@ -297,7 +297,7 @@ jobs:
 
       - name: Build & Test
         id: build-test
-        uses: ecmwf-actions/build-package@v2
+        uses: ecmwf/build-package@v2
         with: ${{ fromJSON(steps.prepare-inputs.outputs.inputs) }}
 
   notify:
@@ -309,7 +309,7 @@ jobs:
     if: always() && inputs.notify_teams && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     steps:
       - name: Notify Teams
-        uses: ecmwf-actions/notify-teams@v1
+        uses: ecmwf/notify-teams@v1
         with:
           incoming_webhook: ${{ secrets.incoming_webhook }}
           needs_context: ${{ toJSON(needs) }}
