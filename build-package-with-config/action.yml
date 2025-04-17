@@ -37,6 +37,9 @@ inputs:
   python_version:
     description: Version of python to optionally setup. If not supplied, only system python is available.
     required: false
+  conda_install:
+    description: Additional conda packages to install (comma or space separated list)
+    required: false
 
 runs:
   using: composite
@@ -138,6 +141,13 @@ runs:
         echo "pythonLocation=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "Python_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "PATH=$RUNNER_TEMP/bpvenv/bin:$PATH" >> "$GITHUB_ENV"
+        
+        if [ -n "${{ inputs.conda_install }}" ]; then
+          echo "Installing additional conda packages: ${{ inputs.conda_install }}"
+          conda activate $RUNNER_TEMP/bpvenv
+          conda install -y ${{ inputs.conda_install }}
+          conda deactivate
+        fi
 
     - name: Build package
       id: build
