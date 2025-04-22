@@ -140,9 +140,7 @@ runs:
         --python-dependencies=${{ steps.inputs.outputs.py_deps }} \
         --workdir=${{ inputs.workdir }} \
         --output-dir=${{ inputs.output_dir }} \
-        ${{ if inputs.cmake_python == 'true' }} \
-        --cmake-python \
-        ${{ endif }}
+        ${{ inputs.cmake_python == 'true' && '--cmake-python' }}
 
     - name: Cancel HPC job
       if: ${{ cancelled() }}
