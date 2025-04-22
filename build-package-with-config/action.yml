@@ -134,8 +134,8 @@ runs:
       shell: bash -e {0}
       if: ${{ inputs.python_version }}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda create -y -p $RUNNER_TEMP/bpvenv python=${{ inputs.python_version }}
+        uv venv --python ${inputs.python_version} $RUNNER_TEMP/bpvenv
+
         echo "Python3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python" >> "$GITHUB_ENV"
         echo "Python3_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "pythonLocation=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
@@ -143,10 +143,9 @@ runs:
         echo "PATH=$RUNNER_TEMP/bpvenv/bin:$PATH" >> "$GITHUB_ENV"
         
         if [ -n "${{ inputs.conda_install }}" ]; then
-          echo "Installing additional conda packages: ${{ inputs.conda_install }}"
-          conda activate $RUNNER_TEMP/bpvenv
-          conda install -y ${{ inputs.conda_install }}
-          conda deactivate
+          echo "Installing additional uv packages: ${{ inputs.conda_install }}"
+          source $RUNNER_TEMP/bpvenv/bin/activate
+          uv pip install ${{ inputs.conda_install }}
         fi
 
     - name: Build package
