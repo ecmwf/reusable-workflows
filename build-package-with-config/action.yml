@@ -134,7 +134,7 @@ runs:
       shell: bash -e {0}
       if: ${{ inputs.python_version }}
       run: |
-        uv venv --python ${inputs.python_version} $RUNNER_TEMP/bpvenv
+        uv venv --python ${{ inputs.python_version }} $RUNNER_TEMP/bpvenv
 
         echo "Python3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python" >> "$GITHUB_ENV"
         echo "Python3_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
