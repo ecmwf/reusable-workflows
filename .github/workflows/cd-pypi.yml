@@ -16,11 +16,26 @@ on:
         type: string
         required: false
         default: "./"
+      platforms:
+        description: 'Comma-separated list of platforms to build for (e.g., ubuntu-latest,windows-latest). Default: "ubuntu-latest".'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      python_versions:
+        description: 'Comma-separated list of Python versions to build for (e.g., 3.8, 3.9, 3.10). Default: "3.8, 3.9, 3.10".'
+        required: false
+        type: string
+        default: '3.8, 3.9, 3.10'
 
 jobs:
-  deploy:
+  build:
     if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi }}
-    runs-on: ubuntu-latest
+    name: Build wheels and source distribution
+    strategy:
+      matrix:
+        os: ${{ fromJson(inputs.platforms) }}
+        python: ${{ fromJson(inputs.python_versions) }}
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -28,6 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: "0"
+          python-version: ${{ matrix.python }}
 
       - name: Test tag name pattern
         if: ${{ !inputs.testpypi }}
@@ -60,7 +76,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install setuptools wheel twine build
+          pip install setuptools wheel twine build cibuildwheel
 
       - name: Check version
         run: |
@@ -75,23 +91,44 @@ jobs:
             if [ "${{ inputs.testpypi }}" != "true" ] ; then test "$release" == "$version"; fi
           fi
 
-      - name: Build and publish to pypi
+      - name: Build wheels
+        run: |
+          cibuildwheel --output-dir dist
+        env:
+          CIBW_BUILD: "cp${{ matrix.python }}-*"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: dist
+
+  upload:
+    if: ${{ inputs.upload }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: dist
+
+      - name: Upload to PyPI
         if: ${{ !inputs.testpypi }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          python -m build
+          pip install twine
           twine check dist/*
           twine upload dist/*
 
-      - name: Build and publish to testpypi
+      - name: Upload to test-PyPI
         if: ${{ inputs.testpypi }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
-          python -m build
+          pip install twine
           twine check dist/*
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's
