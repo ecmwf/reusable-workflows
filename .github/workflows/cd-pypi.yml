@@ -103,7 +103,6 @@ jobs:
           path: dist
 
   upload:
-    if: ${{ inputs.upload }}
     needs: build
     runs-on: ubuntu-latest
     steps:
