@@ -82,6 +82,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install setuptools wheel twine build cibuildwheel
 
+      - name: Install rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          source "$HOME/.cargo/env
+
       - name: Check version
         run: |
           if [ -f "setup.py" ]; then
