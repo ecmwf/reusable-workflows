@@ -121,8 +121,8 @@ jobs:
     name: Build wheels and source distribution
     strategy:
       matrix:
-        os: ${{ fromJson(inputs.platforms) }}
-        python: ${{ fromJson(inputs.pyversions) }}
+        os: ${{ fromJson(inputs.platforms) || ['ubuntu-latest'] }}
+        python: ${{ fromJson(inputs.pyversions) || ['310'] }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
