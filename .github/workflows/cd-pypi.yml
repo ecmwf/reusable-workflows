@@ -110,7 +110,8 @@ jobs:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
           CIBW_SKIP: "pp*"
           CIBW_BEFORE_BUILD: |
-            rustc --version
+            source $HOME/.cargo/env  # Explicitly source Rust environment
+            rustc --version  # Check if rustc is available
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
