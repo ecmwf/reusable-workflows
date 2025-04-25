@@ -17,15 +17,21 @@ on:
         required: false
         default: "./"
       platforms:
-        description: Platforms to build for.
+        description: Platforms to build for e.g. "['ubuntu-latest','macos-latest','windows-latest']"
         required: false
         type: string
-        default: "[]"
+        default: ''
       pyversions:
-        description: Python versions to build for.
+        description: Python versions to build for e.g. "['38','39','310','311','312']"
         required: false
         type: string
-        default: "[]"
+        default: ''
+      build_args:
+        description: Args to pass in to build as `python -m build {build_args}` e.g. '--sdist'
+        type: string
+        required: false
+        default: ''
+
 
 jobs:
   deploy_source:
@@ -91,9 +97,9 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          python -m build --sdist
-          twine check dist/*.tar.gz
-          twine upload dist/*.tar.gz
+          python -m build ${{ inputs.build_args }}
+          twine check dist/*
+          twine upload dist/*
 
       - name: Build and publish to testpypi
         if: ${{ inputs.testpypi }}
@@ -101,16 +107,16 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
-          python -m build --sdist
-          twine check dist/*.tar.gz
+          python -m build ${{ inputs.build_args }}
+          twine check dist/*
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's
           # [tools.setuptools_scm]
-          twine upload --repository testpypi --verbose dist/*.tar.gz
+          twine upload --repository testpypi --verbose dist/*
 
 
   deploy_wheels:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi }}
+    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || inputs.platforms!='' || inputs.pyversions!='' }}
     needs: deploy_source
     name: Build wheels and source distribution
     strategy:
