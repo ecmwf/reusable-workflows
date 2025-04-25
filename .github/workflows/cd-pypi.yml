@@ -110,7 +110,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.python-version }}-${{ matrix.os }}
+          name: wheels-${{ matrix.python }}-${{ matrix.os }}
           path: dist/*.whl
 
   upload:
