@@ -26,6 +26,11 @@ on:
         required: false
         type: string
         default: "['38', '39', '310']"
+      rust: # TODO: use this
+        description: Whether to install rust
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   build:
@@ -97,6 +102,8 @@ jobs:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
           CIBW_SKIP: "pp*"
           CIBW_BEFORE_BUILD: |
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+            . "$HOME/.cargo/env"
             python -m pip install --upgrade pip
             pip install setuptools wheel twine build cibuildwheel
           CIBW_BUILD_VERBOSITY: 1
