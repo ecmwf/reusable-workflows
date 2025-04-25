@@ -120,9 +120,7 @@ jobs:
     needs: deploy_source
     name: Build wheels and source distribution
     strategy:
-      matrix:
-        os: ${{ fromJson(inputs.platforms != '' ? inputs.platforms : '[\"ubuntu-latest\"]') }}
-        python: ${{ fromJson(inputs.pyversions != '' ? inputs.pyversions : '[\"310\"]') }}
+      matrix: ${{ fromJson(format('{{"os": {0}, "python": {1}}}', (inputs.platforms != null && inputs.platforms != '' && inputs.platforms != '[]') && inputs.platforms || '["ubuntu-latest"]', (inputs.pyversions != null && inputs.pyversions != '' && inputs.pyversions != '[]') && inputs.pyversions || '["3.11"]' )) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
