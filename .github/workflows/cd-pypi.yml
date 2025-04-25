@@ -20,12 +20,12 @@ on:
         description: Platforms to build for e.g. "['ubuntu-latest','macos-latest','windows-latest']"
         required: false
         type: string
-        default: ''
+        default: "['invalid']" #hacky workaround to get things to run
       pyversions:
         description: Python versions to build for e.g. "['38','39','310','311','312']"
         required: false
         type: string
-        default: ''
+        default: "['invalid']" #hacky workaround to get things to run
       build_args:
         description: Args to pass in to build as `python -m build {build_args}` e.g. '--sdist'
         type: string
@@ -116,11 +116,13 @@ jobs:
 
 
   deploy_wheels:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || inputs.platforms!='' || inputs.pyversions!='' }}
+    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || inputs.platforms!="['invalid']" || inputs.pyversions!="['invalid']" }}
     needs: deploy_source
     name: Build wheels and source distribution
     strategy:
-      matrix: ${{ fromJson(format('{{"os": {0}, "python": {1}}}', (inputs.platforms != null && inputs.platforms != '' && inputs.platforms != '[]') && inputs.platforms || '["ubuntu-latest"]', (inputs.pyversions != null && inputs.pyversions != '' && inputs.pyversions != '[]') && inputs.pyversions || '["3.11"]' )) }}
+      matrix:
+        os: ${{ fromJson(inputs.platforms) }}
+        python: ${{ fromJson(inputs.pyversions) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
