@@ -116,7 +116,7 @@ jobs:
 
 
   deploy_wheels:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || inputs.platforms!="['invalid']" || inputs.pyversions!="['invalid']" }}
+    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || inputs.platforms!=\"['invalid']\" || inputs.pyversions!=\"['invalid']\" }}
     needs: deploy_source
     name: Build wheels and source distribution
     strategy:
