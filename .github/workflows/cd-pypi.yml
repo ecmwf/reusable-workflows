@@ -85,6 +85,10 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      
+      - name: Check if rust is installed
+        run: |
+          rustc --version
 
       - name: Check version
         run: |
@@ -106,10 +110,7 @@ jobs:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
           CIBW_SKIP: "pp*"
           CIBW_BEFORE_BUILD: |
-            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
-            . "$HOME/.cargo/env"
-            python -m pip install --upgrade pip
-            pip install setuptools wheel twine build cibuildwheel
+            rustc --version
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
