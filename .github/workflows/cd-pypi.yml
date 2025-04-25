@@ -33,7 +33,7 @@ on:
         default: false
 
 jobs:
-  build:
+  deploy:
     if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi }}
     name: Build wheels and source distribution
     strategy:
@@ -110,20 +110,6 @@ jobs:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
           CIBW_BUILD_VERBOSITY: 1
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.python }}-${{ matrix.os }}
-          path: dist/*.whl
-
-  upload:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: wheels-*
-          path: dist/*
-
       - name: Upload to PyPI
         if: ${{ !inputs.testpypi }}
         env:
@@ -131,8 +117,8 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           pip install twine
-          twine check dist/*
-          twine upload dist/*
+          twine check dist/*.whl
+          twine upload dist/*.whl
 
       - name: Upload to test-PyPI
         if: ${{ inputs.testpypi }}
@@ -141,8 +127,8 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
           pip install twine
-          twine check dist/*
+          twine check dist/*.whl
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's
           # [tools.setuptools_scm]
-          twine upload --repository testpypi --verbose dist/*
+          twine upload --repository testpypi --verbose dist/*.whl
