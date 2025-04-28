@@ -116,7 +116,7 @@ jobs:
 
 
   deploy_wheels:
-    if:  {{ inputs.platforms != '' && inputs.pyversions != '' }}
+    if:  inputs.platforms != '' && inputs.pyversions != ''
     needs: deploy_source
     name: Build wheels and source distribution
     strategy:
