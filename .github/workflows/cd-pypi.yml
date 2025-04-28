@@ -20,12 +20,12 @@ on:
         description: Platforms to build for e.g. "['ubuntu-latest','macos-latest','windows-latest']"
         required: false
         type: string
-        default: "invalid" #hacky workaround to get things to run
+        default: ''
       pyversions:
         description: Python versions to build for e.g. "['38','39','310','311','312']"
         required: false
         type: string
-        default: "invalid" #hacky workaround to get things to run
+        default: ''
       build_args:
         description: Args to pass in to build as `python -m build {build_args}` e.g. '--sdist'
         type: string
@@ -116,13 +116,13 @@ jobs:
 
 
   deploy_wheels:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || inputs.platforms != "invalid" || inputs.pyversions != "invalid" }}
+    if:  {{ inputs.platforms != '' && inputs.pyversions != '' }}
     needs: deploy_source
     name: Build wheels and source distribution
     strategy:
       matrix:
-        os: ${{ inputs.platforms != '' && inputs.platforms != 'invalid' ? fromJson(inputs.platforms) : ['skip'] }}
-        python: ${{ inputs.pyversions != '' && inputs.pyversions != 'invalid' ? fromJson(inputs.pyversions) : ['skip'] }}
+        os: ${{ fromJson(inputs.platforms) }}
+        python: ${{ fromJson(inputs.pyversions) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
