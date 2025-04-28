@@ -27,7 +27,7 @@ on:
         type: string
         default: ''
       purepython_buildargs:
-        description: Args to pass in to build as `python -m build {build_args}` e.g. '--sdist'
+        description: Args to pass in to build as `python -m build {purepython_buildargs}` e.g. '--sdist'
           If using binary wheels, set to --sdist to upload just the source distribution.
         type: string
         required: false
@@ -98,7 +98,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          python -m build ${{ inputs.build_args }}
+          python -m build ${{ inputs.purepython_buildargs }}
           twine check dist/*
           twine upload dist/*
 
@@ -108,7 +108,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
-          python -m build ${{ inputs.build_args }}
+          python -m build ${{ inputs.purepython_buildargs }}
           twine check dist/*
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's
@@ -117,12 +117,12 @@ jobs:
 
 
   deploy_binary_wheels:
-    if:  inputs.platforms != '' && inputs.pyversions != ''
+    if:  inputs.binwheel_platforms != '' && inputs.binwheel_pyversions != ''
     needs: deploy_purepython
     strategy:
       matrix:
-        platform: ${{ fromJson(inputs.platforms) }}
-        python: ${{ fromJson(inputs.pyversions) }}
+        platform: ${{ fromJson(inputs.binwheel_platforms) }}
+        python: ${{ fromJson(inputs.binwheel_pyversions) }}
     runs-on: ${{ matrix.platform }}
     defaults:
       run:
