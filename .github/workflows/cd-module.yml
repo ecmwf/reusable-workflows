@@ -11,6 +11,10 @@ on:
         type: string
         description: Path to configuration file for build-package-hpc.
         required: true
+      skip_checks:
+        description: Value `true` will skip version checks, use for testing or in nightly builds.
+        type: boolean
+        required: false
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -22,6 +26,7 @@ jobs:
           fetch-depth: "0"
 
       - name: Test tag name pattern
+        if: ${{ ! inputs.skip_checks }}
         shell: python
         run: |
           import re
@@ -38,7 +43,7 @@ jobs:
             sys.exit(1)
 
       - name: Test branch name pattern
-        if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' }}
+        if: ${{ ! inputs.skip_checks && vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' }}
         run: |
           git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
