@@ -145,6 +145,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     runs-on: [self-hosted, linux, hpc]
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_REPO_READ_TOKEN }}
     steps:
       - uses: ecmwf/reusable-workflows/ci-hpc@v2
         with:
