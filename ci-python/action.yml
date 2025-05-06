@@ -92,6 +92,7 @@ runs:
         if [ -n "${{ inputs.conda_install }}" ]; then
           conda install -y ${{ inputs.conda_install }}
         fi
+        pip install --upgrade pip
         pip install pytest pytest-cov build
         if [ -f ${{ inputs.requirements_path }} ]; then
           pip install -r ${{ inputs.requirements_path }} 
