@@ -40,7 +40,7 @@ jobs:
     needs: qa
     uses: ./.github/workflows/ci-node.yml
     with:
-      repository: ecmwf-actions/build-package
+      repository: ecmwf/build-package
       ref: main
       notify_teams: true
     secrets:
