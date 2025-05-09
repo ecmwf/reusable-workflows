@@ -131,13 +131,14 @@ runs:
       shell: bash -e {0}
       if: ${{ inputs.python_version }}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda create -y -p $RUNNER_TEMP/bpvenv python=${{ inputs.python_version }}
+        uv venv --python ${{ inputs.python_version }} $RUNNER_TEMP/bpvenv
+        source $RUNNER_TEMP/bpvenv/bin/activate
         echo "Python3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python" >> "$GITHUB_ENV"
         echo "Python3_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "pythonLocation=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "Python_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "PATH=$RUNNER_TEMP/bpvenv/bin:$PATH" >> "$GITHUB_ENV"
+        echo "VIRTUAL_ENV=$RUNNER_TEMP/bpvenv" >> "$GITHUB_ENV"
 
     - name: Build package
       id: build
