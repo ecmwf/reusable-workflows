@@ -22,6 +22,11 @@ on:
         type: string
         required: false
         default: ''
+      env_vars:
+        description: A way to set env variables
+        type: string
+        required: false
+        default: ''
 
 
 jobs:
@@ -32,6 +37,15 @@ jobs:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
+      - name: Set env variables from input
+        if: inputs.env_vars != ''
+        run: |
+          for key in $(echo '${{ inputs.env_vars }}' | jq -r 'keys[]'); do
+            value=$(echo '${{ inputs.env_vars }}' | jq -r ".\"$key\"")
+            echo "$key=$value" >> $GITHUB_ENV
+          done
+        shell: bash
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: "0"
