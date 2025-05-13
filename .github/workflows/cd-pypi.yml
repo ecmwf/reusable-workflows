@@ -17,7 +17,7 @@ on:
         required: false
         default: "./"
       buildargs:
-        description: Args to pass in to build as `python -m build {purepython_buildargs}`
+        description: Args to pass in to build as `python -m build {buildargs}`
           e.g. '--sdist' for just source distribution
         type: string
         required: false
@@ -102,7 +102,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          python -m build ${{ inputs.purepython_buildargs }}
+          python -m build ${{ inputs.buildargs }}
           twine check dist/*
           twine upload dist/*
 
@@ -112,7 +112,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
-          python -m build ${{ inputs.purepython_buildargs }}
+          python -m build ${{ inputs.buildargs }}
           twine check dist/*
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's
