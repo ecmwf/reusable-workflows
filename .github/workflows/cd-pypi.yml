@@ -16,26 +16,16 @@ on:
         type: string
         required: false
         default: "./"
-      binwheel_platforms:
-        description: For not pure python project, the platforms to build for e.g. "['ubuntu-latest','macos-latest','windows-latest']"
-        required: false
-        type: string
-        default: ''
-      binwheel_pyversions:
-        description: For not pure python project, the Python versions to build for e.g. "['38','39','310','311','312','313']"
-        required: false
-        type: string
-        default: ''
-      purepython_buildargs:
-        description: Args to pass in to build as `python -m build {purepython_buildargs}` e.g. '--sdist'
-          If using binary wheels, set to --sdist to upload just the source distribution.
+      buildargs:
+        description: Args to pass in to build as `python -m build {purepython_buildargs}`
+          e.g. '--sdist' for just source distribution
         type: string
         required: false
         default: ''
 
 
 jobs:
-  deploy_purepython:
+  deploy:
     if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi }}
     runs-on: ubuntu-latest
     defaults:
@@ -114,58 +104,3 @@ jobs:
           # put `local_scheme = "no-local-version"` pyproject.toml's
           # [tools.setuptools_scm]
           twine upload --repository testpypi --verbose dist/*
-
-
-  deploy_binary_wheels:
-    if:  inputs.binwheel_platforms != '' && inputs.binwheel_pyversions != ''
-    needs: deploy_purepython
-    strategy:
-      matrix:
-        platform: ${{ fromJson(inputs.binwheel_platforms) }}
-        python: ${{ fromJson(inputs.binwheel_pyversions) }}
-    runs-on: ${{ matrix.platform }}
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: "0"
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel twine build cibuildwheel
-
-      - name: Build wheels
-        run: |
-          cibuildwheel --output-dir dist
-        env:
-          CIBW_BUILD: "cp${{ matrix.python }}-*"
-          CIBW_BUILD_VERBOSITY: 1
-
-      - name: Upload to PyPI
-        if: ${{ !inputs.testpypi }}
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          twine check dist/*.whl
-          twine upload dist/*.whl
-
-      - name: Upload to test-PyPI
-        if: ${{ inputs.testpypi }}
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
-        run: |
-          twine check dist/*.whl
-          # HINT: if your upload fails here due to "unsupported local version",
-          # put `local_scheme = "no-local-version"` pyproject.toml's
-          # [tools.setuptools_scm]
-          twine upload --repository testpypi --verbose dist/*.whl
