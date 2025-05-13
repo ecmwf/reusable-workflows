@@ -34,7 +34,7 @@ on:
 
 
 jobs:
-  build:
+  deploy:
     if:  inputs.platforms != '' && inputs.pyversions != ''
     strategy:
       matrix:
@@ -74,28 +74,6 @@ jobs:
         env:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
           CIBW_BUILD_VERBOSITY: 1
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.platform }}-${{ matrix.python }}
-          path: dist/*.whl
-
-  upload:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: all-wheels
-
-      - run: |
-          mkdir dist
-          find all-wheels -name "*.whl" -exec cp {} dist/ \;
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install twine
 
       - name: Upload to PyPI
         if: ${{ !inputs.testpypi }}
