@@ -93,6 +93,8 @@ jobs:
 
       - name: Check version
         shell: python
+        env:
+          INPUT_TESTPYPI: ${{ inputs.testpypi }}
         run: |
           import os
           import subprocess
