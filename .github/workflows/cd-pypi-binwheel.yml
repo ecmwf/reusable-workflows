@@ -109,7 +109,9 @@ jobs:
               result = subprocess.run(["python", "setup.py", "--version"], capture_output=True, text=True, check=True)
               version = result.stdout.strip()
               release = os.environ.get("GITHUB_REF_NAME")
-              testpypi = os.environ.get("INPUT_TESTPYPI", "").lower() == "true"
+              testpypi = os.environ.get("INPUT_TESTPYPI").lower() == "true"
+
+              print(version, release, testpypi)
 
               if not testpypi and release != version:
                   raise SystemExit(f"Version mismatch: release '{release}' != setup.py version '{version}'")
