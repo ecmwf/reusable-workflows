@@ -35,7 +35,7 @@ on:
 
 jobs:
   deploy:
-    if:  {{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || (inputs.platforms != '' && inputs.pyversions != '') }}
+    if:  ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || (inputs.platforms != '' && inputs.pyversions != '') }}
     strategy:
       matrix:
         platform: ${{ fromJson(inputs.platforms) }}
