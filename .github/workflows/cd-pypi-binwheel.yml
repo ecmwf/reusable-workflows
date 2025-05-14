@@ -1,5 +1,5 @@
 ---
-name: cd-pypi
+name: cd-pypi-binwheel
 
 on:
   workflow_call:
