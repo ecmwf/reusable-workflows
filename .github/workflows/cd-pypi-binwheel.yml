@@ -35,7 +35,7 @@ on:
 
 jobs:
   deploy:
-    if:  inputs.platforms != '' && inputs.pyversions != ''
+    if:  {{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || (inputs.platforms != '' && inputs.pyversions != '') }}
     strategy:
       matrix:
         platform: ${{ fromJson(inputs.platforms) }}
@@ -62,11 +62,57 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.x"
+      
+      - name: Test tag name pattern
+        if: ${{ !inputs.testpypi }}
+        shell: python
+        run: |
+          import re
+          import sys
+
+          tag_pattern = r"${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}"
+          ref = "${{ github.ref_name }}"
+
+          if not tag_pattern:
+            sys.exit(0)
+
+          if not re.match(tag_pattern, ref):
+            print(f"::error::{ref} does not match {tag_pattern}")
+            sys.exit(1)
+
+      - name: Test branch name pattern
+        if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' && !inputs.testpypi }}
+        run: |
+          echo "Checking that this release is being made from a main/master branch ( ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }} ) - will fail if not"
+          git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install twine setuptools wheel cibuildwheel
+
+      - name: Check version
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          if Path("setup.py").is_file():
+              if Path("pyproject.toml").is_file():
+                  with open("pyproject.toml", "rb") as f:
+                      data = tomllib.load(f)
+                  requires = data["build-system"]["requires"]
+                  subprocess.run(["pip", "install", "--upgrade", *requires], check=True)
+
+              result = subprocess.run(["python", "setup.py", "--version"], capture_output=True, text=True, check=True)
+              version = result.stdout.strip()
+              release = os.environ.get("GITHUB_REF_NAME")
+              testpypi = os.environ.get("INPUT_TESTPYPI", "").lower() == "true"
+
+              if not testpypi and release != version:
+                  raise SystemExit(f"Version mismatch: release '{release}' != setup.py version '{version}'")
 
       - name: Build wheels
         run: |
