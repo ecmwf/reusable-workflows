@@ -113,8 +113,6 @@ jobs:
               release = os.environ.get("GITHUB_REF_NAME")
               testpypi = os.environ.get("INPUT_TESTPYPI").lower() == "true"
 
-              print(version, release, testpypi)
-
               if not testpypi and release != version:
                   raise SystemExit(f"Version mismatch: release '{release}' != setup.py version '{version}'")
 
