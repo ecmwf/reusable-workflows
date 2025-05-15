@@ -1,0 +1,25 @@
+name: Generate Version Selector
+description: Generates 'version.json' to be used by sphinx doc. See version_gen.py for more details.
+inputs:
+  path:
+    description: Directory to be scanned
+    required: true
+  space:
+    description: Name of the site space
+    required: true
+  name:
+    description: Name of the site within given space
+    required: true
+  sites-token:
+    description: HTTP access token to write to sites.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - shell: bash
+      env:
+        SITES_TOKEN: ${{ inputs.sites-token }}
+      run: python $GITHUB_ACTION_PATH/version_gen.py --path=${{ inputs.path }} --space=${{ inputs.space }} --name=${{ inputs.name }}
