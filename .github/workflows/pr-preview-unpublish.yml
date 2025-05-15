@@ -1,0 +1,39 @@
+# To use this workflow ensure that the calling workflow is run on
+#   pull_request:
+#     types: [closed]
+# If the calling workflow aready filters those events the workflow will not work properly.
+name: PR Preview Unpublish
+
+on:
+  workflow_call:
+    inputs:
+      # This is the sites.ecmwf.int space
+      space:
+        type: string
+        required: true
+      # This is the sites.ecmwf.int name
+      name:
+        type: string
+        required: true
+      # This is path under whic to publish the html
+      # Note that below the path another subdirectory will be created withe pattern PR-<pr-number>
+      # I.e.: sites.ecmwf.int/<space>/<name>/<path>/PR-<PR-number>
+      path:
+        type: string
+        required: true
+    secrets:
+      sites-token:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete from ecmwf-sites on pull-request[closed]
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' }}
+        run: |
+          curl -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.sites-token }}" \
+            -H "Accept: application/json" \
+            https://sites.ecmwf.int/${{ inputs.space }}/${{ inputs.name }}/s/api/v2/files/${{ inputs.path }}/PR-${{ github.event.number }}
+

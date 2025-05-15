@@ -7,6 +7,10 @@ inputs:
   path:
     description: Directory to be uploaded
     required: true
+  remote_path:
+    description: Directory to upload into
+    required: false
+    default: "."
   space:
     description: Name of the site space
     required: true
@@ -24,4 +28,7 @@ runs:
       run: pip install sites-toolkit --upgrade --index-url https://get.ecmwf.int/repository/pypi-all/simple
 
     - shell: bash
-      run: python $GITHUB_ACTION_PATH/upload.py --token=${{ inputs.token }} --path=${{ inputs.path }} --space=${{ inputs.space }} --name=${{ inputs.name }}
+      env:
+        SITES_TOKEN: ${{ inputs.token }}
+      run: |
+        python $GITHUB_ACTION_PATH/upload.py --path=${{ inputs.path }} --remote-path=${{ inputs.remote_path }} --space=${{ inputs.space }} --name=${{ inputs.name }}
