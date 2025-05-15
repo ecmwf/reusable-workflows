@@ -8,6 +8,7 @@ from sites.sdk.sites import Site, Authenticator
 parser = argparse.ArgumentParser()
 parser.add_argument("--token", type=str)
 parser.add_argument("--path", type=str)
+parser.add_argument("--remote-path", type=str, default=".")
 parser.add_argument("--space", type=str)
 parser.add_argument("--name", type=str)
 
@@ -30,7 +31,7 @@ site_content_manager = client.content(site=site)
 
 # upload all the contents of a directory
 print("Uploading...")
-res = site_content_manager.upload(local_path=args.path, recursive=True)
+res = site_content_manager.upload(local_path=args.path, remote_path=args.remote_path, recursive=True)
 print(res)
 if isinstance(res, list) and len(res):
     print(f"Successfully uploaded to sites.ecmwf.int/{args.space}/{args.name}")
