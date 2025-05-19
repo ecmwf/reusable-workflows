@@ -1,5 +1,5 @@
 ---
-name: cd-pypi
+name: cd-pypi-binwheel
 
 on:
   workflow_call:
@@ -16,11 +16,15 @@ on:
         type: string
         required: false
         default: "./"
-      buildargs:
-        description: Args to pass in to build as `python -m build {buildargs}`
-          e.g. '--sdist' for just source distribution
-        type: string
+      platforms:
+        description: For not pure python project, the platforms to build for e.g. "['ubuntu-latest','macos-latest','windows-latest']"
         required: false
+        type: string
+        default: ''
+      pyversions:
+        description: For not pure python project, the Python versions to build for e.g. "['38','39','310','311','312','313']"
+        required: false
+        type: string
         default: ''
       env_vars:
         description: A way to set env variables
@@ -31,8 +35,12 @@ on:
 
 jobs:
   deploy:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi }}
-    runs-on: ubuntu-latest
+    if:  ${{ github.ref_type == 'tag' || github.event_name == 'release' || inputs.testpypi || (inputs.platforms != '' && inputs.pyversions != '') }}
+    strategy:
+      matrix:
+        platform: ${{ fromJson(inputs.platforms) }}
+        python: ${{ fromJson(inputs.pyversions) }}
+    runs-on: ${{ matrix.platform }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -50,6 +58,11 @@ jobs:
         with:
           fetch-depth: "0"
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+      
       - name: Test tag name pattern
         if: ${{ !inputs.testpypi }}
         shell: python
@@ -73,48 +86,60 @@ jobs:
           echo "Checking that this release is being made from a main/master branch ( ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }} ) - will fail if not"
           git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install setuptools wheel twine build
+          pip install twine setuptools wheel cibuildwheel setuptools-rust
 
       - name: Check version
+        shell: python
+        env:
+          INPUT_TESTPYPI: ${{ inputs.testpypi }}
         run: |
-          if [ -f "setup.py" ]; then
-            if [ -f "pyproject.toml" ] ; then
-              # we need to install eg setuptools_scm to correctly determine version later
-              extra_deps=$(python -c 'import tomllib; print(" ".join(f"{e}" for e in tomllib.load(open("pyproject.toml", "rb"))["build-system"]["requires"]))')
-              pip install --upgrade $extra_deps
-            fi
-            version=$(python setup.py --version)
-            release=${{ github.ref_name }}
-            if [ "${{ inputs.testpypi }}" != "true" ] ; then test "$release" == "$version"; fi
-          fi
+          import os
+          import subprocess
+          import tomllib
+          from pathlib import Path
 
-      - name: Build and publish to pypi
+          if Path("setup.py").is_file():
+              if Path("pyproject.toml").is_file():
+                  with open("pyproject.toml", "rb") as f:
+                      data = tomllib.load(f)
+                  requires = data["build-system"]["requires"]
+                  subprocess.run(["pip", "install", "--upgrade", *requires], check=True)
+
+              result = subprocess.run(["python", "setup.py", "--version"], capture_output=True, text=True, check=True)
+              version = result.stdout.strip()
+              release = os.environ.get("GITHUB_REF_NAME")
+              testpypi = os.environ.get("INPUT_TESTPYPI").lower() == "true"
+
+              if not testpypi and release != version:
+                  raise SystemExit(f"Version mismatch: release '{release}' != setup.py version '{version}'")
+
+      - name: Build wheels
+        run: |
+          cibuildwheel --output-dir dist
+        env:
+          CIBW_BUILD: "cp${{ matrix.python }}-*"
+          CIBW_BUILD_VERBOSITY: 1
+
+      - name: Upload to PyPI
         if: ${{ !inputs.testpypi }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          python -m build ${{ inputs.buildargs }}
-          twine check dist/*
-          twine upload dist/*
+          twine check dist/*.whl
+          twine upload dist/*.whl
 
-      - name: Build and publish to testpypi
+      - name: Upload to test-PyPI
         if: ${{ inputs.testpypi }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
         run: |
-          python -m build ${{ inputs.buildargs }}
-          twine check dist/*
+          twine check dist/*.whl
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's
           # [tools.setuptools_scm]
-          twine upload --repository testpypi --verbose dist/*
+          twine upload --repository testpypi --verbose dist/*.whl
