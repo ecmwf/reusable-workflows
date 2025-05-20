@@ -118,6 +118,7 @@ jobs:
 
       - name: Build wheels
         run: |
+          echo $PASSWORD | docker login eccr.ecmwf.int --username $USERNAME --password-stdin
           cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
