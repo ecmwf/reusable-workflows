@@ -175,6 +175,9 @@ runs:
         echo "pip list:"
         pip list
         cd ${{ steps.inputs.outputs.subdir }}
+        # NOTE we disable findlibs-package as a hotfix because the wheel doesnt come from the
+        # preceeding build (which is the one we want to use for tests here!)
+        export FINDLIBS_DISABLE_PACKAGE=yes
         if [ -n "${{ inputs.test_cmd }}" ]; then
           echo "Running package-supplied test command"
           ${{ inputs.test_cmd }}
