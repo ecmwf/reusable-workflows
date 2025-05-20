@@ -131,6 +131,8 @@ jobs:
           CIBW_MANYLINUX_S390X_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
           CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
           CIBW_MANYLINUX_PYPY_I686_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
+          PASSWORD: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+          USERNAME: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
 
 
       - name: Upload to PyPI
