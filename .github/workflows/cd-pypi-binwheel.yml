@@ -134,7 +134,7 @@ jobs:
           CIBW_MANYLINUX_PYPY_I686_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
           PASSWORD: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
           USERNAME: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
-
+          CIBW_CONTAINER_ENGINE: "docker; create_args: --user root"
 
       - name: Upload to PyPI
         if: ${{ !inputs.testpypi }}
