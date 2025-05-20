@@ -116,9 +116,16 @@ jobs:
               if not testpypi and release != version:
                   raise SystemExit(f"Version mismatch: release '{release}' != setup.py version '{version}'")
 
-      - name: Build wheels
+      - name: Docker login
+        if: runner.os == 'Linux'
+        env:
+          PASSWORD: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+          USERNAME: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
         run: |
           echo $PASSWORD | docker login eccr.ecmwf.int --username $USERNAME --password-stdin
+
+      - name: Build wheels
+        run: |
           cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
