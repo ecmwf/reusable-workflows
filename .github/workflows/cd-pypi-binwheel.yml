@@ -122,7 +122,7 @@ jobs:
         env:
           CIBW_BUILD: "cp${{ matrix.python }}-*"
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_ENVIRONMENT_PASS_LINUX: CIBW_ENVIRONMENT: "USERNAME=${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }} PASSWORD=${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}"
+          CIBW_ENVIRONMENT_PASS_LINUX: "USERNAME=${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }} PASSWORD=${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}"
           CIBW_MANYLINUX_X86_64_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
           CIBW_MANYLINUX_I686_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
           CIBW_MANYLINUX_PYPY_X86_64_IMAGE: eccr.ecmwf.int/wheelmaker/2_28:multirelease
