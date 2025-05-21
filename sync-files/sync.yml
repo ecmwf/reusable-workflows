@@ -196,7 +196,7 @@ group:
     dest: training/CONTRIBUTORS.md
     template:
       repo_name: anemoi-training
-  - source: sync-files/anemoi/some/.github/pull_request_template-core.md
+  - source: sync-files/anemoi/all/.github/pull_request_template.md
     dest: .github/pull_request_template.md
     template: true
   - source: sync-files/anemoi/all/.gitignore
