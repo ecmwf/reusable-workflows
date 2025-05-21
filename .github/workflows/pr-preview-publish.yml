@@ -65,26 +65,15 @@ jobs:
       # 3. Update PR description with preview link
       - name: Update PR body with link
         if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-        uses: actions/github-script@v7
+        uses: ecmwf/reusable-workflows/update-pr-description@feature/allow-target-dir-in-sites-upload
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const pr   = context.payload.pull_request;
-            const repo = context.repo;
-            const url  = `https://sites.ecmwf.int/${{ inputs.space }}/${{ inputs.name }}/${{ inputs.path }}/PR-${{ github.event.number }}`
+          text: |- 
+            ${{ inputs.link-text }}
+            https://sites.ecmwf.int/${{ inputs.space }}/${{ inputs.name }}/${{ inputs.path }}/PR-${{ github.event.number }}
+          marker: ${{ inputs.link-tag }}
+          repo: ${{ github.repository }}
+          pr: ${{ github.event.number }}
+        env: 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            const start = '<!-- ${{ inputs.link-tag }}-START -->';
-            const end   = '<!-- ${{ inputs.link-tag }}-URL-END -->';
-            const snippet = `${start}\n${{ inputs.link-text }}\n${url}\n${end}`;
 
-            const original = pr.body || '';
-            const updated  = original.includes(start)
-              ? original.replace(new RegExp(`${start}[\\s\\S]*?${end}`), snippet)
-              : `${original}\n\n${snippet}`;
-
-            await github.rest.pulls.update({
-              owner: repo.owner,
-              repo:  repo.repo,
-              pull_number: pr.number,
-              body: updated
-            });
