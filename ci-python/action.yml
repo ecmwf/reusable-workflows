@@ -94,13 +94,15 @@ runs:
           conda install -y python=${{ inputs.python_version }} openldap
           conda install -y ${{ inputs.conda_install }}
           pip_command="pip"
-          echo "use_conda=true" >> $GITHUB_OUTPUT
+          use_conda="true"
+          build_command="python -m build --sdist"
         else
           # Use uv if conda_install is not set
           uv venv --python ${{ inputs.python_version }} $RUNNER_TEMP/venv
           source $RUNNER_TEMP/venv/bin/activate
           pip_command="uv pip"
-          echo "use_conda=false" >> $GITHUB_OUTPUT
+          use_conda="false"
+          build_command="uv build --sdist --no-sources"
         fi
 
         $pip_command install --upgrade pip
@@ -112,7 +114,10 @@ runs:
           cd ${{ steps.inputs.outputs.subdir }}
           $pip_command install -e .[${{ inputs.toml_opt_dep_sections }}]
         fi
+
+        echo "use_conda=$use_conda" >> $GITHUB_OUTPUT
         echo "pip_command=$pip_command" >> $GITHUB_OUTPUT
+        echo "build_command=$build_command" >> $GITHUB_OUTPUT
 
     - name: Install dependencies
       if: ${{ inputs.python_dependencies }}
@@ -157,7 +162,7 @@ runs:
           git fetch --depth 1 origin $ref
           git checkout FETCH_HEAD
           cd $subdir
-          python -m build --sdist
+          ${{ steps.setup_env.outputs.build_command }}
           ${{ steps.setup_env.outputs.pip_command }} install dist/*
         done <<< "${{ inputs.python_dependencies }}"
 
@@ -172,7 +177,7 @@ runs:
         fi
 
         cd ${{ steps.inputs.outputs.subdir }}
-        python -m build --sdist
+        ${{ steps.setup_env.outputs.build_command }}
         ${{ steps.setup_env.outputs.pip_command }} install dist/*
 
     - name: Add dependency bin dirs to PATH
