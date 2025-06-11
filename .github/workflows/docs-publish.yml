@@ -2,7 +2,7 @@
 #   pull_request:
 #     types: [opened, synchronize, reopened]
 # If the calling workflow already filters those events the workflow will not work properly.
-name: PR Preview Publish
+name: Publish Documentation
 
 on:
   workflow_call:
@@ -55,7 +55,7 @@ jobs:
 
       # 2. Deploy HTML
       - name: Publish to ecmwf-sites
-        uses: ecmwf/reuasable-workflows/ecmwf-sites-upload
+        uses: ecmwf/reusable-workflows/ecmwf-sites-upload
         with:
           token: ${{ secrets.sites-token }}
           path: ${{ steps.get-artifact.outputs.download-path }}
