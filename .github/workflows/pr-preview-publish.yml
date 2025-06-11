@@ -1,0 +1,78 @@
+# To use this workflow ensure that the calling workflow is run on
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+# If the calling workflow aready filters those events the workflow will not work properly.
+name: PR Preview Publish
+
+on:
+  workflow_call:
+    inputs:
+      # Id of the artifact to publish
+      artifact-id:
+        type: string
+        required: true
+      # This is the sites.ecmwf.int space
+      space:
+        type: string
+        required: true
+      # This is the sites.ecmwf.int name
+      name:
+        type: string
+        required: true
+      # This is path under whic to publish the html
+      # Note that below the path another subdirectory will be created withe pattern PR-<pr-number>
+      # I.e.: sites.ecmwf.int/<space>/<name>/<path>/PR-<PR-number>
+      path:
+        type: string
+        required: true
+      # This tag identifies the preview link in case multiple runs of this workflow add preview links,
+      # e.g., documentation, tests, static-analyzer
+      link-tag:
+        type: string
+        default: PREVIEW-URL
+      link-text:
+        type: string
+        required: true
+    secrets:
+      sites-token:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Download artifact containing HTML to publish if the PR is updated/opened/synced
+      - name: Download artifact to publish
+        if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+        id: get-artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact-id }}
+          path: ${{ runner.temp }}/html
+          merge-multiple: true
+
+      # 2. Deploy HTML if the PR is updated/opened/synced
+      - name: Publish to ecmwf-sites on pull-request[opened, updated, synchronized]
+        if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+        uses: ecmwf/reusable-workflows/ecmwf-sites-upload
+        with:
+          token: ${{ secrets.sites-token }}
+          path: ${{ steps.get-artifact.outputs.download-path }}
+          remote_path: ${{ inputs.path }}/PR-${{ github.event.number }}
+          space: ${{ inputs.space }}
+          name: ${{ inputs.name }}
+
+      # 3. Update PR description with preview link
+      - name: Update PR body with link
+        if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+        uses: ecmwf/reusable-workflows/update-pr-description
+        with:
+          text: |-
+            ${{ inputs.link-text }}
+            https://sites.ecmwf.int/${{ inputs.space }}/${{ inputs.name }}/${{ inputs.path }}/PR-${{ github.event.number }}
+          marker: ${{ inputs.link-tag }}
+          repo: ${{ github.repository }}
+          pr: ${{ github.event.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

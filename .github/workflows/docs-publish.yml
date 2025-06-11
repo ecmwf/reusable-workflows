@@ -1,0 +1,83 @@
+# To use this workflow ensure that the calling workflow is run on
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+# If the calling workflow already filters those events the workflow will not work properly.
+name: PR Preview Publish
+
+on:
+  workflow_call:
+    inputs:
+      # Id of the artifact to publish
+      artifact-id:
+        type: string
+        required: true
+      # This is the sites.ecmwf.int space
+      # sites.ecmwf.int/<space>/<name>/<path>/<id>
+      space:
+        type: string
+        required: true
+      # This is the sites.ecmwf.int name
+      # sites.ecmwf.int/<space>/<name>/<path>/<id>
+      name:
+        type: string
+        required: true
+      # This is path under whic to publish the html
+      # Note that below the path another subdirectory will be created with the pattern:
+      # sites.ecmwf.int/<space>/<name>/<path>/<id>
+      path:
+        type: string
+        required: true
+      # This is the final part of the path, e.g. tag/branch name or latest/stable
+      # sites.ecmwf.int/<space>/<name>/<path>/<id>
+      id:
+        type: string
+        required: true
+      # Optional softlink to create, use this to link from latest/stable to concrete
+      # sites.ecmwf.int/<space>/<name>/<path>/<softlink>
+      softlink:
+        type: string
+    secrets:
+      sites-token:
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Download artifact containing html to publish
+      - name: Download artifact to publish
+        id: get-artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact-id }}
+          path: ${{ runner.temp }}/html
+          merge-multiple: true
+
+      # 2. Deploy HTML
+      - name: Publish to ecmwf-sites
+        uses: ecmwf/reuasable-workflows/ecmwf-sites-upload
+        with:
+          token: ${{ secrets.sites-token }}
+          path: ${{ steps.get-artifact.outputs.download-path }}
+          remote_path: ${{ inputs.path }}/${{ inputs.id }}
+          space: ${{ inputs.space }}
+          name: ${{ inputs.name }}
+
+      # 3. Create softlink if desierd
+      - name: Create softlinks
+        if: ${{ inputs.softlink }}
+        run: |
+          curl -X 'PUT' \
+            -H "Authorization: Bearer ${{ secrets.sites-token }}" \
+            -H "Accept: application/json" \
+            https://sites.ecmwf.int/${{ inputs.space }}/${{ inputs.name }}/s/api/v2/symlinks/${{ inputs.path }}/${{ inputs.softlink }}?force=true \
+          -d '{"target": "${{ inputs.path }}/${{ inputs.id }}"}'
+
+      # 4. Update version selector json
+      - name: Update version selectors for tags
+        uses: ecmwf/reusable-workflows/generate-version-selector
+        with:
+          path: ${{ inputs.path }}
+          space: ${{ inputs.space }}
+          name: ${{ inputs.name }}
+          sites-token: ${{ secrets.sites-token }}
