@@ -3,7 +3,6 @@
 #     types: [opened, synchronize, reopened]
 # If the calling workflow aready filters those events the workflow will not work properly.
 name: PR Preview Publish
-
 on:
   workflow_call:
     inputs:
@@ -54,7 +53,7 @@ jobs:
       # 2. Deploy HTML if the PR is updated/opened/synced
       - name: Publish to ecmwf-sites on pull-request[opened, updated, synchronized]
         if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-        uses: ecmwf/reusable-workflows/ecmwf-sites-upload
+        uses: ecmwf/reusable-workflows/ecmwf-sites-upload@main
         with:
           token: ${{ secrets.sites-token }}
           path: ${{ steps.get-artifact.outputs.download-path }}
@@ -65,7 +64,7 @@ jobs:
       # 3. Update PR description with preview link
       - name: Update PR body with link
         if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-        uses: ecmwf/reusable-workflows/update-pr-description
+        uses: ecmwf/reusable-workflows/update-pr-description@main
         with:
           text: |-
             ${{ inputs.link-text }}

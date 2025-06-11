@@ -3,7 +3,6 @@
 #     types: [closed]
 # If the calling workflow aready filters those events the workflow will not work properly.
 name: PR Preview Unpublish
-
 on:
   workflow_call:
     inputs:

@@ -3,7 +3,6 @@
 #     types: [opened, synchronize, reopened]
 # If the calling workflow already filters those events the workflow will not work properly.
 name: Publish Documentation
-
 on:
   workflow_call:
     inputs:
@@ -55,7 +54,7 @@ jobs:
 
       # 2. Deploy HTML
       - name: Publish to ecmwf-sites
-        uses: ecmwf/reusable-workflows/ecmwf-sites-upload
+        uses: ecmwf/reusable-workflows/ecmwf-sites-upload@main
         with:
           token: ${{ secrets.sites-token }}
           path: ${{ steps.get-artifact.outputs.download-path }}
@@ -75,7 +74,7 @@ jobs:
 
       # 4. Update version selector json
       - name: Update version selectors for tags
-        uses: ecmwf/reusable-workflows/generate-version-selector
+        uses: ecmwf/reusable-workflows/generate-version-selector@main
         with:
           path: ${{ inputs.path }}
           space: ${{ inputs.space }}
