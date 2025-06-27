@@ -30,6 +30,11 @@ inputs:
     required: false
     default: ""
     type: string
+  env-vars:
+    description: "Optional environment variables to set (format: VAR1=value1 VAR2=value2)"
+    required: false
+    default: ""
+    type: string
   manual:
     description: Trigger the action manually and bypass the latest commit check.
     required: false
@@ -79,5 +84,18 @@ runs:
 
     - name: Run integration tests
       if: ${{ env.should_run == 'true' || inputs.manual == 'true' }}
-      run: python -m pytest -v --emoji ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
+      env:
+        INPUT_ENV_VARS: ${{ inputs.env-vars }}
+      run: |
+        # Set environment variables if provided
+        for var_assignment in $INPUT_ENV_VARS; do
+          if [[ "$var_assignment" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]]; then
+            echo "Setting environment variable: $var_assignment"
+            export "$var_assignment"
+          else
+            echo "Skipping invalid environment variable assignment: $var_assignment"
+          fi
+        done
+
+        python -m pytest -v --emoji ${{ inputs.test-directory }} ${{ inputs.pytest-options }}
       shell: bash
