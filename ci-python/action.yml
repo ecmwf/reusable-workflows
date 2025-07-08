@@ -82,33 +82,53 @@ runs:
       run: echo "${{ inputs.env }}" >> "$GITHUB_ENV"
 
     - name: Setup python env
+      id: setup_env
       shell: bash -e {0}
-      # include openldap to provide a consistent environment with conda's openssl
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda create -y -p $RUNNER_TEMP/venv
-        conda activate $RUNNER_TEMP/venv
-        conda install -y python=${{ inputs.python_version }} openldap
         if [ -n "${{ inputs.conda_install }}" ]; then
+          # Use conda if conda_install is set
+          source /opt/conda/etc/profile.d/conda.sh
+          conda create -y -p $RUNNER_TEMP/venv
+          conda activate $RUNNER_TEMP/venv
+          # include openldap to provide a consistent environment with conda's openssl
+          conda install -y python=${{ inputs.python_version }} openldap
           conda install -y ${{ inputs.conda_install }}
+          pip_command="pip"
+          use_conda="true"
+          build_command="python -m build --sdist"
+        else
+          # Use uv if conda_install is not set
+          uv venv --python ${{ inputs.python_version }} $RUNNER_TEMP/venv
+          source $RUNNER_TEMP/venv/bin/activate
+          pip_command="uv pip"
+          use_conda="false"
+          build_command="uv build --sdist --no-sources"
         fi
-        pip install --upgrade pip
-        pip install pytest pytest-cov build
+
+        $pip_command install --upgrade pip
+        $pip_command install pytest pytest-cov build
         if [ -f ${{ inputs.requirements_path }} ]; then
-          pip install -r ${{ inputs.requirements_path }} 
+          $pip_command install -r ${{ inputs.requirements_path }}
         fi
-        # this is just to install the dependencies; the pkg will be overwritten later
         if [ -n "${{ inputs.toml_opt_dep_sections }}" ]; then
           cd ${{ steps.inputs.outputs.subdir }}
-          pip install -e .[${{ inputs.toml_opt_dep_sections }}]
+          $pip_command install -e .[${{ inputs.toml_opt_dep_sections }}]
         fi
+
+        echo "use_conda=$use_conda" >> $GITHUB_OUTPUT
+        echo "pip_command=$pip_command" >> $GITHUB_OUTPUT
+        echo "build_command=$build_command" >> $GITHUB_OUTPUT
 
     - name: Install dependencies
       if: ${{ inputs.python_dependencies }}
       shell: bash -ex {0}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda activate $RUNNER_TEMP/venv
+        if [ "${{ steps.setup_env.outputs.use_conda }}" = "true" ]; then
+          source /opt/conda/etc/profile.d/conda.sh
+          conda activate $RUNNER_TEMP/venv
+        else
+          source $RUNNER_TEMP/venv/bin/activate
+        fi
 
         while IFS= read -r line && [[ -n "$line" ]]; do
           vars=($(python <<HEREDOC
@@ -142,18 +162,23 @@ runs:
           git fetch --depth 1 origin $ref
           git checkout FETCH_HEAD
           cd $subdir
-          python -m build --sdist
-          pip install dist/*
+          ${{ steps.setup_env.outputs.build_command }}
+          ${{ steps.setup_env.outputs.pip_command }} install dist/*
         done <<< "${{ inputs.python_dependencies }}"
 
     - name: Install package
       shell: bash -e {0}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda activate $RUNNER_TEMP/venv
+        if [ "${{ steps.setup_env.outputs.use_conda }}" = "true" ]; then
+          source /opt/conda/etc/profile.d/conda.sh
+          conda activate $RUNNER_TEMP/venv
+        else
+          source $RUNNER_TEMP/venv/bin/activate
+        fi
+
         cd ${{ steps.inputs.outputs.subdir }}
-        python -m build --sdist
-        pip install dist/*
+        ${{ steps.setup_env.outputs.build_command }}
+        ${{ steps.setup_env.outputs.pip_command }} install dist/*
 
     - name: Add dependency bin dirs to PATH
       shell: bash -ex {0}
@@ -168,12 +193,17 @@ runs:
         LD_LIBRARY_PATH: ${{ inputs.lib_path }}
       shell: bash -ex {0}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda activate $RUNNER_TEMP/venv
-        echo "conda list:"
-        conda list
+        if [ "${{ steps.setup_env.outputs.use_conda }}" = "true" ]; then
+          source /opt/conda/etc/profile.d/conda.sh
+          conda activate $RUNNER_TEMP/venv
+          echo "conda list:"
+          conda list
+        else
+          source $RUNNER_TEMP/venv/bin/activate
+        fi
+
         echo "pip list:"
-        pip list
+        ${{ steps.setup_env.outputs.pip_command }} list
         cd ${{ steps.inputs.outputs.subdir }}
         # NOTE we disable findlibs-package as a hotfix because the wheel doesnt come from the
         # preceeding build (which is the one we want to use for tests here!)
