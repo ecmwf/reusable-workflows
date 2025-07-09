@@ -46,7 +46,7 @@ on:
         default: "./"
 
 env:
-  UV_SYSTEM_PYTHON: 1
+  UV_SYSTEM_PYTHON: 1  # ensures uv uses the system Python interpreter instead of downloading its own.
 
 jobs:
   tests:
@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
-    name: Run pytest with Python ${{ inputs.python-version }} on ${{ matrix.platform }}
+    name: pytest (${{ matrix.platform }})
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: latest
+          version: 0.7.19
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
         if: ${{ inputs.install-dependencies }}
