@@ -81,12 +81,14 @@ jobs:
           cd proj && $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/prepare_deps.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
       - run: |
           cd proj
+          rm -rf /tmp/buildvenv && uv venv --python python"${{ matrix.python_version }}" /tmp/buildvenv && source /tmp/buildvenv/bin/activate && uv pip install build twine==6.0.1 delocate setuptools requests # NOTE twine version forced due to metadata issue, cf wheelmaker Dockerfile
+          VERSION=$(cat VERSION) PYTHONPATH=$GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts python -c 'from setup_utils import get_version; print(get_version())' > VERSION
           if [[ -f ./${{ inputs.wheel_directory }}/pre-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/pre-compile.sh ; fi
           PATH="$GITHUB_WORKSPACE/ecbuild/bin/:$PATH" $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/compile.sh ./${{ inputs.wheel_directory }}/buildconfig
           if [[ -f ./${{ inputs.wheel_directory }}/post-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/post-compile.sh ; fi
       - run: |
           cd proj
-          rm -rf /tmp/buildvenv && uv venv --python python"${{ matrix.python_version }}" /tmp/buildvenv && source /tmp/buildvenv/bin/activate && uv pip install build twine==6.0.1 delocate setuptools requests # NOTE twine version forced due to metadata issue, cf wheelmaker Dockerfile
+          source /tmp/buildvenv/bin/activate
           PYTHONPATH=$GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/wheel-linux.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
           if [[ -f ./${{ inputs.wheel_directory }}/post-build.sh ]] ; then ./${{ inputs.wheel_directory }}/post-build.sh ; fi
           $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/test-wheel.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
