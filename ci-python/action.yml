@@ -75,6 +75,8 @@ runs:
         repository: ${{ steps.inputs.outputs.repo }}
         ref: ${{ steps.inputs.outputs.ref }}
         token: ${{ inputs.github_token }}
+        fetch-depth: 0  # pyprojects using setuptools-scm need unshallow fetch to determine version
+        fetch-tags: true
 
     - name: Set env vars from matrix
       if: ${{ inputs.env }}
@@ -159,7 +161,7 @@ runs:
           cd $RUNNER_TEMP/ci-deps/$name/$subdir
           git init
           git remote add origin https://${{ inputs.github_token }}@github.com/$owner/$repo.git
-          git fetch --depth 1 origin $ref
+          git fetch --tags origin $ref
           git checkout FETCH_HEAD
           cd $subdir
           ${{ steps.setup_env.outputs.build_command }}
