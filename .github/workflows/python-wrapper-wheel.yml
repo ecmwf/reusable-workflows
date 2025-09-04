@@ -1,10 +1,8 @@
-# Releases a python-wrapper wheel: for an ecbuild-based compiled library,
-# runs the compilation and bundles all artifacts (libs, includes, ...) into
-# a binary wheel (manylinux/macos) along with findlibs-compatible instructions
-# about dependencies
-# Accepts `wheel_directory` parameter, by default `python_wrapper`, with files
-# that configure this action -- `buildconfig`, `pyproject.toml`, `setup.py`, and
-# a few optional bash scripts such as `pre-compile.sh`
+# Used to be a job that released binary python wheels
+# However, we have moved away from reusable-actions to a different
+# repo which facilitates centralized bundle-style releases
+# We keep this action in place until all repos get cleaned of the triggering
+# reference
 
 on:
   workflow_call:
@@ -20,83 +18,9 @@ on:
         type: string
         default: python_wrapper
 jobs:
-  linux-wheel:
-    name: Build manylinux_2_28
-    strategy:
-      fail-fast: true # NOTE this is not as good as it looks, because by the time something fails, we may have some wheels published already. Ideally we have one cross-platform pypi push at the end
-      matrix:
-        # TODO convert this to be matrix-friendly. Note it's a bit tricky since
-        # we'd ideally not reexecute the compile step multiple times, but it
-        # (non-essentially) depends on a matrix-based step. Add more pythons, possibly
-        # more manylinuxes
-        python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-    runs-on: [self-hosted, Linux, platform-builder-Rocky-8.6]
-    container:
-      image: eccr.ecmwf.int/wheelmaker/2_28:1.latest
-      options: --user github-actions
-      credentials:
-        username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
-        password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+  noop:
+    name: There is no job, there is only peace
+    if: false
+    runs-on: ubuntu-24.04
     steps:
-        # NOTE we dont use action checkout because it doesnt cleanup after itself correctly
-      - run: git clone --depth=1 --branch="${GITHUB_REF_NAME}" https://github.com/$GITHUB_REPOSITORY /src/proj
-      - run: |
-          set -euo pipefail
-          if [ "${{ inputs.use_test_pypi }}" = "true" ] ; then UPLOAD_TO=test ; else UPLOAD_TO=prod ; fi
-          cd /src/proj
-          /buildscripts/all.sh "${{ matrix.python_version }}" /venv/ $UPLOAD_TO ${{ inputs.wheel_directory }}
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD_PROD: ${{ secrets.PYPI_API_TOKEN }}
-          TWINE_PASSWORD_TEST: ${{ secrets.PYPI_TEST_API_TOKEN }}
-  macos-wheel:
-    name: Build macos wheel
-    strategy:
-      fail-fast: false # NOTE primary reason for fail fast is the failure in the clean up step. Once fixed, consider true
-      matrix:
-        arch_type: [ARM64, X64]
-        python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-    runs-on: [self-hosted, macOS, "${{ matrix.arch_type }}"]
-    steps:
-
-      # TODO convert this to be matrix-friendly for python versions. Note it's a bit tricky since
-      # we'd ideally not reexecute the compile step multiple times, but it
-      # (non-essentially) depends on a matrix-based step
-      # NOTE we dont use action checkout because it doesnt cleanup after itself correctly
-      - run: |
-          if [ -z "$(which uv)" ] ; then curl -LsSf https://astral.sh/uv/install.sh | sh ; fi
-          rm -rf ecbuild wheelmaker
-          git clone --depth=1 https://github.com/ecmwf/ecbuild ecbuild
-          # git clone --depth=1 --branch="wheelmaker" https://github.com/ecmwf/ci-utils wheelmaker # TODO use token here to get rid of the checkout action below
-      - uses: actions/checkout@v4
-        with:
-          repository: ecmwf/ci-utils
-          ref: 1.latest
-          path: ci-utils
-          token: ${{ secrets.GH_REPO_READ_TOKEN }}
-      - run: rm -rf proj && git clone --depth=1 --branch="${GITHUB_REF_NAME}" https://github.com/$GITHUB_REPOSITORY proj
-          # TODO simplify this action by calling /buildscripts/all.sh instead of the three next steps
-      - run: |
-          uv python install python"${{ matrix.python_version }}"
-          cd proj && $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/prepare_deps.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
-      - run: |
-          cd proj
-          rm -rf /tmp/buildvenv && uv venv --python python"${{ matrix.python_version }}" /tmp/buildvenv && source /tmp/buildvenv/bin/activate && uv pip install build twine==6.0.1 delocate setuptools requests # NOTE twine version forced due to metadata issue, cf wheelmaker Dockerfile
-          VERSION=$(cat VERSION) PYTHONPATH=$GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts python -c 'from setup_utils import get_version; print(get_version())' > VERSION
-          if [[ -f ./${{ inputs.wheel_directory }}/pre-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/pre-compile.sh ; fi
-          PATH="$GITHUB_WORKSPACE/ecbuild/bin/:$PATH" $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/compile.sh ./${{ inputs.wheel_directory }}/buildconfig
-          if [[ -f ./${{ inputs.wheel_directory }}/post-compile.sh ]] ; then ./${{ inputs.wheel_directory }}/post-compile.sh ; fi
-      - run: |
-          cd proj
-          source /tmp/buildvenv/bin/activate
-          PYTHONPATH=$GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/wheel-linux.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
-          if [[ -f ./${{ inputs.wheel_directory }}/post-build.sh ]] ; then ./${{ inputs.wheel_directory }}/post-build.sh ; fi
-          $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/test-wheel.sh ./${{ inputs.wheel_directory }}/buildconfig "${{ matrix.python_version }}"
-          if [ "${{ inputs.use_test_pypi }}" = "true" ] ; then UPLOAD_TO=test ; else UPLOAD_TO=prod ; fi
-          source ./${{ inputs.wheel_directory }}/buildconfig
-          WHEELS=/tmp/$NAME/build/wheel/ # $NAME is from buildconfig
-          PYTHONPATH=$GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts $GITHUB_WORKSPACE/ci-utils/wheelmaker/buildscripts/upload-pypi.sh $UPLOAD_TO $WHEELS
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD_PROD: ${{ secrets.PYPI_API_TOKEN }}
-          TWINE_PASSWORD_TEST: ${{ secrets.PYPI_TEST_API_TOKEN }}
+      - run: echo ""
