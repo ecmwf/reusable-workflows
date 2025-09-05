@@ -41,6 +41,21 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Cleanup bad fdb folders
+      shell: bash
+      run: |
+        CANDIDATES=(
+          "opt/actions-runner/work/_work/fdb/fdb/build/tests/regressions/FDB-544/root_xxxx"
+          "opt/actions-runner/work/_work/fdb/fdb/build/tests/regressions/FDB-544/root_yyyy"
+        )
+        for BAD in "${CANDIDATES[@]}"; do
+          echo "Looking for $BAD ..."
+          if sudo test -e "$BAD"; then
+            echo "Found! $BAD"
+            echo "todo: rm it..."
+          fi
+        done
+  
     - name: Parse repository input
       id: inputs
       shell: python3 {0}
