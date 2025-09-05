@@ -50,9 +50,9 @@ runs:
         )
         for BAD in "${CANDIDATES[@]}"; do
           echo "Looking for $BAD ..."
-          if sudo test -e "$BAD"; then
+          if test -e "$BAD"; then
             echo "Found! $BAD"
-            echo "todo: rm it..."
+            chmod 777 $BAD
           fi
         done
   
