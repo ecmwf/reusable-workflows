@@ -45,14 +45,17 @@ runs:
       shell: bash
       run: |
         CANDIDATES=(
-          "opt/actions-runner/work/_work/fdb/fdb/build/tests/regressions/FDB-544/root_xxxx"
-          "opt/actions-runner/work/_work/fdb/fdb/build/tests/regressions/FDB-544/root_yyyy"
+          "/opt/actions-runner/work/_work/fdb/fdb/build/tests/regressions/FDB-544/root_xxxx"
+          "/opt/actions-runner/work/_work/fdb/fdb/build/tests/regressions/FDB-544/root_yyyy"
         )
         for BAD in "${CANDIDATES[@]}"; do
           echo "Looking for $BAD ..."
           if test -e "$BAD"; then
             echo "Found! $BAD"
             chmod 777 $BAD
+            rm -rf $BAD
+          else
+            echo "Did not find $BAD"
           fi
         done
   
