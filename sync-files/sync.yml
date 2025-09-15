@@ -171,10 +171,39 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
       short_desc: "Miscellanous tools for training data-driven weather forecasts."
-    exclude: |
-      .release-please-manifest.json
-      .github/workflows/python-publish.yml
-      .github/workflows/release-please.yml
+    # exclude: |  NOTE - EXCLUDE IS BROKEN - NEED TO LIST ALL FILES WITH INCLUDE PATTERN
+    #   .release-please-manifest.json
+    #   .github/workflows/python-publish.yml
+    #   .github/workflows/release-please.yml
+  - source: sync-files/anemoi/all/.github/pull_request_template.md
+    dest: .github/pull_request_template.md
+    template: true
+  - source: sync-files/anemoi/all/.gitignore
+    dest: .gitignore
+  - source: sync-files/anemoi/all/CONTRIBUTORS.md
+    dest: CONTRIBUTORS.md
+    template:
+      repo_name: anemoi
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-public.yml
+    dest: .github/workflows/pr-label-public.yml
+    template:
+      repo_name: anemoi
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-conventional-commits.yml
+    dest: .github/workflows/pr-label-conventional-commits.yml
+    template:
+      repo_name: anemoi
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-file-based.yml
+    dest: .github/workflows/pr-label-file-based.yml
+    template:
+      repo_name: anemoi
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-ats.yml
+    dest: .github/workflows/pr-label-ats.yml
+    template:
+      repo_name: anemoi
+  - source: sync-files/anemoi/all/.pre-commit-config.yaml
+    dest: .pre-commit-config.yaml
+  - source: sync-files/anemoi/some/.pre-commit-config.yaml
+    dest: .pre-commit-config.yaml
   - source: sync-files/general/python/LICENSE
     dest: LICENSE
     template:
@@ -233,10 +262,6 @@ group:
       repo_name: anemoi-core
   - source: sync-files/anemoi/all/.github/workflows/pr-label-file-based.yml
     dest: .github/workflows/pr-label-file-based.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
-    dest: .github/workflows/pr-conventional-commit.yml
     template:
       repo_name: anemoi-core
   - source: sync-files/anemoi/all/.github/workflows/pr-label-ats.yml
