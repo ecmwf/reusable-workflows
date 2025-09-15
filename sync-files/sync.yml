@@ -264,6 +264,10 @@ group:
     dest: .github/workflows/pr-label-file-based.yml
     template:
       repo_name: anemoi-core
+  - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
+    dest: .github/workflows/pr-conventional-commit.yml
+    template:
+      repo_name: anemoi-core
   - source: sync-files/anemoi/all/.github/workflows/pr-label-ats.yml
     dest: .github/workflows/pr-label-ats.yml
     template:
