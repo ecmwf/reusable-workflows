@@ -63,7 +63,6 @@ runs:
         repository: ${{ steps.inputs.outputs.repo }}
         ref: ${{ steps.inputs.outputs.ref }}
         token: ${{ inputs.github_token }}
-        fetch-depth: 0  # pyprojects using setuptools-scm need unshallow fetch to determine version
 
     - name: Set env vars from matrix
       if: ${{ inputs.env }}
