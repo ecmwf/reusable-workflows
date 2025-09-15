@@ -63,5 +63,4 @@ jobs:
           fi
           echo -e "\nFor more information on ATS labels, see:"
           echo "https://anemoi.readthedocs.io/en/latest/contributing/guidelines.html#labelling-guidelines"
-          exit $EXIT_CODE
-          
+          exit $EXIT_CODE       
