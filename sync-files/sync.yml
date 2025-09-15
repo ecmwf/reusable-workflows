@@ -206,8 +206,6 @@ group:
       repo_name: anemoi
   - source: sync-files/anemoi/all/.pre-commit-config.yaml
     dest: .pre-commit-config.yaml
-  - source: sync-files/anemoi/some/.pre-commit-config.yaml
-    dest: .pre-commit-config.yaml
   - source: sync-files/general/python/LICENSE
     dest: LICENSE
     template:
