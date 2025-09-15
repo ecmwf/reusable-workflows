@@ -162,6 +162,26 @@ group:
   repos: |
     ecmwf/anemoi-utils
 
+# Anemoi specific
+- files:
+  - source: sync-files/anemoi/all/
+    dest: ./
+    template:
+      repo_name: anemoi
+      year: 2024-2025
+      authors: Anemoi Contributors
+      short_desc: "Miscellanous tools for training data-driven weather forecasts."
+    exclude: |
+      .release-please-manifest.json
+      .github/workflows/python-publish.yml
+      .github/workflows/release-please.yml
+  - source: sync-files/general/python/LICENSE
+    dest: LICENSE
+    template:
+      year: 2024-2025
+      authors: Anemoi Contributors
+  repos: |
+    ecmwf/anemoi
 
 # Anemoi Core specific
 - files:
@@ -217,6 +237,10 @@ group:
       repo_name: anemoi-core
   - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
     dest: .github/workflows/pr-conventional-commit.yml
+    template:
+      repo_name: anemoi-core
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-ats.yml
+    dest: .github/workflows/pr-label-ats.yml
     template:
       repo_name: anemoi-core
   - source: sync-files/anemoi/all/.pre-commit-config.yaml
