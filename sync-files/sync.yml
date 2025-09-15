@@ -164,17 +164,6 @@ group:
 
 # Anemoi specific
 - files:
-  - source: sync-files/anemoi/all/
-    dest: ./
-    template:
-      repo_name: anemoi
-      year: 2024-2025
-      authors: Anemoi Contributors
-      short_desc: "Miscellanous tools for training data-driven weather forecasts."
-    # exclude: |  NOTE - EXCLUDE IS BROKEN - NEED TO LIST ALL FILES WITH INCLUDE PATTERN
-    #   .release-please-manifest.json
-    #   .github/workflows/python-publish.yml
-    #   .github/workflows/release-please.yml
   - source: sync-files/anemoi/all/.github/pull_request_template.md
     dest: .github/pull_request_template.md
     template: true
