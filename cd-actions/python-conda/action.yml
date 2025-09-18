@@ -168,7 +168,6 @@ runs:
             find "$output_folder" -type f | head -20
             exit 1
         fi
-
     - name: Upload artifacts
       if: ${{ inputs.dry_run != 'true' }}
       uses: actions/upload-artifact@v4
