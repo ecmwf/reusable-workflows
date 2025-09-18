@@ -1,0 +1,108 @@
+name: Python UV Builder
+description: Build Python packages using UV package manager
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  config:
+    description: 'Build configuration JSON'
+    required: true
+  ref_name:
+    description: 'Git ref name for artifacts'
+    required: true
+  os:
+    description: 'Runner OS'
+    required: false
+    default: 'ubuntu-latest'
+  python_version:
+    description: 'Python version override'
+    required: false
+  build_suffix:
+    description: 'Suffix for artifact names'
+    required: false
+  dry_run:
+    description: 'Dry run mode'
+    required: false
+    default: 'false'
+
+
+runs:
+  using: composite
+  steps:
+    - name: Parse build configuration
+      id: config
+      shell: bash -el {0}
+      run: |
+        config='${{ inputs.config }}'
+        echo "Parsing configuration: $config"
+        
+        # Extract configuration values with defaults
+        python_version=$(echo "$config" | jq -r '.python_version // ">=3.8"')
+        frozen=$(echo "$config" | jq -r '.frozen // true')
+        sync_args=$(echo "$config" | jq -r '.sync_args // "--frozen"')
+        build_args=$(echo "$config" | jq -r '.build_args // ""')
+        artifact_pattern=$(echo "$config" | jq -r '.artifact_pattern // "dist/*.whl"')
+        
+        echo "python_version=$python_version" >> $GITHUB_OUTPUT
+        echo "frozen=$frozen" >> $GITHUB_OUTPUT
+        echo "sync_args=$sync_args" >> $GITHUB_OUTPUT
+        echo "build_args=$build_args" >> $GITHUB_OUTPUT
+        echo "artifact_pattern=$artifact_pattern" >> $GITHUB_OUTPUT
+        
+    - name: Create uv environment
+      shell: bash -el {0}
+      run: |
+        echo $PATH
+        uv venv --python "${{ inputs.python_version || steps.config.outputs.python_version }}" /tmp/venv-${{ github.run_id }}
+          
+    - name: Install dependencies
+      shell: bash -el {0}
+      run: |
+        source /tmp/venv-${{ github.run_id }}/bin/activate
+        sync_args="${{ steps.config.outputs.sync_args }}"
+        if [[ "${{ steps.config.outputs.frozen }}" == "true" && -f "uv.lock" ]]; then
+            echo "Using frozen lockfile"
+            uv sync $sync_args
+        else
+            echo "Installing without lockfile constraints"
+            uv sync
+        fi
+        
+    - name: Build package
+      shell: bash -el {0}
+      run: |
+        source /tmp/venv-${{ github.run_id }}/bin/activate
+        build_args="${{ steps.config.outputs.build_args }}"
+        echo "Building package with args: $build_args"
+        uv build $build_args
+        
+    - name: Verify artifacts
+      shell: bash -el {0}
+      run: |
+        pattern="${{ steps.config.outputs.artifact_pattern }}"
+        echo "Checking for artifacts matching: $pattern"
+        ls -la $pattern || (echo "No artifacts found matching pattern: $pattern" && exit 1)
+        
+    - name: Upload artifacts
+      if: ${{ inputs.dry_run != 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.ref_name }}-${{ inputs.name }}${{ inputs.build_suffix }}
+        path: ${{ steps.config.outputs.artifact_pattern }}
+        if-no-files-found: error
+        retention-days: 90
+        compression-level: 9
+        
+    - name: Summary
+      shell: bash -el {0}
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Name**: ${{ inputs.name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Version**: ${{ inputs.python_version || steps.config.outputs.python_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **OS**: ${{ inputs.os }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Frozen Dependencies**: ${{ steps.config.outputs.frozen }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Artifact Pattern**: ${{ steps.config.outputs.artifact_pattern }}" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "- **Mode**: Dry Run (no artifacts uploaded)" >> $GITHUB_STEP_SUMMARY
+        fi

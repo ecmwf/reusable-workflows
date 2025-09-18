@@ -1,0 +1,156 @@
+name: Reusable CD Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      config_file:
+        description: 'Path to build configuration file'
+        required: false
+        type: string
+        default: '.github/build-config.yml'
+      ref_name:
+        description: 'Git ref name for artifacts and release'
+        required: true
+        type: string
+      dry_run:
+        description: 'Perform a dry run without creating release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  load-config:
+    name: Load and Validate Configuration
+    runs-on: self-hosted
+    outputs:
+      config: ${{ steps.load.outputs.config }}
+      build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
+      release_enabled: ${{ steps.parse-release.outputs.enabled }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Check configuration file exists
+        id: check-config
+        run: |
+          if [[ ! -f "${{ inputs.config_file }}" ]]; then
+            echo "Configuration file ${{ inputs.config_file }} not found"
+            echo "Looking for alternative locations..."
+            if [[ -f ".github/workflows/build-config.yml" ]]; then
+              echo "config_file=.github/workflows/build-config.yml" >> $GITHUB_OUTPUT
+            else
+              echo "No configuration file found. Please create ${{ inputs.config_file }}"
+              exit 1
+            fi
+          else
+            echo "config_file=${{ inputs.config_file }}" >> $GITHUB_OUTPUT
+          fi
+        
+      - name: Load configuration
+        id: load
+        run: |
+          config=$(cat "${{ steps.check-config.outputs.config_file }}")
+          echo "Raw configuration loaded"
+          # Validate YAML syntax
+          echo "$config" | yq > /dev/null
+          echo "config<<EOF" >> $GITHUB_OUTPUT
+          echo "$config" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+      - name: Generate build matrix
+        id: generate-matrix
+        run: |
+          # Parse configuration and generate build matrix
+          matrix=$(echo '${{ steps.load.outputs.config }}' | python3 -c "
+          import sys, yaml, json
+          config = yaml.safe_load(sys.stdin)
+          
+          matrix = {'include': []}
+          for build in config.get('builds', []):
+              if build.get('enabled', True):
+                  matrix_item = {
+                      'name': build['name'],
+                      'type': build['type'],
+                      'config': json.dumps(build.get('config', {}))
+                  }
+                  
+                  # Handle matrix configurations
+                  if 'matrix' in config:
+                      base_matrix = config['matrix']
+                      for matrix_combo in base_matrix.get('include', [{}]):
+                          # Skip excluded combinations
+                          excluded = False
+                          for exclude in base_matrix.get('exclude', []):
+                              if all(matrix_combo.get(k) == v for k, v in exclude.items() if k != 'build' or v == build['name']):
+                                  excluded = True
+                                  break
+                          
+                          if not excluded:
+                              final_item = matrix_item.copy()
+                              final_item.update(matrix_combo)
+                              matrix['include'].append(final_item)
+                  else:
+                      matrix['include'].append(matrix_item)
+          
+          print(json.dumps(matrix))
+          ")
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          
+      - name: Parse release configuration
+        id: parse-release
+        run: |
+          enabled=$(echo '${{ steps.load.outputs.config }}' | yq '.release.enabled // false')
+          echo "enabled=$enabled" >> $GITHUB_OUTPUT
+
+  build:
+    name: ${{ matrix.name }}
+    if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
+    needs: load-config
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+          
+      - name: Build with Python Conda
+        if: ${{ matrix.type == 'python-conda' }}
+        uses: ecmwf/reusable-workflows/cd-actions/python-conda@cd-actions
+        with:
+          name: ${{ matrix.name }}
+          config: ${{ matrix.config }}
+          ref_name: ${{ inputs.ref_name }}
+          python_version: ${{ matrix.python || '' }}
+          dry_run: ${{ inputs.dry_run }}
+          gh_pat: ${{ secrets.GH_PAT || '' }}
+
+      - name: Build with Python UV
+        if: ${{ matrix.type == 'python-uv' }}
+        uses: ecmwf/reusable-workflows/cd-actions/python-uv@cd-actions
+        with:
+          name: ${{ matrix.name }}
+          config: ${{ matrix.config }}
+          ref_name: ${{ inputs.ref_name }}
+          os: ${{ matrix.os }}
+          python_version: ${{ matrix.python || '' }}
+          build_suffix: ${{ matrix.build_suffix || '' }}
+          dry_run: ${{ inputs.dry_run }}
+
+  release:
+    name: Create Release
+    if: ${{ needs.load-config.outputs.release_enabled == 'true' && !inputs.dry_run && needs.build.result == 'success' }}
+    needs: [load-config, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+          
+      - name: Create GitHub release
+        uses: ecmwf/reusable-workflows/cd-actions/release@cd-actions
+        with:
+          config: ${{ needs.load-config.outputs.config }}
+          ref_name: ${{ inputs.ref_name }}

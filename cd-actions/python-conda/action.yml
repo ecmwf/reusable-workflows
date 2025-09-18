@@ -1,0 +1,218 @@
+name: Python Conda Builder
+description: Build Python packages using conda/mamba
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  config:
+    description: 'Build configuration JSON'
+    required: true
+  ref_name:
+    description: 'Git ref name for artifacts'
+    required: true
+  python_version:
+    description: 'Python version override'
+    required: false
+  dry_run:
+    description: 'Dry run mode'
+    required: false
+    default: 'false'
+  gh_pat:
+    description: 'GitHub PAT token'
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Parse build configuration
+      id: config
+      shell: bash
+      run: |
+        config='${{ inputs.config }}'
+        echo "Parsing configuration: $config"
+
+        # Extract remote repository configuration
+        remote_repo=$(echo "$config" | jq -r '.remote_repo // empty')
+        remote_ref=$(echo "$config" | jq -r '.remote_ref // "main"')
+        remote_path=$(echo "$config" | jq -r '.remote_path // ".conda"')
+        
+        # Extract configuration values
+        if [[ -n "$remote_repo" ]]; then
+            conda_dir=".conda-${{ github.run_id }}"
+        else
+            conda_dir=".conda"
+        fi
+        environment_file="$conda_dir/environment.yml"
+        meta_file="$conda_dir/meta.yaml"
+        channels=$(echo "$config" | jq -r '.channels[]? // "conda-forge"' | tr '\n' ' ')
+        output_folder="$conda_dir/build"
+        conda_build_args=$(echo "$config" | jq -r '.conda_build_args // "--no-anaconda-upload"')
+        
+        artifact_pattern="$output_folder/**/*.conda"
+        
+        echo "conda_dir=$conda_dir" >> $GITHUB_OUTPUT
+        echo "environment_file=$environment_file" >> $GITHUB_OUTPUT
+        echo "meta_file=$meta_file" >> $GITHUB_OUTPUT
+        echo "channels=$channels" >> $GITHUB_OUTPUT
+        echo "output_folder=$output_folder" >> $GITHUB_OUTPUT
+        echo "artifact_pattern=$artifact_pattern" >> $GITHUB_OUTPUT
+        echo "conda_build_args=$conda_build_args" >> $GITHUB_OUTPUT
+        echo "remote_repo=$remote_repo" >> $GITHUB_OUTPUT
+        echo "remote_ref=$remote_ref" >> $GITHUB_OUTPUT
+        echo "remote_path=$remote_path" >> $GITHUB_OUTPUT
+        
+    - name: Fetch remote conda configuration
+      if: ${{ steps.config.outputs.remote_repo != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_pat || github.token }}
+      run: |
+        remote_repo="${{ steps.config.outputs.remote_repo }}"
+        remote_ref="${{ steps.config.outputs.remote_ref }}"
+        remote_path="${{ steps.config.outputs.remote_path }}"
+        
+        echo "Fetching conda configuration from remote repository:"
+        echo "  Repository: $remote_repo"
+        echo "  Reference: $remote_ref"
+        echo "  Path: $remote_path"
+        
+        # Create temporary directory for remote checkout
+        temp_dir=$(mktemp -d)
+        echo "Created temporary directory: $temp_dir"
+        
+        # Clone the remote repository using standard git commands
+        # Format the repository URL with token authentication
+        if [[ "$remote_repo" == *"/"* ]] && [[ "$remote_repo" != http* ]]; then
+            # Assume GitHub format: owner/repo
+            repo_url="https://x-access-token:${GH_TOKEN}@github.com/${remote_repo}.git"
+        else
+            # Full URL provided - insert token if it's an HTTPS GitHub URL
+            if [[ "$remote_repo" == https://github.com/* ]]; then
+                repo_url="${remote_repo/https:\/\/github.com\//https://x-access-token:${GH_TOKEN}@github.com/}"
+                if [[ "$repo_url" != *.git ]]; then
+                    repo_url="${repo_url}.git"
+                fi
+            else
+                repo_url="$remote_repo"
+            fi
+        fi
+        
+        echo "Cloning repository: $repo_url"
+        git clone --depth 1 --branch "$remote_ref" "$repo_url" "$temp_dir"
+        
+        # Create local conda directory if it doesn't exist
+        mkdir -p ${{ steps.config.outputs.conda_dir }}
+        
+        # Copy conda configuration files from remote repository
+        if [[ -d "$temp_dir/$remote_path" ]]; then
+            echo "Copying files from $temp_dir/$remote_path to ${{ steps.config.outputs.conda_dir }}"
+            cp -r "$temp_dir/$remote_path"/* ${{ steps.config.outputs.conda_dir }}
+        else
+            echo "Remote path $remote_path not found in repository"
+            exit 1
+        fi
+        
+        # Clean up temporary directory
+        rm -rf "$temp_dir"
+        echo "Remote conda configuration fetched successfully"
+        
+    - name: Validate configuration files
+      id: validate
+      shell: bash
+      run: |
+        environment_file="${{ steps.config.outputs.environment_file }}"
+        meta_file="${{ steps.config.outputs.meta_file }}"
+        
+        # Validation
+        if [[ ! -f "$environment_file" ]]; then
+            echo "Environment file not found: $environment_file"
+            exit 1
+        fi
+        
+        if [[ ! -f "$meta_file" ]]; then
+            echo "Meta file not found: $meta_file"
+            exit 1
+        fi
+        
+        echo "meta_dir=$(dirname $meta_file)" >> $GITHUB_OUTPUT
+        echo "Configuration files validated successfully"
+
+    - name: Create conda environment
+      shell: bash -el {0}
+      run: |
+        conda env create -n build-env-${{ github.run_id }} -f ${{ steps.config.outputs.environment_file }}
+          
+    - name: Install build dependencies
+      shell: bash -el {0}
+      run: |
+        conda activate build-env-${{ github.run_id }}
+        conda install -y conda-build
+        conda info
+        conda list
+        
+    - name: Validate meta.yaml
+      shell: bash -el {0}
+      run: |
+        conda activate build-env-${{ github.run_id }}
+        meta_file="${{ steps.config.outputs.meta_file }}"
+        echo "Validating meta.yaml: $meta_file"
+        conda render "$meta_file" --output
+        
+    - name: Build conda package
+      shell: bash -el {0}
+      run: |
+        conda activate build-env-${{ github.run_id }}
+        meta_dir="${{ steps.validate.outputs.meta_dir }}"
+        output_folder="${{ steps.config.outputs.output_folder }}"
+        build_args="${{ steps.config.outputs.conda_build_args }}"
+        
+        echo "Building conda package from: $meta_dir"
+        echo "Output folder: $output_folder"
+        echo "Build args: $build_args"
+        
+        mkdir -p "$output_folder"
+        
+        conda build "$meta_dir" --output-folder "$output_folder" $build_args
+        
+    - name: List built packages
+      shell: bash -el {0}
+      run: |
+        output_folder="${{ steps.config.outputs.output_folder }}"
+        echo "Built packages:"
+        find "$output_folder" -name "*.conda" -o -name "*.tar.bz2" | sort
+        
+    - name: Verify artifacts
+      shell: bash -el {0}
+      run: |
+        output_folder="${{ steps.config.outputs.output_folder }}"
+        echo "Checking for conda packages in: $output_folder"
+        
+        # Check if conda packages exist in output folder
+        if ! find "$output_folder" -name "*.conda" -type f | head -1 | grep -q .; then
+            echo "No conda packages found in: $output_folder"
+            echo "Available files:"
+            find "$output_folder" -type f | head -20
+            exit 1
+        fi
+        
+    - name: Upload artifacts
+      if: ${{ inputs.dry_run != 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.ref_name }}-${{ inputs.name }}
+        path: ${{ steps.config.outputs.artifact_pattern }}
+        if-no-files-found: error
+        retention-days: 90
+        
+    - name: Summary
+      shell: bash -el {0}
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Name**: ${{ inputs.name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment File**: ${{ steps.config.outputs.environment_file }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Meta File**: ${{ steps.config.outputs.meta_file }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Channels**: ${{ steps.config.outputs.channels }}" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "- **Mode**: Dry Run (no artifacts uploaded)" >> $GITHUB_STEP_SUMMARY
+        fi
