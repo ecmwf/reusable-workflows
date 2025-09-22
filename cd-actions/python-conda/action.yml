@@ -29,38 +29,57 @@ runs:
       id: config
       shell: bash
       run: |
-        config='${{ inputs.config }}'
-        echo "Parsing configuration: $config"
+        python <<'PY'
+        import json
+        import os
+        import sys
 
-        # Extract remote repository configuration
-        remote_repo=$(echo "$config" | jq -r '.remote_repo // empty')
-        remote_ref=$(echo "$config" | jq -r '.remote_ref // "main"')
-        remote_path=$(echo "$config" | jq -r '.remote_path // ".conda"')
-        
-        # Extract configuration values
-        if [[ -n "$remote_repo" ]]; then
-            conda_dir=".conda-${{ github.run_id }}"
-        else
-            conda_dir=".conda"
-        fi
-        environment_file="$conda_dir/environment.yml"
-        meta_file="$conda_dir/meta.yaml"
-        channels=$(echo "$config" | jq -r '.channels[]? // "conda-forge"' | tr '\n' ' ')
-        output_folder="$conda_dir/build"
-        conda_build_args=$(echo "$config" | jq -r '.conda_build_args // "--no-anaconda-upload"')
-        
-        artifact_pattern="$output_folder/**/*.conda"
-        
-        echo "conda_dir=$conda_dir" >> $GITHUB_OUTPUT
-        echo "environment_file=$environment_file" >> $GITHUB_OUTPUT
-        echo "meta_file=$meta_file" >> $GITHUB_OUTPUT
-        echo "channels=$channels" >> $GITHUB_OUTPUT
-        echo "output_folder=$output_folder" >> $GITHUB_OUTPUT
-        echo "artifact_pattern=$artifact_pattern" >> $GITHUB_OUTPUT
-        echo "conda_build_args=$conda_build_args" >> $GITHUB_OUTPUT
-        echo "remote_repo=$remote_repo" >> $GITHUB_OUTPUT
-        echo "remote_ref=$remote_ref" >> $GITHUB_OUTPUT
-        echo "remote_path=$remote_path" >> $GITHUB_OUTPUT
+        raw = '''${{ inputs.config }}'''.strip()
+        print(f"Raw config: {raw}")
+        try:
+            cfg = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON config: {e}")
+            sys.exit(1)
+
+        run_id = os.environ.get('GITHUB_RUN_ID', '')
+
+        remote_repo = cfg.get('remote_repo', '') or ''
+        remote_ref = cfg.get('remote_ref', 'main') or 'main'
+        remote_path = cfg.get('remote_path', '.conda') or '.conda'
+
+        conda_dir = f".conda-{run_id}" if remote_repo else ".conda"
+
+        channels_list = cfg.get('channels') or ["conda-forge"]
+        if not isinstance(channels_list, list):
+            channels_list = [str(channels_list)]
+        channels = " ".join([c for c in channels_list if c]) or "conda-forge"
+
+        conda_build_args = cfg.get('conda_build_args', '--no-anaconda-upload') or '--no-anaconda-upload'
+
+        environment_file = f"{conda_dir}/environment.yml"
+        meta_file = f"{conda_dir}/meta.yaml"
+        output_folder = f"{conda_dir}/build"
+        artifact_pattern = f"{output_folder}/**/*.tar.bz2"
+
+        outputs = {
+            'conda_dir': conda_dir,
+            'environment_file': environment_file,
+            'meta_file': meta_file,
+            'channels': channels,
+            'output_folder': output_folder,
+            'artifact_pattern': artifact_pattern,
+            'conda_build_args': conda_build_args,
+            'remote_repo': remote_repo,
+            'remote_ref': remote_ref,
+            'remote_path': remote_path,
+        }
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+            for k, v in outputs.items():
+                fh.write(f"{k}={v}\n")
+                print(f"Set output {k}={v}")
+        PY
         
     - name: Fetch remote conda configuration
       if: ${{ steps.config.outputs.remote_repo != '' }}
