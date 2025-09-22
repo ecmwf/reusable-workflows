@@ -160,20 +160,24 @@ runs:
     - name: Create conda environment
       shell: bash -el {0}
       run: |
-        conda env create -n build-env-${{ github.run_id }} -f ${{ steps.config.outputs.environment_file }}
+        BUILD_ENV="build-env-${GITHUB_RUN_ID}"
+        echo "BUILD_ENV=$BUILD_ENV" >> "$GITHUB_ENV"
+        mamba env create -n "$BUILD_ENV" -f "${{ steps.config.outputs.environment_file }}"
           
     - name: Install build dependencies
       shell: bash -el {0}
       run: |
-        conda activate build-env-${{ github.run_id }}
-        conda install -y conda-build
-        conda info
-        conda list
+        eval "$(conda shell.bash hook)"
+        conda activate "$BUILD_ENV"
+        mamba install -y conda conda-build boa
+        mamba info
+        mamba list
         
     - name: Validate meta.yaml
       shell: bash -el {0}
       run: |
-        conda activate build-env-${{ github.run_id }}
+        eval "$(conda shell.bash hook)"
+        conda activate "$BUILD_ENV"
         meta_file="${{ steps.config.outputs.meta_file }}"
         echo "Validating meta.yaml: $meta_file"
         conda render "$meta_file" --output
@@ -181,25 +185,26 @@ runs:
     - name: Build conda package
       shell: bash -el {0}
       run: |
-        conda activate build-env-${{ github.run_id }}
+        eval "$(conda shell.bash hook)"
+        conda activate "$BUILD_ENV"
         meta_dir="${{ steps.validate.outputs.meta_dir }}"
         output_folder="${{ steps.config.outputs.output_folder }}"
         build_args="${{ steps.config.outputs.conda_build_args }}"
-        
+
         echo "Building conda package from: $meta_dir"
         echo "Output folder: $output_folder"
         echo "Build args: $build_args"
-        
+
         mkdir -p "$output_folder"
-        
-        conda build "$meta_dir" --output-folder "$output_folder" $build_args
+
+        conda mambabuild "$meta_dir" --output-folder "$output_folder" $build_args
         
     - name: List built packages
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
         echo "Built packages:"
-        find "$output_folder" -name "*.conda" -o -name "*.tar.bz2" | sort
+        find "$output_folder" -name "*.tar.bz2" -o -name "*.tar.bz2" | sort
         
     - name: Verify artifacts
       shell: bash -el {0}
@@ -208,7 +213,7 @@ runs:
         echo "Checking for conda packages in: $output_folder"
         
         # Check if conda packages exist in output folder
-        if ! find "$output_folder" -name "*.conda" -type f | head -1 | grep -q .; then
+        if ! find "$output_folder" -name "*.tar.bz2" -type f | head -1 | grep -q .; then
             echo "No conda packages found in: $output_folder"
             echo "Available files:"
             find "$output_folder" -type f | head -20
