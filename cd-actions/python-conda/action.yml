@@ -57,7 +57,7 @@ runs:
 
         conda_build_args = cfg.get('conda_build_args', '--no-anaconda-upload') or '--no-anaconda-upload'
 
-        environment_file = f"{conda_dir}/environment.yml"
+        environment_file = f"{conda_dir}/environment.yaml"
         meta_file = f"{conda_dir}/meta.yaml"
         output_folder = f"{conda_dir}/build"
         artifact_pattern = f"{output_folder}/**/*.tar.bz2"
