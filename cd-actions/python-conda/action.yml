@@ -29,7 +29,7 @@ runs:
       id: config
       shell: bash
       run: |
-        python <<'PY'
+        python3 <<'PY'
         import json
         import os
         import sys
