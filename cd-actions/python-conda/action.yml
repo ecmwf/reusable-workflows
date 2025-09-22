@@ -158,6 +158,7 @@ runs:
         echo "Configuration files validated successfully"
 
     - name: Setup conda env dir
+      shell: bash
       run: |
         echo "CONDA_ENVS_DIRS=$RUNNER_TEMP/envs" >> "$GITHUB_ENV"
         mkdir -p "$RUNNER_TEMP/envs"
