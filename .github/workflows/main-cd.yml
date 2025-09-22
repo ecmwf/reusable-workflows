@@ -21,7 +21,7 @@ on:
 jobs:
   load-config:
     name: Load and Validate Configuration
-    runs-on: self-hosted
+    runs-on: platform-builder-Debian-12
     outputs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
@@ -106,7 +106,7 @@ jobs:
     name: ${{ matrix.name }}
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: load-config
-    runs-on: self-hosted
+    runs-on: platform-builder-Debian-12
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
