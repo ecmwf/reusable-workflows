@@ -157,12 +157,16 @@ runs:
         echo "meta_dir=$(dirname $meta_file)" >> $GITHUB_OUTPUT
         echo "Configuration files validated successfully"
 
+    - name: Setup conda env dir
+      run: |
+        echo "CONDA_ENVS_DIRS=$RUNNER_TEMP/envs" >> "$GITHUB_ENV"
+        mkdir -p "$RUNNER_TEMP/envs"
+
     - name: Create conda environment
       shell: bash -el {0}
       run: |
         BUILD_ENV="build-env-${GITHUB_RUN_ID}"
         echo "BUILD_ENV=$BUILD_ENV" >> "$GITHUB_ENV"
-        echo "MAMBA_ROOT_PREFIX=${cache_root}" >> "$GITHUB_ENV"
         mamba env create -n "$BUILD_ENV" -f "${{ steps.config.outputs.environment_file }}"
           
     - name: Install build dependencies
