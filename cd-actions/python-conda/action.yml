@@ -57,14 +57,12 @@ runs:
 
         conda_build_args = cfg.get('conda_build_args', '--no-anaconda-upload') or '--no-anaconda-upload'
 
-        environment_file = f"{conda_dir}/environment.yaml"
         meta_file = f"{conda_dir}/meta.yaml"
         output_folder = f"{conda_dir}/build"
         artifact_pattern = f"{output_folder}/**/*.tar.bz2"
 
         outputs = {
             'conda_dir': conda_dir,
-            'environment_file': environment_file,
             'meta_file': meta_file,
             'channels': channels,
             'output_folder': output_folder,
@@ -140,14 +138,7 @@ runs:
       id: validate
       shell: bash
       run: |
-        environment_file="${{ steps.config.outputs.environment_file }}"
         meta_file="${{ steps.config.outputs.meta_file }}"
-        
-        # Validation
-        if [[ ! -f "$environment_file" ]]; then
-            echo "Environment file not found: $environment_file"
-            exit 1
-        fi
         
         if [[ ! -f "$meta_file" ]]; then
             echo "Meta file not found: $meta_file"
@@ -168,7 +159,7 @@ runs:
       run: |
         BUILD_ENV="build-env-${GITHUB_RUN_ID}"
         echo "BUILD_ENV=$BUILD_ENV" >> "$GITHUB_ENV"
-        mamba env create -n "$BUILD_ENV" -f "${{ steps.config.outputs.environment_file }}"
+        mamba env create -n "$BUILD_ENV"
           
     - name: Install build dependencies
       shell: bash -el {0}
@@ -178,15 +169,6 @@ runs:
         mamba install -y conda conda-build boa
         mamba info
         mamba list
-        
-    - name: Validate meta.yaml
-      shell: bash -el {0}
-      run: |
-        eval "$(conda shell.bash hook)"
-        conda activate "$BUILD_ENV"
-        meta_file="${{ steps.config.outputs.meta_file }}"
-        echo "Validating meta.yaml: $meta_file"
-        conda render "$meta_file" --output
         
     - name: Build conda package
       shell: bash -el {0}
@@ -240,7 +222,6 @@ runs:
       run: |
         echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Build Name**: ${{ inputs.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Environment File**: ${{ steps.config.outputs.environment_file }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Meta File**: ${{ steps.config.outputs.meta_file }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Channels**: ${{ steps.config.outputs.channels }}" >> $GITHUB_STEP_SUMMARY
         if [[ "${{ inputs.dry_run }}" == "true" ]]; then
