@@ -7,7 +7,7 @@ on:
         description: 'Path to build configuration file'
         required: false
         type: string
-        default: '.github/build-config.yml'
+        default: '.github/cd-config.yml'
       ref_name:
         description: 'Git ref name for artifacts and release'
         required: true
@@ -36,8 +36,8 @@ jobs:
           if [[ ! -f "${{ inputs.config_file }}" ]]; then
             echo "Configuration file ${{ inputs.config_file }} not found"
             echo "Looking for alternative locations..."
-            if [[ -f ".github/workflows/build-config.yml" ]]; then
-              echo "config_file=.github/workflows/build-config.yml" >> $GITHUB_OUTPUT
+            if [[ -f ".github/workflows/cd-config.yml" ]]; then
+              echo "config_file=.github/workflows/cd-config.yml" >> $GITHUB_OUTPUT
             else
               echo "No configuration file found. Please create ${{ inputs.config_file }}"
               exit 1
