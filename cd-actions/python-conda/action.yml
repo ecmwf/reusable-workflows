@@ -203,7 +203,7 @@ runs:
 
         mkdir -p "$output_folder"
 
-        conda mambabuild "$meta_dir" --output-folder "$output_folder" $build_args
+        conda mambabuild "$meta_dir" -c https://nexus-test.ecmwf.int/repository/conda-ecmwf-public/ -c conda-forge --output-folder "$output_folder" $build_args
         
     - name: List built packages
       shell: bash -el {0}
