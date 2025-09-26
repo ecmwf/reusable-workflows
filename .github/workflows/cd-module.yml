@@ -15,10 +15,6 @@ on:
         description: Value `true` will skip version checks, use for testing or in nightly builds.
         type: boolean
         required: false
-      clean_before_install:
-        description: Value `true` will remove/delete anything under prefix before install, use in nightly builds.
-        type: boolean
-        required: false
 jobs:
   setup:
     runs-on: ubuntu-latest
