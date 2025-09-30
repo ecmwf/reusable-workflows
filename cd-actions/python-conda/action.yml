@@ -188,7 +188,7 @@ runs:
         # Download channeldata.json
         index_temp_dir=$(mktemp -d)
         echo "Downloading current channeldata from $nexus_url/channeldata.json"
-        if curl -sf -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+        if curl -sf -u "${{ inputs.nexus_token }}" \
             "$nexus_url/channeldata.json" \
             -o "$index_temp_dir/channeldata.json"; then
             echo "Downloaded existing channeldata.json"
@@ -212,7 +212,7 @@ runs:
 
             # Download current repodata.json
             echo "  Downloading current index from $nexus_url/$subdir/repodata.json"
-            if curl -sf -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+            if curl -sf -u "${{ inputs.nexus_token }}" \
                 "$nexus_url/$subdir/repodata.json" \
                 -o "$index_temp_dir/$subdir/repodata.json"; then
                 echo "  Downloaded existing repodata.json"
@@ -237,7 +237,7 @@ runs:
 
             # Upload the package
             echo "  Uploading package to $nexus_url/$subdir/$package_name"
-            if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+            if ! curl -f -u "${{ inputs.nexus_token }}" \
                 --upload-file "$package" \
                 "$nexus_url/$subdir/$package_name"; then
                 echo "  Error: Failed to upload package"
@@ -248,7 +248,7 @@ runs:
 
             # Upload updated repodata.json
             echo "  Uploading updated repodata.json"
-            if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+            if ! curl -f -u "${{ inputs.nexus_token }}" \
                 --upload-file "$index_temp_dir/$subdir/repodata.json" \
                 "$nexus_url/$subdir/repodata.json"; then
                 echo "  Error: Failed to upload repodata.json"
@@ -258,7 +258,7 @@ runs:
 
             # Upload repodata_from_packages.json
             echo "  Uploading repodata_from_packages.json"
-            if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+            if ! curl -f -u "${{ inputs.nexus_token }}" \
                 --upload-file "$index_temp_dir/$subdir/repodata_from_packages.json" \
                 "$nexus_url/$subdir/repodata_from_packages.json"; then
                 echo "  Error: Failed to upload repodata_from_packages.json"
@@ -274,7 +274,7 @@ runs:
         # Upload channeldata.json
         echo ""
         echo "Uploading updated channeldata.json"
-        if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+        if ! curl -f -u "${{ inputs.nexus_token }}" \
             --upload-file "$index_temp_dir/channeldata.json" \
             "$nexus_url/channeldata.json"; then
             echo "Error: Failed to upload channeldata.json"
