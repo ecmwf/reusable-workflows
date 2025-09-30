@@ -170,6 +170,126 @@ runs:
         fi
     - name: Upload artifacts
       if: ${{ inputs.dry_run != 'true' }}
+      shell: bash
+      run: |
+        output_folder="${{ steps.config.outputs.output_folder }}"
+        nexus_url="${{ inputs.nexus_url }}"
+
+        echo "Uploading conda packages to Nexus: $nexus_url"
+
+        # Find all built packages
+        packages=$(find "$output_folder" -name "*.tar.bz2" -type f)
+
+        if [ -z "$packages" ]; then
+            echo "No packages found to upload"
+            exit 1
+        fi
+
+        # Download channeldata.json
+        index_temp_dir=$(mktemp -d)
+        echo "Downloading current channeldata from $nexus_url/channeldata.json"
+        if curl -sf -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+            "$nexus_url/channeldata.json" \
+            -o "$index_temp_dir/channeldata.json"; then
+            echo "Downloaded existing channeldata.json"
+        else
+            echo "No existing channeldata.json found (will create new)"
+        fi
+
+        # Process each package
+        for package in $packages; do
+            echo "Processing package: $package"
+
+            # Detect subdir from path
+            subdir=$(basename $(dirname "$package"))
+            package_name=$(basename "$package")
+
+            echo "  Subdir: $subdir"
+            echo "  Package: $package_name"
+
+            # Create subdir directory for index operations
+            mkdir -p "$index_temp_dir/$subdir"
+
+            # Download current repodata.json
+            echo "  Downloading current index from $nexus_url/$subdir/repodata.json"
+            if curl -sf -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+                "$nexus_url/$subdir/repodata.json" \
+                -o "$index_temp_dir/$subdir/repodata.json"; then
+                echo "  Downloaded existing repodata.json"
+            else
+                echo "  No existing repodata.json found (will create new)"
+            fi
+
+            # Update the index with the new package
+            echo "  Updating conda index..."
+
+            # Setup uv venv
+            echo "  Setting up Python venv for index update..."
+            uv venv "$RUNNER_TEMP/update-index-venv"
+            source "$RUNNER_TEMP/update-index-venv/bin/activate"
+            uv pip install packaging
+
+            uv run python "${{ github.action_path }}/scripts/update_conda_index.py" \
+                "$package" \
+                --repodata-dir "$index_temp_dir" \
+                --subdir "$subdir" \
+                --output-dir "$index_temp_dir"
+
+            # Upload the package
+            echo "  Uploading package to $nexus_url/$subdir/$package_name"
+            if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+                --upload-file "$package" \
+                "$nexus_url/$subdir/$package_name"; then
+                echo "  Error: Failed to upload package"
+                rm -rf "$index_temp_dir"
+                exit 1
+            fi
+            echo "  Package uploaded successfully"
+
+            # Upload updated repodata.json
+            echo "  Uploading updated repodata.json"
+            if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+                --upload-file "$index_temp_dir/$subdir/repodata.json" \
+                "$nexus_url/$subdir/repodata.json"; then
+                echo "  Error: Failed to upload repodata.json"
+                rm -rf "$index_temp_dir"
+                exit 1
+            fi
+
+            # Upload repodata_from_packages.json
+            echo "  Uploading repodata_from_packages.json"
+            if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+                --upload-file "$index_temp_dir/$subdir/repodata_from_packages.json" \
+                "$nexus_url/$subdir/repodata_from_packages.json"; then
+                echo "  Error: Failed to upload repodata_from_packages.json"
+                rm -rf "$index_temp_dir"
+                exit 1
+            fi
+
+            echo "  Index files uploaded successfully"
+
+            echo "✓ Successfully uploaded $package_name to Nexus"
+        done
+
+        # Upload channeldata.json
+        echo ""
+        echo "Uploading updated channeldata.json"
+        if ! curl -f -u "${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN }}" \
+            --upload-file "$index_temp_dir/channeldata.json" \
+            "$nexus_url/channeldata.json"; then
+            echo "Error: Failed to upload channeldata.json"
+            rm -rf "$index_temp_dir"
+            exit 1
+        fi
+        echo "✓ Channeldata uploaded successfully"
+
+        # Clean up
+        rm -rf "$index_temp_dir"
+
+        echo ""
+        echo "All packages and indexes uploaded to Nexus successfully!"
+
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.run_id }}-${{ inputs.name }}
