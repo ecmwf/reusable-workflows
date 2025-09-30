@@ -124,6 +124,7 @@ jobs:
           python_version: ${{ matrix.python || '' }}
           dry_run: ${{ inputs.dry_run }}
           gh_pat: ${{ secrets.GH_PAT || '' }}
+          nexus_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN || '' }}
 
       - name: Build with Python UV
         if: ${{ matrix.type == 'python-uv' }}
