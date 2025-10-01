@@ -229,6 +229,12 @@ def upload_to_nexus(
             if not upload_file(index_html, remote_url):
                 sys.exit(1)
 
+        cache_db = arch_dir / ".cache" / "cache.db"
+        if cache_db.exists():
+            remote_url = urljoin(nexus_url, f"{arch}/.cache/cache.db")
+            if not upload_file(cache_db, remote_url):
+                sys.exit(1)
+
     for json_file in work_dir.glob("*.json"):
         remote_url = urljoin(nexus_url, json_file.name)
         if not upload_file(json_file, remote_url):
