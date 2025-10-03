@@ -173,7 +173,7 @@ runs:
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
-        nexus_url="${{ inputs.nexus_url }}"
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
 
         echo "Uploading conda packages to Nexus: $nexus_url"
 
@@ -199,7 +199,7 @@ runs:
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
-        nexus_url="${{ inputs.nexus_url }}"
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
 
         echo "Testing package installation from Nexus..."
 
