@@ -13,12 +13,50 @@ on:
         required: true
         type: string
       dry_run:
-        description: 'Perform a dry run without creating release'
+        description: 'Dry run mode - build only, no uploads or releases'
         required: false
         type: boolean
         default: false
 
 jobs:
+  detect-release-type:
+    name: Detect Release Type
+    runs-on: ubuntu-latest
+    outputs:
+      is_dry_run: ${{ steps.detect.outputs.is_dry_run }}
+      is_prerelease: ${{ steps.detect.outputs.is_prerelease }}
+    steps:
+      - name: Detect release type from ref
+        id: detect
+        run: |
+          ref_name="${{ inputs.ref_name }}"
+          echo "Analyzing ref: $ref_name"
+
+          # Check if it's a standard semantic version tag (e.g., v1.2.3 or 1.2.3)
+          if [[ "$ref_name" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Standard release detected"
+            echo "is_dry_run=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+
+          # Check if it's a pre-release tag (e.g., v1.2.3-RC1, 1.2.3-alpha1)
+          elif [[ "$ref_name" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-.+$ ]]; then
+            echo "Pre-release detected"
+            echo "is_dry_run=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+
+          # Everything else is a dry run (PRs, branches, etc.)
+          else
+            echo "Dry run detected"
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Override with explicit dry_run input if provided
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "Explicit dry_run input enabled - forcing dry run mode"
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+          fi
+
   load-config:
     name: Load and Validate Configuration
     runs-on: platform-builder-Debian-12
@@ -105,7 +143,7 @@ jobs:
   build:
     name: ${{ matrix.name }}
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
-    needs: load-config
+    needs: [detect-release-type, load-config]
     runs-on: platform-builder-Debian-12
     strategy:
       fail-fast: false
@@ -122,7 +160,8 @@ jobs:
           config: ${{ matrix.config }}
           ref_name: ${{ inputs.ref_name }}
           python_version: ${{ matrix.python || '' }}
-          dry_run: ${{ inputs.dry_run }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
           gh_pat: ${{ secrets.GH_PAT || '' }}
           nexus_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
 
@@ -136,22 +175,34 @@ jobs:
           os: ${{ matrix.os }}
           python_version: ${{ matrix.python || '' }}
           build_suffix: ${{ matrix.build_suffix || '' }}
-          dry_run: ${{ inputs.dry_run }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
 
   release:
     name: Create Release
-    if: ${{ needs.load-config.outputs.release_enabled == 'true' && !inputs.dry_run && needs.build.result == 'success' }}
-    needs: [load-config, build]
+    if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
+    needs: [detect-release-type, load-config, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
-          
+
+      - name: Prepare release configuration
+        id: prepare-config
+        run: |
+          config='${{ needs.load-config.outputs.config }}'
+          is_prerelease='${{ needs.detect-release-type.outputs.is_prerelease }}'
+
+          # Inject prerelease flag into config
+          updated_config=$(echo "$config" | yq eval ".release.config.prerelease = ($is_prerelease == \"true\")" -)
+
+          echo "config<<EOF" >> $GITHUB_OUTPUT
+          echo "$updated_config" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create GitHub release
         uses: ecmwf/reusable-workflows/cd-actions/release@cd-actions
         with:
-          config: ${{ needs.load-config.outputs.config }}
+          config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}

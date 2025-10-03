@@ -18,13 +18,13 @@ inputs:
     description: 'Dry run mode'
     required: false
     default: 'false'
+  is_prerelease:
+    description: 'Is this a pre-release build'
+    required: false
+    default: 'false'
   gh_pat:
     description: 'GitHub PAT token'
     required: false
-  nexus_url:
-    description: 'Nexus conda repository URL'
-    required: false
-    default: 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
   nexus_token:
     description: 'Nexus upload token'
     required: false
@@ -68,6 +68,16 @@ runs:
 
         conda_build_args = cfg.get('conda_build_args', '--no-anaconda-upload') or '--no-anaconda-upload'
 
+        # Determine Nexus URL based on prerelease flag
+        is_prerelease = '${{ inputs.is_prerelease }}' == 'true'
+        if is_prerelease:
+            nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
+            print("Using test Nexus repository for pre-release")
+        else:
+            # TODO: Use production Nexus repository for standard release
+            nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
+            print("Using production Nexus repository for standard release")
+
         meta_file = f"{conda_dir}/meta.yaml"
         output_folder = f"{conda_dir}/build"
         artifact_pattern = f"{output_folder}/**/*.tar.bz2"
@@ -82,6 +92,7 @@ runs:
             'remote_repo': remote_repo,
             'remote_ref': remote_ref,
             'remote_path': remote_path,
+            'nexus_url': nexus_url,
         }
 
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
@@ -196,7 +207,7 @@ runs:
 
         mkdir -p "$output_folder"
 
-        conda mambabuild "$meta_dir" -c https://nexus-test.ecmwf.int/repository/conda-ecmwf-public/ -c https://nexus.ecmwf.int/repository/conda-forge/ --output-folder "$output_folder" $build_args
+        conda mambabuild "$meta_dir" -c ${{ steps.config.outputs.nexus_url }} -c conda-forge --output-folder "$output_folder" $build_args
         
     - name: List built packages
       shell: bash -el {0}
@@ -224,7 +235,7 @@ runs:
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
-        nexus_url="${{ inputs.nexus_url }}"
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
 
         echo "Uploading conda packages to Nexus: $nexus_url"
 
@@ -250,7 +261,7 @@ runs:
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
-        nexus_url="${{ inputs.nexus_url }}"
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
 
         echo "Testing package installation from Nexus..."
 
