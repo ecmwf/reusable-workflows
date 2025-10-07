@@ -23,3 +23,11 @@ jobs:
           issue: ${{ github.event.number }}
           label: approved-for-ci
           action: remove
+
+      - name: Remove label 'approved-for-cd'
+        if: ${{ github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'approved-for-cd') }}
+        uses: ecmwf/labeler@v1
+        with:
+          issue: ${{ github.event.number }}
+          label: approved-for-cd
+          action: remove
