@@ -168,18 +168,6 @@ jobs:
           gh_pat: ${{ secrets.GH_PAT || '' }}
           nexus_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
 
-      - name: Build with Python UV
-        if: ${{ matrix.type == 'python-uv' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-uv@cd-actions
-        with:
-          name: ${{ matrix.name }}
-          config: ${{ matrix.config }}
-          ref_name: ${{ inputs.ref_name }}
-          os: ${{ matrix.os }}
-          python_version: ${{ matrix.python || '' }}
-          build_suffix: ${{ matrix.build_suffix || '' }}
-          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
-
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
         uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-actions
