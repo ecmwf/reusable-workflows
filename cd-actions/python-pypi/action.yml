@@ -1,0 +1,178 @@
+name: Python PyPI Publisher
+description: Build and publish Python packages to PyPI/TestPyPI
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  config:
+    description: 'Build configuration JSON'
+    required: true
+  ref_name:
+    description: 'Git ref name for release'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build only, no upload'
+    required: false
+    default: 'false'
+  is_prerelease:
+    description: 'Is this a pre-release build'
+    required: false
+    default: 'false'
+  pypi_token:
+    description: 'PyPI API token'
+    required: false
+  pypi_test_token:
+    description: 'TestPyPI API token'
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Parse build configuration
+      id: config
+      shell: bash
+      run: |
+        python3 <<'PY'
+        import json
+        import os
+        import sys
+
+        raw = '''${{ inputs.config }}'''.strip()
+        print(f"Raw config: {raw}")
+        try:
+            cfg = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON config: {e}")
+            sys.exit(1)
+
+        run_id = os.environ.get('GITHUB_RUN_ID', '')
+
+        working_directory = cfg.get('working_directory', './') or './'
+        buildargs = cfg.get('buildargs', '') or ''
+        env_vars = cfg.get('env_vars', {}) or {}
+
+        # Check if config explicitly sets testpypi (overrides is_prerelease)
+        testpypi = cfg.get('testpypi', None)
+        if testpypi is None:
+            # Use is_prerelease to determine target
+            testpypi = '${{ inputs.is_prerelease }}' == 'true'
+
+        outputs = {
+            'working_directory': working_directory,
+            'buildargs': buildargs,
+            'testpypi': str(testpypi).lower(),
+        }
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+            for k, v in outputs.items():
+                fh.write(f"{k}={v}\n")
+                print(f"Set output {k}={v}")
+
+            # Handle env_vars as multiline output
+            if env_vars:
+                fh.write("env_vars<<EOF\n")
+                for key, value in env_vars.items():
+                    fh.write(f"{key}={value}\n")
+                fh.write("EOF\n")
+                print(f"Set env vars: {list(env_vars.keys())}")
+        PY
+
+    - name: Set environment variables from config
+      if: steps.config.outputs.env_vars != ''
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      run: |
+        echo '${{ steps.config.outputs.env_vars }}' >> $GITHUB_ENV
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine build
+
+    - name: Check version
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      run: |
+        if [ -f "setup.py" ]; then
+          if [ -f "pyproject.toml" ] ; then
+            # Install build dependencies to correctly determine version
+            extra_deps=$(python -c 'import tomllib; print(" ".join(f"{e}" for e in tomllib.load(open("pyproject.toml", "rb"))["build-system"]["requires"]))')
+            pip install --upgrade $extra_deps
+          fi
+          version=$(python setup.py --version)
+          release=${{ inputs.ref_name }}
+          echo "Package version: $version"
+          echo "Release tag: $release"
+          if [ "${{ steps.config.outputs.testpypi }}" != "true" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            if [ "$release" != "$version" ]; then
+              echo "Error: Release tag ($release) does not match package version ($version)"
+              exit 1
+            fi
+          fi
+        fi
+
+    - name: Build package
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      run: |
+        echo "Building package with args: ${{ steps.config.outputs.buildargs }}"
+        python -m build ${{ steps.config.outputs.buildargs }}
+        echo "Checking built packages..."
+        twine check dist/*
+
+    - name: Publish to PyPI
+      if: ${{ false && inputs.dry_run != 'true' && steps.config.outputs.testpypi != 'true' }}
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ inputs.pypi_token }}
+      run: |
+        echo "Publishing to PyPI..."
+        twine upload dist/*
+
+    - name: Publish to TestPyPI
+      if: ${{ inputs.dry_run != 'true' && steps.config.outputs.testpypi == 'true' }}
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ inputs.pypi_test_token }}
+      run: |
+        echo "Publishing to TestPyPI..."
+        twine upload --repository testpypi --verbose dist/*
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.config.outputs.working_directory }}/dist/*
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Summary
+      shell: bash
+      run: |
+        echo "## PyPI Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Name**: ${{ inputs.name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Working Directory**: ${{ steps.config.outputs.working_directory }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Args**: ${{ steps.config.outputs.buildargs }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Target**: $([ "${{ steps.config.outputs.testpypi }}" == "true" ] && echo "TestPyPI" || echo "PyPI")" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "- **Mode**: Dry Run (no upload)" >> $GITHUB_STEP_SUMMARY
+        else
+            echo "- **Mode**: Published" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Built Packages" >> $GITHUB_STEP_SUMMARY
+        find ${{ steps.config.outputs.working_directory }}/dist -type f | sort | while read -r file; do
+            echo "- $(basename "$file")" >> $GITHUB_STEP_SUMMARY
+        done
