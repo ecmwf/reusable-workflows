@@ -313,18 +313,7 @@ runs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.ref_name }}-${{ inputs.name }}
+        name: ${{ github.run_id }}-${{ inputs.name }}
         path: ${{ steps.config.outputs.artifact_pattern }}
         if-no-files-found: error
         retention-days: 90
-        
-    - name: Summary
-      shell: bash -el {0}
-      run: |
-        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Build Name**: ${{ inputs.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Meta File**: ${{ steps.config.outputs.meta_file }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Channels**: ${{ steps.config.outputs.channels }}" >> $GITHUB_STEP_SUMMARY
-        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
-            echo "- **Mode**: Dry Run (no artifacts uploaded)" >> $GITHUB_STEP_SUMMARY
-        fi
