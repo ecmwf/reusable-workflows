@@ -1,0 +1,88 @@
+name: Conda Index Lock
+
+on:
+  workflow_dispatch:
+    inputs:
+      nexus_url:
+        description: 'Nexus repository URL'
+        required: true
+        type: string
+      nexus_token:
+        description: 'Nexus authentication token (user:password)'
+        required: true
+        type: string
+      package_artifact_name:
+        description: 'Name of the artifact containing conda packages'
+        required: true
+        type: string
+      caller_run_id:
+        description: 'Run ID of the calling workflow'
+        required: true
+        type: string
+      caller_repo:
+        description: 'Repository that called this lock (owner/repo)'
+        required: true
+        type: string
+      gh_pat:
+        description: 'GitHub PAT for downloading artifacts from caller repo'
+        required: true
+        type: string
+        # TODO: remove before going to production
+
+# CRITICAL: Only one indexing operation at a time
+concurrency:
+  group: conda-index-lock
+  cancel-in-progress: false
+
+jobs:
+  index:
+    name: Index Conda Repository
+    runs-on: platform-builder-Debian-12
+    steps:
+      - name: Create conda environment
+        shell: bash -el {0}
+        run: |
+          INDEX_ENV="conda-index-lock-${GITHUB_RUN_ID}"
+          echo "INDEX_ENV=$INDEX_ENV" >> "$GITHUB_ENV"
+          mamba env create -n "$INDEX_ENV"
+
+      - name: Install dependencies
+        shell: bash -el {0}
+        run: |
+          eval "$(conda shell.bash hook)"
+          conda activate "$INDEX_ENV"
+          mamba install -y conda-index requests
+
+      - name: Download artifacts from caller workflow
+        env:
+          GH_TOKEN: ${{ inputs.gh_pat }}
+        run: |
+          echo "Downloading artifact '${{ inputs.package_artifact_name }}' from run ${{ inputs.caller_run_id }}"
+          echo "Caller repository: ${{ inputs.caller_repo }}"
+
+          # Download artifact from the calling workflow
+          gh run download ${{ inputs.caller_run_id }} \
+            --repo ${{ inputs.caller_repo }} \
+            --name ${{ inputs.package_artifact_name }} \
+            --dir ./packages
+
+          echo "Downloaded packages:"
+          find ./packages -name "*.tar.bz2" | sort
+
+      - name: Rebuild conda index
+        shell: bash -el {0}
+        env:
+          NEXUS_URL: ${{ inputs.nexus_url }}
+          NEXUS_TOKEN: ${{ inputs.nexus_token }}
+        run: |
+          eval "$(conda shell.bash hook)"
+          conda activate "$INDEX_ENV"
+
+          echo "Indexing packages to: $NEXUS_URL"
+
+          python "${{ github.workspace }}/cd-actions/python-conda/scripts/rebuild_conda_index.py" \
+            --package-dir ./packages \
+            --nexus-url "$NEXUS_URL" \
+            --nexus-token "$NEXUS_TOKEN"
+
+          echo "Indexing completed successfully!"

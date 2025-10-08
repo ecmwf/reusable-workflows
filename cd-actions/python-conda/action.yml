@@ -38,7 +38,7 @@ runs:
   steps:
     - name: Parse build configuration
       id: config
-      shell: bash
+      shell: bash -el {0}
       run: |
         python3 <<'PY'
         import json
@@ -96,7 +96,7 @@ runs:
         
     - name: Validate configuration files
       id: validate
-      shell: bash
+      shell: bash -el {0}
       run: |
         meta_file="${{ steps.config.outputs.meta_file }}"
         
@@ -109,7 +109,7 @@ runs:
         echo "Configuration files validated successfully"
 
     - name: Setup conda env dir
-      shell: bash
+      shell: bash -el {0}
       run: |
         echo "CONDA_ENVS_DIRS=$RUNNER_TEMP/envs" >> "$GITHUB_ENV"
         mkdir -p "$RUNNER_TEMP/envs"
@@ -168,28 +168,34 @@ runs:
             exit 1
         fi
 
-    - name: Upload to Nexus
+    - name: Upload artifacts
+      if: ${{ inputs.dry_run != 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.config.outputs.artifact_pattern }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Acquire lock and upload to Nexus
       if: ${{ inputs.dry_run != 'true' }}
       shell: bash -el {0}
       run: |
-        output_folder="${{ steps.config.outputs.output_folder }}"
         nexus_url="${{ steps.config.outputs.nexus_url }}"
+        artifact_name="${{ github.run_id }}-${{ inputs.name }}"
 
-        echo "Uploading conda packages to Nexus: $nexus_url"
+        echo "Acquiring conda index lock and uploading to Nexus: $nexus_url"
+        echo "Artifact: $artifact_name"
+        echo ""
 
-        # Activate build environment and install dependencies
-        eval "$(conda shell.bash hook)"
-        conda activate "$BUILD_ENV"
-
-        echo "Installing conda-index and requests..."
-        mamba install -y conda-index requests
-
-        # Run the rebuild script
-        echo "Rebuilding conda index..."
-        python "${{ github.action_path }}/scripts/rebuild_conda_index.py" \
-            --package-dir "$output_folder" \
+        # Run the lock acquisition script
+        python3 "${{ github.action_path }}/scripts/acquire_lock.py" \
             --nexus-url "$nexus_url" \
-            --nexus-token "${{ inputs.nexus_token }}"
+            --nexus-token "${{ inputs.nexus_token }}" \
+            --artifact-name "$artifact_name" \
+            --caller-run-id "${{ github.run_id }}" \
+            --caller-repo "${{ github.repository }}" \
+            --gh-pat "${{ inputs.gh_pat }}"
 
         echo ""
         echo "All packages and indexes uploaded to Nexus successfully!"
@@ -247,11 +253,3 @@ runs:
 
         echo ""
         echo "All packages successfully installed from Nexus!"
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ github.run_id }}-${{ inputs.name }}
-        path: ${{ steps.config.outputs.artifact_pattern }}
-        if-no-files-found: error
-        retention-days: 90
