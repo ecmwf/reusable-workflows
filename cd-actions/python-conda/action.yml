@@ -55,11 +55,7 @@ runs:
 
         run_id = os.environ.get('GITHUB_RUN_ID', '')
 
-        remote_repo = cfg.get('remote_repo', '') or ''
-        remote_ref = cfg.get('remote_ref', 'main') or 'main'
-        remote_path = cfg.get('remote_path', '.conda') or '.conda'
-
-        conda_dir = f".conda-{run_id}" if remote_repo else ".conda"
+        conda_dir = cfg.get('conda_dir', './.cd/.conda')
 
         channels_list = cfg.get('channels') or ["conda-forge"]
         if not isinstance(channels_list, list):
@@ -89,9 +85,6 @@ runs:
             'output_folder': output_folder,
             'artifact_pattern': artifact_pattern,
             'conda_build_args': conda_build_args,
-            'remote_repo': remote_repo,
-            'remote_ref': remote_ref,
-            'remote_path': remote_path,
             'nexus_url': nexus_url,
         }
 
@@ -100,61 +93,6 @@ runs:
                 fh.write(f"{k}={v}\n")
                 print(f"Set output {k}={v}")
         PY
-        
-    - name: Fetch remote conda configuration
-      if: ${{ steps.config.outputs.remote_repo != '' }}
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.gh_pat || github.token }}
-      run: |
-        remote_repo="${{ steps.config.outputs.remote_repo }}"
-        remote_ref="${{ steps.config.outputs.remote_ref }}"
-        remote_path="${{ steps.config.outputs.remote_path }}"
-        
-        echo "Fetching conda configuration from remote repository:"
-        echo "  Repository: $remote_repo"
-        echo "  Reference: $remote_ref"
-        echo "  Path: $remote_path"
-        
-        # Create temporary directory for remote checkout
-        temp_dir=$(mktemp -d)
-        echo "Created temporary directory: $temp_dir"
-        
-        # Clone the remote repository using standard git commands
-        # Format the repository URL with token authentication
-        if [[ "$remote_repo" == *"/"* ]] && [[ "$remote_repo" != http* ]]; then
-            # Assume GitHub format: owner/repo
-            repo_url="https://x-access-token:${GH_TOKEN}@github.com/${remote_repo}.git"
-        else
-            # Full URL provided - insert token if it's an HTTPS GitHub URL
-            if [[ "$remote_repo" == https://github.com/* ]]; then
-                repo_url="${remote_repo/https:\/\/github.com\//https://x-access-token:${GH_TOKEN}@github.com/}"
-                if [[ "$repo_url" != *.git ]]; then
-                    repo_url="${repo_url}.git"
-                fi
-            else
-                repo_url="$remote_repo"
-            fi
-        fi
-        
-        echo "Cloning repository: $repo_url"
-        git clone --depth 1 --branch "$remote_ref" "$repo_url" "$temp_dir"
-        
-        # Create local conda directory if it doesn't exist
-        mkdir -p ${{ steps.config.outputs.conda_dir }}
-        
-        # Copy conda configuration files from remote repository
-        if [[ -d "$temp_dir/$remote_path" ]]; then
-            echo "Copying files from $temp_dir/$remote_path to ${{ steps.config.outputs.conda_dir }}"
-            cp -r "$temp_dir/$remote_path"/* ${{ steps.config.outputs.conda_dir }}
-        else
-            echo "Remote path $remote_path not found in repository"
-            exit 1
-        fi
-        
-        # Clean up temporary directory
-        rm -rf "$temp_dir"
-        echo "Remote conda configuration fetched successfully"
         
     - name: Validate configuration files
       id: validate
