@@ -120,7 +120,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.run_id }}-${{ inputs.name }}
-        path: ${{ steps.config.outputs.working_directory }}/dist/*
+        path: ${{ steps.config.outputs.working_directory }}/dist/*.whl
         if-no-files-found: error
         retention-days: 90
 
