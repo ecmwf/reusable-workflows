@@ -15,6 +15,12 @@ on:
         description: Value `true` will skip version checks, use for testing or in nightly builds.
         type: boolean
         required: false
+      ref_name:
+        type: string
+        description: Git branch or tag name to checkout.
+        default: ${{ github.ref_name }}
+        required: true
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -23,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref_name }}
           fetch-depth: "0"
 
       - name: Test tag name pattern
@@ -33,7 +40,7 @@ jobs:
           import sys
 
           tag_pattern = r"${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}"
-          ref = "${{ github.ref_name }}"
+          ref = "${{ inputs.ref_name }}"
 
           if not tag_pattern:
             sys.exit(0)
@@ -45,7 +52,7 @@ jobs:
       - name: Test branch name pattern
         if: ${{ ! inputs.skip_checks && vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' }}
         run: |
-          git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ inputs.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
       - name: Setup Matrix
         id: matrix
@@ -153,5 +160,5 @@ jobs:
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ secrets.HPC_CI_SSH_USER }}
-          repository: ${{ github.repository }}@${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ github.repository }}@${{ inputs.ref_name }}
           build_config: ${{ inputs.config_path }}
