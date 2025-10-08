@@ -3,28 +3,41 @@
 
 import argparse
 import json
-import os
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 # Configuration
 LOCK_REPO = "ecmwf/reusable-workflows"
 LOCK_WORKFLOW = "conda-index-lock.yml"
 MAX_WAIT = 1800  # 30 minutes
 POLL_INTERVAL = 10  # seconds
+GITHUB_API = "https://api.github.com"
 
 
-def gh(args):
-    """Run gh CLI command"""
-    result = subprocess.run(
-        ["gh"] + args,
-        capture_output=True,
-        text=True,
-        check=True
-    )
-    return result.stdout
+def gh_api_request(endpoint, method="GET", data=None, token=None):
+    """Make GitHub API request"""
+    url = f"{GITHUB_API}{endpoint}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    req = Request(url, headers=headers, method=method)
+    if data:
+        req.data = json.dumps(data).encode('utf-8')
+        req.add_header('Content-Type', 'application/json')
+
+    try:
+        with urlopen(req) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        raise Exception(f"GitHub API error {e.code}: {error_body}")
 
 
 def main():
@@ -37,9 +50,6 @@ def main():
     parser.add_argument("--gh-pat", required=True)
     args = parser.parse_args()
 
-    # Set GH_TOKEN for all gh commands
-    os.environ["GH_TOKEN"] = args.gh_pat
-
     print("=" * 50)
     print("Conda Index Lock Acquisition")
     print("=" * 50)
@@ -50,17 +60,22 @@ def main():
 
     # Dispatch workflow
     print("Dispatching lock workflow...")
-    gh([
-        "workflow", "run", LOCK_WORKFLOW,
-        "--repo", LOCK_REPO,
-        "--ref", "main",
-        "-f", f"nexus_url={args.nexus_url}",
-        "-f", f"nexus_token={args.nexus_token}",
-        "-f", f"package_artifact_name={args.artifact_name}",
-        "-f", f"caller_run_id={args.caller_run_id}",
-        "-f", f"caller_repo={args.caller_repo}",
-        "-f", f"gh_pat={args.gh_pat}",
-    ])
+    gh_api_request(
+        f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/dispatches",
+        method="POST",
+        data={
+            "ref": "main",
+            "inputs": {
+                "nexus_url": args.nexus_url,
+                "nexus_token": args.nexus_token,
+                "package_artifact_name": args.artifact_name,
+                "caller_run_id": args.caller_run_id,
+                "caller_repo": args.caller_repo,
+                "gh_pat": args.gh_pat,
+            }
+        },
+        token=args.gh_pat
+    )
 
     time.sleep(5)  # Wait for workflow to appear
 
@@ -69,18 +84,15 @@ def main():
     run_id = None
 
     for _ in range(30):
-        runs = json.loads(gh([
-            "run", "list",
-            "--repo", LOCK_REPO,
-            "--workflow", LOCK_WORKFLOW,
-            "--limit", "5",
-            "--json", "databaseId,createdAt"
-        ]))
+        runs = gh_api_request(
+            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs?per_page=5",
+            token=args.gh_pat
+        )
 
-        for run in runs:
-            created = datetime.fromisoformat(run["createdAt"].replace("Z", "+00:00")).timestamp()
+        for run in runs.get("workflow_runs", []):
+            created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00")).timestamp()
             if created >= start_time - 30:
-                run_id = run["databaseId"]
+                run_id = run["id"]
                 break
 
         if run_id:
@@ -100,11 +112,10 @@ def main():
     interval = POLL_INTERVAL
 
     while elapsed < MAX_WAIT:
-        data = json.loads(gh([
-            "run", "view", str(run_id),
-            "--repo", LOCK_REPO,
-            "--json", "status,conclusion"
-        ]))
+        data = gh_api_request(
+            f"/repos/{LOCK_REPO}/actions/runs/{run_id}",
+            token=args.gh_pat
+        )
 
         status = data["status"]
         conclusion = data.get("conclusion")
@@ -132,9 +143,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except subprocess.CalledProcessError as e:
-        print(f"Error: {e.stderr}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-    except KeyboardInterrupt:
-        print("\nInterrupted", file=sys.stderr)
-        sys.exit(130)
