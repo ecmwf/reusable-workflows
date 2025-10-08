@@ -19,7 +19,7 @@ on:
         type: string
         description: Git branch or tag name to checkout.
         default: ${{ github.ref_name }}
-        required: true
+        required: false
 
 jobs:
   setup:
