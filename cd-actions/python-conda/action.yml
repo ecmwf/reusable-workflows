@@ -172,24 +172,21 @@ runs:
       if: ${{ inputs.dry_run != 'true' }}
       shell: bash -el {0}
       run: |
-        output_folder="${{ steps.config.outputs.output_folder }}"
         nexus_url="${{ steps.config.outputs.nexus_url }}"
+        artifact_name="${{ github.run_id }}-${{ inputs.name }}"
 
-        echo "Uploading conda packages to Nexus: $nexus_url"
+        echo "Acquiring conda index lock and uploading to Nexus: $nexus_url"
+        echo "Artifact: $artifact_name"
+        echo ""
 
-        # Activate build environment and install dependencies
-        eval "$(conda shell.bash hook)"
-        conda activate "$BUILD_ENV"
-
-        echo "Installing conda-index and requests..."
-        mamba install -y conda-index requests
-
-        # Run the rebuild script
-        echo "Rebuilding conda index..."
-        python "${{ github.action_path }}/scripts/rebuild_conda_index.py" \
-            --package-dir "$output_folder" \
+        # Run the lock acquisition script
+        python3 "${{ github.action_path }}/scripts/acquire_lock.py" \
             --nexus-url "$nexus_url" \
-            --nexus-token "${{ inputs.nexus_token }}"
+            --nexus-token "${{ inputs.nexus_token }}" \
+            --artifact-name "$artifact_name" \
+            --caller-run-id "${{ github.run_id }}" \
+            --caller-repo "${{ github.repository }}" \
+            --gh-pat "${{ inputs.gh_pat }}"
 
         echo ""
         echo "All packages and indexes uploaded to Nexus successfully!"
