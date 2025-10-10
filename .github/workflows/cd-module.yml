@@ -31,7 +31,9 @@ jobs:
         with:
           ref: ${{ inputs.ref_name }}
           fetch-depth: "0"
-
+      - name: Get checked out SHA
+        id: checked_out_sha
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
       - name: Test tag name pattern
         if: ${{ ! inputs.skip_checks }}
         shell: python
@@ -125,7 +127,7 @@ jobs:
 
           owner_repo = "${{ github.repository }}"
           owner, repo = owner_repo.split("/")
-          ref = "${{ github.sha }}"
+          ref = os.getenv("CHECKED_OUT_SHA")
           token = "${{ github.token }}"
           url = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{input_config_path}"
           response = requests.get(url, headers={"Authorization": f"token {token}"})
@@ -160,5 +162,5 @@ jobs:
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ secrets.HPC_CI_SSH_USER }}
-          repository: ${{ github.repository }}@${{ inputs.ref_name }}
+          repository: ${{ github.repository }}@${{ needs.setup.outputs.checked_out_sha }}
           build_config: ${{ inputs.config_path }}
