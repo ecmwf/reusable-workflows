@@ -111,24 +111,7 @@ jobs:
                       'type': build['type'],
                       'config': json.dumps(build.get('config', {}))
                   }
-                  
-                  # Handle matrix configurations
-                  if 'matrix' in config:
-                      base_matrix = config['matrix']
-                      for matrix_combo in base_matrix.get('include', [{}]):
-                          # Skip excluded combinations
-                          excluded = False
-                          for exclude in base_matrix.get('exclude', []):
-                              if all(matrix_combo.get(k) == v for k, v in exclude.items() if k != 'build' or v == build['name']):
-                                  excluded = True
-                                  break
-                          
-                          if not excluded:
-                              final_item = matrix_item.copy()
-                              final_item.update(matrix_combo)
-                              matrix['include'].append(final_item)
-                  else:
-                      matrix['include'].append(matrix_item)
+                  matrix['include'].append(matrix_item)
           
           print(json.dumps(matrix))
           ")
@@ -162,7 +145,6 @@ jobs:
           name: ${{ matrix.name }}
           config: ${{ matrix.config }}
           ref_name: ${{ inputs.ref_name }}
-          python_version: ${{ matrix.python || '' }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
           gh_pat: ${{ secrets.GH_PAT || '' }}

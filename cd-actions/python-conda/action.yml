@@ -11,9 +11,6 @@ inputs:
   ref_name:
     description: 'Git ref name for artifacts'
     required: true
-  python_version:
-    description: 'Python version override'
-    required: false
   dry_run:
     description: 'Dry run mode'
     required: false
@@ -53,8 +50,6 @@ runs:
             print(f"Failed to parse JSON config: {e}")
             sys.exit(1)
 
-        run_id = os.environ.get('GITHUB_RUN_ID', '')
-
         conda_dir = cfg.get('conda_dir', './.cd/.conda')
 
         channels_list = cfg.get('channels') or ["conda-forge"]
@@ -78,20 +73,20 @@ runs:
         output_folder = f"{conda_dir}/build"
         artifact_pattern = f"{output_folder}/**/*.tar.bz2"
 
-        outputs = {
-            'conda_dir': conda_dir,
-            'meta_file': meta_file,
-            'channels': channels,
-            'output_folder': output_folder,
-            'artifact_pattern': artifact_pattern,
-            'conda_build_args': conda_build_args,
-            'nexus_url': nexus_url,
-        }
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"meta_file={meta_file}\n")
+            f.write(f"channels={channels}\n")
+            f.write(f"output_folder={output_folder}\n")
+            f.write(f"artifact_pattern={artifact_pattern}\n")
+            f.write(f"conda_build_args={conda_build_args}\n")
+            f.write(f"nexus_url={nexus_url}\n")
 
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
-            for k, v in outputs.items():
-                fh.write(f"{k}={v}\n")
-                print(f"Set output {k}={v}")
+        print(f"Meta file: {meta_file}")
+        print(f"Channels: {channels}")
+        print(f"Output folder: {output_folder}")
+        print(f"Artifact pattern: {artifact_pattern}")
+        print(f"Conda build args: {conda_build_args}")
+        print(f"Nexus URL: {nexus_url}")
         PY
         
     - name: Validate configuration files

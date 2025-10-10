@@ -46,8 +46,6 @@ runs:
             print(f"Failed to parse JSON config: {e}")
             sys.exit(1)
 
-        run_id = os.environ.get('GITHUB_RUN_ID', '')
-
         working_directory = cfg.get('working_directory', './') or './'
         buildargs = cfg.get('buildargs', '') or ''
         env_vars = cfg.get('env_vars', {}) or {}
@@ -58,24 +56,23 @@ runs:
             # Use is_prerelease to determine target
             testpypi = '${{ inputs.is_prerelease }}' == 'true'
 
-        outputs = {
-            'working_directory': working_directory,
-            'buildargs': buildargs,
-            'testpypi': str(testpypi).lower(),
-        }
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
-            for k, v in outputs.items():
-                fh.write(f"{k}={v}\n")
-                print(f"Set output {k}={v}")
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"working_directory={working_directory}\n")
+            f.write(f"buildargs={buildargs}\n")
+            f.write(f"testpypi={str(testpypi).lower()}\n")
 
             # Handle env_vars as multiline output
             if env_vars:
-                fh.write("env_vars<<EOF\n")
+                f.write("env_vars<<EOF\n")
                 for key, value in env_vars.items():
-                    fh.write(f"{key}={value}\n")
-                fh.write("EOF\n")
-                print(f"Set env vars: {list(env_vars.keys())}")
+                    f.write(f"{key}={value}\n")
+                f.write("EOF\n")
+
+        print(f"Working directory: {working_directory}")
+        print(f"Build args: {buildargs}")
+        print(f"Test PyPI: {str(testpypi).lower()}")
+        if env_vars:
+            print(f"Env vars: {list(env_vars.keys())}")
         PY
 
     - name: Set environment variables from config
@@ -97,7 +94,7 @@ runs:
         ls -lh dist/
 
     - name: Publish to PyPI
-      if: ${{ false && inputs.dry_run != 'true' && steps.config.outputs.testpypi != 'true' }}
+      if: ${{ false && inputs.dry_run != 'true' && steps.config.outputs.testpypi != 'true' }} # Enable when ready
       shell: bash
       working-directory: ${{ steps.config.outputs.working_directory }}
       env:
@@ -123,22 +120,3 @@ runs:
         path: ${{ steps.config.outputs.working_directory }}/dist/*.whl
         if-no-files-found: error
         retention-days: 90
-
-    - name: Summary
-      shell: bash
-      run: |
-        echo "## PyPI Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Build Name**: ${{ inputs.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Working Directory**: ${{ steps.config.outputs.working_directory }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Build Args**: ${{ steps.config.outputs.buildargs }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Target**: $([ "${{ steps.config.outputs.testpypi }}" == "true" ] && echo "TestPyPI" || echo "PyPI")" >> $GITHUB_STEP_SUMMARY
-        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
-            echo "- **Mode**: Dry Run (no upload)" >> $GITHUB_STEP_SUMMARY
-        else
-            echo "- **Mode**: Published" >> $GITHUB_STEP_SUMMARY
-        fi
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Built Packages" >> $GITHUB_STEP_SUMMARY
-        find ${{ steps.config.outputs.working_directory }}/dist -type f | sort | while read -r file; do
-            echo "- $(basename "$file")" >> $GITHUB_STEP_SUMMARY
-        done
