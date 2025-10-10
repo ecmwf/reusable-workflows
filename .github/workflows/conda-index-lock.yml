@@ -23,11 +23,6 @@ on:
         description: 'Repository that called this lock (owner/repo)'
         required: true
         type: string
-      gh_pat:
-        description: 'GitHub PAT for downloading artifacts from caller repo'
-        required: true
-        type: string
-        # TODO: remove before going to production
 
 # CRITICAL: Only one indexing operation at a time
 concurrency:

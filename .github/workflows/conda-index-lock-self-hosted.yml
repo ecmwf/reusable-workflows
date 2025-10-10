@@ -23,11 +23,6 @@ on:
         description: 'Repository that called this lock (owner/repo)'
         required: true
         type: string
-      gh_pat:
-        description: 'GitHub PAT for downloading artifacts from caller repo'
-        required: true
-        type: string
-        # TODO: remove before going to production
 
 # CRITICAL: Only one indexing operation at a time
 concurrency:
@@ -55,7 +50,7 @@ jobs:
 
       - name: Download artifacts from caller workflow
         env:
-          GH_TOKEN: ${{ inputs.gh_pat }}
+          GH_TOKEN: ${{ secrets.GH_REPO_READ_TOKEN }}
         run: |
           echo "Downloading artifact '${{ inputs.package_artifact_name }}' from run ${{ inputs.caller_run_id }}"
           echo "Caller repository: ${{ inputs.caller_repo }}"
