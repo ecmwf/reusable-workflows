@@ -71,7 +71,6 @@ def main():
                 "package_artifact_name": args.artifact_name,
                 "caller_run_id": args.caller_run_id,
                 "caller_repo": args.caller_repo,
-                "gh_pat": args.gh_pat,
             }
         },
         token=args.gh_pat
