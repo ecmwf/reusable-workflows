@@ -127,7 +127,7 @@ jobs:
 
           owner_repo = "${{ github.repository }}"
           owner, repo = owner_repo.split("/")
-          ref = os.getenv("CHECKED_OUT_SHA")
+          ref = "${{ github.sha }}"
           token = "${{ github.token }}"
           url = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{input_config_path}"
           response = requests.get(url, headers={"Authorization": f"token {token}"})
@@ -159,6 +159,7 @@ jobs:
     steps:
       - uses: ecmwf/reusable-workflows/ci-hpc@v2
         with:
+          # todo: remove before merge
           dev-runner: true
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
