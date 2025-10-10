@@ -71,7 +71,7 @@ runs:
         else:
             # TODO: Use production Nexus repository for standard release
             nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
-            nexus_token = '${{ inputs.nexus_token }}'
+            nexus_token = '${{ inputs.nexus_test_token }}'
             print("Using production Nexus repository for standard release")
 
         meta_file = f"{conda_dir}/meta.yaml"
