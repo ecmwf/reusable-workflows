@@ -1,0 +1,122 @@
+name: Python PyPI Publisher
+description: Build and publish Python packages to PyPI/TestPyPI using UV
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  config:
+    description: 'Build configuration JSON'
+    required: true
+  ref_name:
+    description: 'Git ref name for release'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build only, no upload'
+    required: false
+    default: 'false'
+  is_prerelease:
+    description: 'Is this a pre-release build'
+    required: false
+    default: 'false'
+  pypi_token:
+    description: 'PyPI API token'
+    required: false
+  pypi_test_token:
+    description: 'TestPyPI API token'
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Parse build configuration
+      id: config
+      shell: bash
+      run: |
+        python3 <<'PY'
+        import json
+        import os
+        import sys
+
+        raw = '''${{ inputs.config }}'''.strip()
+        print(f"Raw config: {raw}")
+        try:
+            cfg = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON config: {e}")
+            sys.exit(1)
+
+        working_directory = cfg.get('working_directory', './') or './'
+        buildargs = cfg.get('buildargs', '') or ''
+        env_vars = cfg.get('env_vars', {}) or {}
+
+        # Check if config explicitly sets testpypi (overrides is_prerelease)
+        testpypi = cfg.get('testpypi', None)
+        if testpypi is None:
+            # Use is_prerelease to determine target
+            testpypi = '${{ inputs.is_prerelease }}' == 'true'
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"working_directory={working_directory}\n")
+            f.write(f"buildargs={buildargs}\n")
+            f.write(f"testpypi={str(testpypi).lower()}\n")
+
+            # Handle env_vars as multiline output
+            if env_vars:
+                f.write("env_vars<<EOF\n")
+                for key, value in env_vars.items():
+                    f.write(f"{key}={value}\n")
+                f.write("EOF\n")
+
+        print(f"Working directory: {working_directory}")
+        print(f"Build args: {buildargs}")
+        print(f"Test PyPI: {str(testpypi).lower()}")
+        if env_vars:
+            print(f"Env vars: {list(env_vars.keys())}")
+        PY
+
+    - name: Set environment variables from config
+      if: steps.config.outputs.env_vars != ''
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      run: |
+        echo '${{ steps.config.outputs.env_vars }}' >> $GITHUB_ENV
+
+    - name: Build package with uv
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      run: |
+        echo "Building package with uv..."
+        echo "Build args: ${{ steps.config.outputs.buildargs }}"
+        uv build ${{ steps.config.outputs.buildargs }}
+        echo ""
+        echo "Built packages:"
+        ls -lh dist/
+
+    - name: Publish to PyPI
+      if: ${{ false && inputs.dry_run != 'true' && steps.config.outputs.testpypi != 'true' }} # Enable when ready
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      env:
+        UV_PUBLISH_TOKEN: ${{ inputs.pypi_token }}
+      run: |
+        echo "Publishing to PyPI..."
+        uv publish --publish-url https://upload.pypi.org/legacy/
+
+    - name: Publish to TestPyPI
+      if: ${{ inputs.dry_run != 'true' && steps.config.outputs.testpypi == 'true' }}
+      shell: bash
+      working-directory: ${{ steps.config.outputs.working_directory }}
+      env:
+        UV_PUBLISH_TOKEN: ${{ inputs.pypi_test_token }}
+      run: |
+        echo "Publishing to TestPyPI..."
+        uv publish --publish-url https://test.pypi.org/legacy/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.config.outputs.working_directory }}/dist/*.whl
+        if-no-files-found: error
+        retention-days: 90

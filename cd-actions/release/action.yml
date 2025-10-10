@@ -1,0 +1,97 @@
+name: Release Action
+description: Create GitHub releases with artifact uploads
+
+inputs:
+  config:
+    description: 'Full configuration object'
+    required: true
+  ref_name:
+    description: 'Git ref name for release'
+    required: true
+  artifacts_dir:
+    description: 'Directory containing downloaded artifacts'
+    required: false
+    default: 'release-artifacts'
+
+runs:
+  using: composite
+  steps:
+    - name: Parse release configuration
+      id: config
+      shell: bash
+      run: |
+        python3 <<'PY'
+        import yaml
+        import os
+
+        config_yaml = '''${{ inputs.config }}'''
+        config = yaml.safe_load(config_yaml)
+
+        release_config = config.get('release', {}).get('config', {})
+
+        release_name = release_config.get('name', 'Release ${{ inputs.ref_name }}')
+        release_body = release_config.get('body', '## Changes\nSee the changelog for details.')
+        prerelease = str(release_config.get('prerelease', False)).lower()
+        draft = str(release_config.get('draft', False)).lower()
+        make_latest = release_config.get('make_latest', 'true')
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"release_name={release_name}\n")
+            f.write(f"prerelease={prerelease}\n")
+            f.write(f"draft={draft}\n")
+            f.write(f"make_latest={make_latest}\n")
+            # Handle multiline body
+            f.write("release_body<<EOF\n")
+            f.write(f"{release_body}\n")
+            f.write("EOF\n")
+
+        print(f"Release name: {release_name}")
+        print(f"Prerelease: {prerelease}")
+        print(f"Draft: {draft}")
+        print(f"Make latest: {make_latest}")
+        PY
+        
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ github.run_id }}-*
+        merge-multiple: true
+        path: ${{ inputs.artifacts_dir }}
+        
+    - name: List downloaded artifacts
+      shell: bash
+      run: |
+        echo "Downloaded artifacts:"
+        find ${{ inputs.artifacts_dir }} -type f | sort
+        
+    - name: Create release file list
+      id: files
+      shell: bash
+      run: |
+        echo "Creating file list for release..."
+        # Find all files in the artifacts directory
+        files_list=$(find ${{ inputs.artifacts_dir }} -type f | sort)
+        
+        if [[ -z "$files_list" ]]; then
+            echo "No files found for release in ${{ inputs.artifacts_dir }}"
+            exit 1
+        fi
+        
+        echo "Files to be released:"
+        echo "$files_list"
+        
+        echo "files_list<<EOF" >> $GITHUB_OUTPUT
+        echo "$files_list" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+    - name: Create GitHub release
+      uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
+      with:
+        tag_name: ${{ inputs.ref_name }}
+        name: ${{ steps.config.outputs.release_name }}
+        body: ${{ steps.config.outputs.release_body }}
+        files: ${{ steps.files.outputs.files_list }}
+        prerelease: ${{ steps.config.outputs.prerelease }}
+        draft: ${{ steps.config.outputs.draft }}
+        make_latest: ${{ steps.config.outputs.make_latest }}
+        token: ${{ github.token }}

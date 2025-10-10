@@ -1,0 +1,194 @@
+name: Reusable CD Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      config_file:
+        description: 'Path to build configuration file'
+        required: false
+        type: string
+        default: '.github/cd-config.yml'
+      ref_name:
+        description: 'Git ref name for artifacts and release'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run mode - build only, no uploads or releases'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  detect-release-type:
+    name: Detect Release Type
+    runs-on: ubuntu-latest
+    outputs:
+      is_dry_run: ${{ steps.detect.outputs.is_dry_run }}
+      is_prerelease: ${{ steps.detect.outputs.is_prerelease }}
+    steps:
+      - name: Detect release type from ref
+        id: detect
+        run: |
+          ref_name="${{ inputs.ref_name }}"
+          echo "Analyzing ref: $ref_name"
+
+          # Check if it's a standard semantic version tag (e.g., v1.2.3 or 1.2.3)
+          if [[ "$ref_name" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Standard release detected"
+            echo "is_dry_run=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+
+          # Check if it's a pre-release tag (e.g., v1.2.3-RC1, 1.2.3-alpha1)
+          elif [[ "$ref_name" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-.+$ ]]; then
+            echo "Pre-release detected"
+            echo "is_dry_run=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+
+          # Everything else is a dry run (PRs, branches, etc.)
+          else
+            echo "Dry run detected"
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Override with explicit dry_run input if provided
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "Explicit dry_run input enabled - forcing dry run mode"
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+          fi
+
+  load-config:
+    name: Load and Validate Configuration
+    runs-on: platform-builder-Debian-12
+    outputs:
+      config: ${{ steps.load.outputs.config }}
+      build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
+      release_enabled: ${{ steps.parse-release.outputs.enabled }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        
+      - name: Check configuration file exists
+        id: check-config
+        run: |
+          if [[ ! -f "${{ inputs.config_file }}" ]]; then
+            echo "Configuration file ${{ inputs.config_file }} not found"
+            echo "Looking for alternative locations..."
+            if [[ -f ".github/workflows/cd-config.yml" ]]; then
+              echo "config_file=.github/workflows/cd-config.yml" >> $GITHUB_OUTPUT
+            else
+              echo "No configuration file found. Please create ${{ inputs.config_file }}"
+              exit 1
+            fi
+          else
+            echo "config_file=${{ inputs.config_file }}" >> $GITHUB_OUTPUT
+          fi
+        
+      - name: Load configuration
+        id: load
+        run: |
+          config=$(cat "${{ steps.check-config.outputs.config_file }}")
+          echo "Raw configuration loaded"
+          # Validate YAML syntax
+          echo "$config" | yq > /dev/null
+          echo "config<<EOF" >> $GITHUB_OUTPUT
+          echo "$config" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+      - name: Generate build matrix
+        id: generate-matrix
+        run: |
+          # Parse configuration and generate build matrix
+          matrix=$(echo '${{ steps.load.outputs.config }}' | python3 -c "
+          import sys, yaml, json
+          config = yaml.safe_load(sys.stdin)
+          
+          matrix = {'include': []}
+          for build in config.get('builds', []):
+              if build.get('enabled', True):
+                  matrix_item = {
+                      'name': build['name'],
+                      'type': build['type'],
+                      'config': json.dumps(build.get('config', {}))
+                  }
+                  matrix['include'].append(matrix_item)
+          
+          print(json.dumps(matrix))
+          ")
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          
+      - name: Parse release configuration
+        id: parse-release
+        run: |
+          enabled=$(echo '${{ steps.load.outputs.config }}' | yq '.release.enabled // false')
+          echo "enabled=$enabled" >> $GITHUB_OUTPUT
+
+  build:
+    name: ${{ matrix.name }}
+    if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
+    needs: [detect-release-type, load-config]
+    runs-on: platform-builder-Debian-12
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          
+      - name: Build with Python Conda
+        if: ${{ matrix.type == 'python-conda' }}
+        uses: ecmwf/reusable-workflows/cd-actions/python-conda@cd-actions
+        with:
+          name: ${{ matrix.name }}
+          config: ${{ matrix.config }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
+          nexus_token: ${{ secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN) || '' }}
+          nexus_test_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
+
+      - name: Build with Python PyPI
+        if: ${{ matrix.type == 'python-pypi' }}
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-actions
+        with:
+          name: ${{ matrix.name }}
+          config: ${{ matrix.config }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
+          pypi_token: ${{ secrets.PYPI_API_TOKEN }}
+          pypi_test_token: ${{ secrets.PYPI_TEST_API_TOKEN }}
+
+  release:
+    name: Create Release
+    if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
+    needs: [detect-release-type, load-config, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Prepare release configuration
+        id: prepare-config
+        run: |
+          config='${{ needs.load-config.outputs.config }}'
+          is_prerelease='${{ needs.detect-release-type.outputs.is_prerelease }}'
+
+          # Inject prerelease flag into config
+          updated_config=$(echo "$config" | yq eval ".release.config.prerelease = ($is_prerelease == \"true\")" -)
+
+          echo "config<<EOF" >> $GITHUB_OUTPUT
+          echo "$updated_config" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        uses: ecmwf/reusable-workflows/cd-actions/release@cd-actions
+        with:
+          config: ${{ steps.prepare-config.outputs.config }}
+          ref_name: ${{ inputs.ref_name }}
