@@ -162,5 +162,5 @@ jobs:
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ secrets.HPC_CI_SSH_USER }}
-          repository: ${{ github.repository }}@${{ needs.setup.outputs.checked_out_sha }}
+          repository: ${{ github.repository }}@${{ inputs.ref_name }}
           build_config: ${{ inputs.config_path }}
