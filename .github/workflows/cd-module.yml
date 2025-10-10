@@ -60,6 +60,7 @@ jobs:
         id: matrix
         shell: python
         env:
+          CHECKED_OUT_SHA: ${{ steps.checked_out_sha.outputs.sha }}
           MATRIX: |
             name:
             - gnu-12.2.0
@@ -127,7 +128,7 @@ jobs:
 
           owner_repo = "${{ github.repository }}"
           owner, repo = owner_repo.split("/")
-          ref = "${{ github.sha }}"
+          ref = os.getenv("CHECKED_OUT_SHA")
           token = "${{ github.token }}"
           url = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{input_config_path}"
           response = requests.get(url, headers={"Authorization": f"token {token}"})
