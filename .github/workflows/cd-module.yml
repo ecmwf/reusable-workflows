@@ -153,12 +153,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-    runs-on: [self-hosted, linux, hpc]
+    runs-on: [self-hosted, linux, hpc-dev]
     env:
       GITHUB_TOKEN: ${{ secrets.GH_REPO_READ_TOKEN }}
     steps:
       - uses: ecmwf/reusable-workflows/ci-hpc@v2
         with:
+          dev-runner: true
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ secrets.HPC_CI_SSH_USER }}
