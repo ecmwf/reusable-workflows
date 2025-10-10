@@ -147,7 +147,7 @@ jobs:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
-          gh_pat: ${{ secrets.GH_PAT || '' }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
 
       - name: Build with Python PyPI

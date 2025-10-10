@@ -52,7 +52,7 @@ jobs:
 
       - name: Download artifacts from caller workflow
         env:
-          GH_TOKEN: ${{ inputs.gh_pat }}
+          GH_TOKEN: ${{ secrets.GH_REPO_READ_TOKEN }}
         run: |
           echo "Downloading artifact '${{ inputs.package_artifact_name }}' from run ${{ inputs.caller_run_id }}"
           echo "Caller repository: ${{ inputs.caller_repo }}"
