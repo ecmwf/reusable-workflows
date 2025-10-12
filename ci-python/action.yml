@@ -223,7 +223,8 @@ runs:
         fi
 
     - name: Upload Extra Artifact
-      if: always() &&  ${{ inputs.upload_extra_artifact != 'none' }}
+      #if: always() &&  ${{ inputs.upload_extra_artifact != 'none' }}
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.upload_extra_artifact }}
