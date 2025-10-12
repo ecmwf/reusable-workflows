@@ -199,7 +199,6 @@ runs:
         LD_LIBRARY_PATH: ${{ inputs.lib_path }}
       shell: bash -ex {0}
       run: |
-        echo "artifact path will be ${{ inputs.upload_extra_artifact }}-${{ github.runner.name }}-${{ github.run_id }}"
         if [ "${{ steps.setup_env.outputs.use_conda }}" = "true" ]; then
           source /opt/conda/etc/profile.d/conda.sh
           conda activate $RUNNER_TEMP/venv
