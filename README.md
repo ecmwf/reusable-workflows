@@ -203,6 +203,12 @@ The version of Python binary to use.
 **Default:** `'3.9'`
 **Type:** `ring`
 
+#### `upload_extra_artifact`
+
+Upload a file or directory specified in this argument as an artifact.
+**Default:** `none`
+**Type:** `string`
+
 #### `repository`
 
 The source repository name. Repository names should follow the standard Github `owner/name` format.

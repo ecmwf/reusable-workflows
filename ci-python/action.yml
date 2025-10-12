@@ -45,6 +45,10 @@ inputs:
   codecov_token:
     description: codecov.io upload token
     required: false
+  upload_extra_artifact:
+    description: upload a file or directory as an artifact if it exists
+    required: false
+    default: "none"
 
 runs:
   using: composite
@@ -217,6 +221,13 @@ runs:
           pytest --cov=./ --cov-report=xml
           python -m coverage report
         fi
+
+    - name: Upload Extra Artifact
+      if: ${{ always() && inputs.upload_extra_artifact != 'none' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.upload_extra_artifact }}-${{ matrix.os }}-${{ github.run_id }}
+        path: ${{ inputs.upload_extra_artifact }}/
 
     - name: Codecov Upload
       if: ${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}
