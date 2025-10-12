@@ -228,7 +228,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.upload_extra_artifact }}-${{ github.runner.name }}-${{ github.run_id }}
+        name: ${{ inputs.upload_extra_artifact }}-${{ matrix.os }}-${{ github.run_id }}
         path: ${{ inputs.upload_extra_artifact }}/
 
     - name: Codecov Upload
