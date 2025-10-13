@@ -34,6 +34,9 @@ jobs:
     name: Index Conda Repository
     runs-on: platform-builder-Debian-12
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Create conda environment
         shell: bash -el {0}
         run: |
