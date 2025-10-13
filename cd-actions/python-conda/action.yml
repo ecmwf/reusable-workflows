@@ -295,8 +295,12 @@ runs:
             echo ""
             echo "Testing installation of: $package_name"
 
-            # Extract package name without version/build info
-            pkg_base=$(echo "$package_name" | sed 's/-.*//')
+            # Extract package name and version
+            pkg_base=$(echo "$package_name" | sed -E 's/-[0-9]+(\.[0-9]+)*-.*//')
+            pkg_version=$(echo "$package_name" | sed -E 's/^[^-]+-([0-9]+(\.[0-9]+)*).*/\1/')
+
+            echo "Package: $pkg_base"
+            echo "Version: $pkg_version"
 
             # Create a test environment
             test_env="test-install-${GITHUB_RUN_ID}-${RANDOM}"
@@ -304,16 +308,18 @@ runs:
 
             eval "$(conda shell.bash hook)"
 
-            # Create environment and install package from Nexus
-            if mamba create -n "$test_env" -c "$nexus_url" -c conda-forge "$pkg_base" -y; then
-                echo "✓ Successfully installed $pkg_base from Nexus"
+            # Create environment and install the EXACT version from Nexus
+            if mamba create -n "$test_env" -c "$nexus_url" -c conda-forge "${pkg_base}=${pkg_version}" -y; then
+                echo "Successfully installed ${pkg_base}=${pkg_version} from Nexus"
 
-                # Verify package is installed
+                # Verify the exact version is installed
                 conda activate "$test_env"
-                if conda list | grep -q "$pkg_base"; then
-                    echo "✓ Package $pkg_base verified in environment"
+                installed_version=$(conda list "$pkg_base" | grep "$pkg_base" | awk '{print $2}')
+
+                if [ "$installed_version" = "$pkg_version" ]; then
+                    echo "Verified exact version: $installed_version matches $pkg_version"
                 else
-                    echo "✗ Package $pkg_base not found in environment"
+                    echo "Version mismatch: installed $installed_version but expected $pkg_version"
                     conda deactivate
                     conda env remove -n "$test_env" -y
                     exit 1
@@ -324,10 +330,11 @@ runs:
                 conda env remove -n "$test_env" -y
                 echo "Test environment removed"
             else
-                echo "✗ Failed to install $pkg_base from Nexus"
+                echo "Failed to install ${pkg_base}=${pkg_version} from Nexus"
+                echo "This could mean the package was not uploaded successfully"
                 exit 1
             fi
         done
 
         echo ""
-        echo "All packages successfully installed from Nexus!"
+        echo "All packages successfully installed from Nexus with correct versions!"
