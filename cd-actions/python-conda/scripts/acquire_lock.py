@@ -34,7 +34,11 @@ def gh_api_request(endpoint, method="GET", data=None, token=None):
 
     try:
         with urlopen(req) as response:
-            return json.loads(response.read().decode('utf-8'))
+            body = response.read().decode('utf-8')
+            # 204 No Content responses have no body
+            if not body:
+                return None
+            return json.loads(body)
     except HTTPError as e:
         error_body = e.read().decode('utf-8')
         raise Exception(f"GitHub API error {e.code}: {error_body}")
