@@ -37,6 +37,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Setup conda env dir
+        shell: bash -el {0}
+        run: |
+          echo "CONDA_ENVS_DIRS=$RUNNER_TEMP/envs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/envs"
+
       - name: Create conda environment
         shell: bash -el {0}
         run: |
