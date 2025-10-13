@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 
 # Configuration
 LOCK_REPO = "ecmwf/reusable-workflows"
-LOCK_WORKFLOW = "conda-index-lock.yml"
+LOCK_WORKFLOW = "conda-index-lock-self-hosted.yml"
 MAX_WAIT = 1800  # 30 minutes
 POLL_INTERVAL = 10  # seconds
 GITHUB_API = "https://api.github.com"
