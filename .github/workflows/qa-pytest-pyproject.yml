@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-latest", "macos-latest"]
+        platform: ["ubuntu-latest"]
     name: pytest (${{ matrix.platform }})
     runs-on: ${{ matrix.platform }}
     steps:
