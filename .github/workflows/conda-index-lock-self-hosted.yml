@@ -34,6 +34,15 @@ jobs:
     name: Index Conda Repository
     runs-on: platform-builder-Debian-12
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup conda env dir
+        shell: bash -el {0}
+        run: |
+          echo "CONDA_ENVS_DIRS=$RUNNER_TEMP/envs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/envs"
+
       - name: Create conda environment
         shell: bash -el {0}
         run: |
@@ -49,17 +58,61 @@ jobs:
           mamba install -y conda-index requests
 
       - name: Download artifacts from caller workflow
+        shell: bash -el {0}
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_READ_TOKEN }}
+          REPO: ${{ inputs.caller_repo }}
+          RUN_ID: ${{ inputs.caller_run_id }}
+          ARTIFACT_NAME: ${{ inputs.package_artifact_name }}
         run: |
-          echo "Downloading artifact '${{ inputs.package_artifact_name }}' from run ${{ inputs.caller_run_id }}"
-          echo "Caller repository: ${{ inputs.caller_repo }}"
+          eval "$(conda shell.bash hook)"
+          conda activate "$INDEX_ENV"
 
-          # Download artifact from the calling workflow
-          gh run download ${{ inputs.caller_run_id }} \
-            --repo ${{ inputs.caller_repo }} \
-            --name ${{ inputs.package_artifact_name }} \
-            --dir ./packages
+          echo "Downloading artifact '$ARTIFACT_NAME' from run $RUN_ID in $REPO"
+
+          python3 << 'EOF'
+          import os
+          import sys
+          import zipfile
+          import requests
+
+          repo = os.environ["REPO"]
+          run_id = os.environ["RUN_ID"]
+          artifact_name = os.environ["ARTIFACT_NAME"]
+          token = os.environ["GH_TOKEN"]
+
+          # Get artifact list
+          url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts"
+          headers = {"Authorization": f"Bearer {token}"}
+          resp = requests.get(url, headers=headers)
+          resp.raise_for_status()
+
+          # Find artifact ID
+          artifact_id = None
+          for artifact in resp.json()["artifacts"]:
+              if artifact["name"] == artifact_name:
+                  artifact_id = artifact["id"]
+                  break
+
+          if not artifact_id:
+              print(f"Artifact '{artifact_name}' not found", file=sys.stderr)
+              sys.exit(1)
+
+          # Download artifact zip
+          url = f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip"
+          resp = requests.get(url, headers=headers)
+          resp.raise_for_status()
+
+          # Extract to ./packages
+          os.makedirs("./packages", exist_ok=True)
+          with open("/tmp/artifact.zip", "wb") as f:
+              f.write(resp.content)
+          with zipfile.ZipFile("/tmp/artifact.zip") as z:
+              z.extractall("./packages")
+          os.remove("/tmp/artifact.zip")
+
+          print("Downloaded and extracted artifact")
+          EOF
 
           echo "Downloaded packages:"
           find ./packages -name "*.tar.bz2" | sort

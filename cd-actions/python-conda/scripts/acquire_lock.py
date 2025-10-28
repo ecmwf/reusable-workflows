@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 
 # Configuration
 LOCK_REPO = "ecmwf/reusable-workflows"
-LOCK_WORKFLOW = "conda-index-lock.yml"
+LOCK_WORKFLOW = "conda-index-lock-self-hosted.yml"
 MAX_WAIT = 1800  # 30 minutes
 POLL_INTERVAL = 10  # seconds
 GITHUB_API = "https://api.github.com"
@@ -34,7 +34,11 @@ def gh_api_request(endpoint, method="GET", data=None, token=None):
 
     try:
         with urlopen(req) as response:
-            return json.loads(response.read().decode('utf-8'))
+            body = response.read().decode('utf-8')
+            # 204 No Content responses have no body
+            if not body:
+                return None
+            return json.loads(body)
     except HTTPError as e:
         error_body = e.read().decode('utf-8')
         raise Exception(f"GitHub API error {e.code}: {error_body}")
@@ -71,7 +75,6 @@ def main():
                 "package_artifact_name": args.artifact_name,
                 "caller_run_id": args.caller_run_id,
                 "caller_repo": args.caller_repo,
-                "gh_pat": args.gh_pat,
             }
         },
         token=args.gh_pat

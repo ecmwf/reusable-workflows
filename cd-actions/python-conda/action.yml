@@ -71,7 +71,7 @@ runs:
         else:
             # TODO: Use production Nexus repository for standard release
             nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
-            nexus_token = '${{ inputs.nexus_token }}'
+            nexus_token = '${{ inputs.nexus_test_token }}'
             print("Using production Nexus repository for standard release")
 
         meta_file = f"{conda_dir}/meta.yaml"
@@ -168,17 +168,7 @@ runs:
             find "$output_folder" -type f | head -20
             exit 1
         fi
-
     - name: Upload artifacts
-      if: ${{ inputs.dry_run != 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ github.run_id }}-${{ inputs.name }}
-        path: ${{ steps.config.outputs.artifact_pattern }}
-        if-no-files-found: error
-        retention-days: 90
-
-    - name: Acquire lock and upload to Nexus
       if: ${{ inputs.dry_run != 'true' }}
       shell: bash -el {0}
       run: |
@@ -255,3 +245,96 @@ runs:
 
         echo ""
         echo "All packages successfully installed from Nexus!"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.config.outputs.artifact_pattern }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Acquire lock and upload to Nexus
+      if: ${{ inputs.dry_run != 'true' }}
+      shell: bash -el {0}
+      run: |
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
+        nexus_token="${{ steps.config.outputs.nexus_token }}"
+        artifact_name="${{ github.run_id }}-${{ inputs.name }}"
+
+        echo "Acquiring conda index lock and uploading to Nexus: $nexus_url"
+        echo "Artifact: $artifact_name"
+        echo ""
+
+        # Run the lock acquisition script
+        python3 "${{ github.action_path }}/scripts/acquire_lock.py" \
+            --nexus-url "$nexus_url" \
+            --nexus-token "$nexus_token" \
+            --artifact-name "$artifact_name" \
+            --caller-run-id "${{ github.run_id }}" \
+            --caller-repo "${{ github.repository }}" \
+            --gh-pat "${{ inputs.gh_pat }}"
+
+        echo ""
+        echo "All packages and indexes uploaded to Nexus successfully!"
+
+    - name: Test package installation from Nexus
+      if: ${{ inputs.dry_run != 'true' && inputs.skip_installation_test != 'true' }}
+      shell: bash -el {0}
+      run: |
+        output_folder="${{ steps.config.outputs.output_folder }}"
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
+
+        echo "Testing package installation from Nexus..."
+
+        # Get package name and version from built packages
+        packages=$(find "$output_folder" -name "*.tar.bz2" -type f)
+
+        for package in $packages; do
+            package_name=$(basename "$package")
+            echo ""
+            echo "Testing installation of: $package_name"
+
+            # Extract package name and version
+            pkg_base=$(echo "$package_name" | sed -E 's/-[0-9]+(\.[0-9]+)*-.*//')
+            pkg_version=$(echo "$package_name" | sed -E 's/^[^-]+-([0-9]+(\.[0-9]+)*).*/\1/')
+
+            echo "Package: $pkg_base"
+            echo "Version: $pkg_version"
+
+            # Create a test environment
+            test_env="test-install-${GITHUB_RUN_ID}-${RANDOM}"
+            echo "Creating test environment: $test_env"
+
+            eval "$(conda shell.bash hook)"
+
+            # Create environment and install the EXACT version from Nexus
+            if mamba create -n "$test_env" -c "$nexus_url" -c conda-forge "${pkg_base}=${pkg_version}" -y; then
+                echo "Successfully installed ${pkg_base}=${pkg_version} from Nexus"
+
+                # Verify the exact version is installed
+                conda activate "$test_env"
+                installed_version=$(conda list "$pkg_base" | grep "$pkg_base" | awk '{print $2}')
+
+                if [ "$installed_version" = "$pkg_version" ]; then
+                    echo "Verified exact version: $installed_version matches $pkg_version"
+                else
+                    echo "Version mismatch: installed $installed_version but expected $pkg_version"
+                    conda deactivate
+                    conda env remove -n "$test_env" -y
+                    exit 1
+                fi
+                conda deactivate
+
+                # Clean up test environment
+                conda env remove -n "$test_env" -y
+                echo "Test environment removed"
+            else
+                echo "Failed to install ${pkg_base}=${pkg_version} from Nexus"
+                echo "This could mean the package was not uploaded successfully"
+                exit 1
+            fi
+        done
+
+        echo ""
+        echo "All packages successfully installed from Nexus with correct versions!"
