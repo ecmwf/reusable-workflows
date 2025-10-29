@@ -163,18 +163,6 @@ jobs:
           pypi_token: ${{ secrets.PYPI_API_TOKEN }}
           pypi_test_token: ${{ secrets.PYPI_TEST_API_TOKEN }}
 
-      - name: Build with Python PyPI
-        if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-actions
-        with:
-          name: ${{ matrix.name }}
-          config: ${{ matrix.config }}
-          ref_name: ${{ inputs.ref_name }}
-          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
-          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
-          pypi_token: ${{ secrets.PYPI_API_TOKEN }}
-          pypi_test_token: ${{ secrets.PYPI_TEST_API_TOKEN }}
-
   release:
     name: Create Release
     if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
