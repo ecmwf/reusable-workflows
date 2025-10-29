@@ -1,0 +1,125 @@
+name: HPC Module Deployer
+description: Deploy HPC modules across platforms using ci-hpc
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  config:
+    description: 'Build configuration JSON containing platform and config_path'
+    required: true
+  ref_name:
+    description: 'Git ref name for deployment'
+    required: true
+  dry_run:
+    description: 'Dry run mode - skip actual deployment'
+    required: false
+    default: 'false'
+  github_user:
+    description: 'GitHub user for authentication'
+    required: true
+  github_token:
+    description: 'GitHub PAT for repository access'
+    required: true
+  troika_user:
+    description: 'HPC submission user'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Parse HPC configuration
+      id: config
+      shell: python3 {0}
+      run: |
+        import json
+        import os
+        import sys
+
+        raw = '''${{ inputs.config }}'''.strip()
+        print(f"Raw config: {raw}")
+
+        try:
+            cfg = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON config: {e}")
+            sys.exit(1)
+
+        platform = cfg.get('platform', '')
+        config_path = cfg.get('config_path', '')
+
+        if not platform:
+            print("Error: 'platform' not found in config")
+            sys.exit(1)
+
+        if not config_path:
+            print("Error: 'config_path' not found in config")
+            sys.exit(1)
+
+        # Platform to compiler mapping
+        platform_map = {
+            'gnu-12.2.0': {
+                'compiler': 'gnu-12.2.0',
+                'compiler_cc': 'gcc',
+                'compiler_cxx': 'g++',
+                'compiler_fc': 'gfortran',
+                'compiler_modules': 'gcc/12.2.0'
+            },
+            'gnu-8.5.0': {
+                'compiler': 'gnu-8.5.0',
+                'compiler_cc': 'gcc',
+                'compiler_cxx': 'g++',
+                'compiler_fc': 'gfortran',
+                'compiler_modules': 'gcc/8.5.0'
+            },
+            'nvidia-22.11': {
+                'compiler': 'nvidia-22.11',
+                'compiler_cc': 'nvc',
+                'compiler_cxx': 'nvc++',
+                'compiler_fc': 'nvfortran',
+                'compiler_modules': 'prgenv/nvidia,nvidia/22.11'
+            },
+            'intel-2021.4.0': {
+                'compiler': 'intel-2021.4.0',
+                'compiler_cc': 'icc',
+                'compiler_cxx': 'icpc',
+                'compiler_fc': 'ifort',
+                'compiler_modules': 'prgenv/intel,intel/2021.4.0'
+            }
+        }
+
+        if platform not in platform_map:
+            print(f"Error: Unknown platform '{platform}'")
+            print(f"Available platforms: {', '.join(platform_map.keys())}")
+            sys.exit(1)
+
+        compiler_info = platform_map[platform]
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"platform={platform}\n")
+            f.write(f"config_path={config_path}\n")
+            f.write(f"compiler={compiler_info['compiler']}\n")
+            f.write(f"compiler_cc={compiler_info['compiler_cc']}\n")
+            f.write(f"compiler_cxx={compiler_info['compiler_cxx']}\n")
+            f.write(f"compiler_fc={compiler_info['compiler_fc']}\n")
+            f.write(f"compiler_modules={compiler_info['compiler_modules']}\n")
+
+        print(f"Platform: {platform}")
+        print(f"Config path: {config_path}")
+        print(f"Compiler: {compiler_info['compiler']}")
+        print(f"Compiler modules: {compiler_info['compiler_modules']}")
+
+    - name: Deploy HPC module
+      if: ${{ inputs.dry_run != 'true' }}
+      uses: ecmwf/reusable-workflows/ci-hpc@cd-hpc
+      with:
+        github_user: ${{ inputs.github_user }}
+        github_token: ${{ inputs.github_token }}
+        troika_user: ${{ inputs.troika_user }}
+        repository: ${{ github.repository }}@${{ inputs.ref_name }}
+        build_config: ${{ steps.config.outputs.config_path }}
+        compiler: ${{ steps.config.outputs.compiler }}
+        compiler_cc: ${{ steps.config.outputs.compiler_cc }}
+        compiler_cxx: ${{ steps.config.outputs.compiler_cxx }}
+        compiler_fc: ${{ steps.config.outputs.compiler_fc }}
+        compiler_modules: ${{ steps.config.outputs.compiler_modules }}

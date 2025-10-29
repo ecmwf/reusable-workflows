@@ -101,18 +101,69 @@ jobs:
           # Parse configuration and generate build matrix
           matrix=$(echo '${{ steps.load.outputs.config }}' | python3 -c "
           import sys, yaml, json
+          import os
           config = yaml.safe_load(sys.stdin)
-          
+
           matrix = {'include': []}
           for build in config.get('builds', []):
               if build.get('enabled', True):
-                  matrix_item = {
-                      'name': build['name'],
-                      'type': build['type'],
-                      'config': json.dumps(build.get('config', {}))
-                  }
-                  matrix['include'].append(matrix_item)
-          
+                  build_type = build['type']
+                  build_name = build['name']
+                  build_config = build.get('config', {})
+
+                  if build_type == 'hpc-module':
+                      platforms = build_config.get('platforms', [])
+                      config_path = build_config.get('config_path', '')
+
+                      if not platforms:
+                          print(f'Error: hpc-module build \"{build_name}\" has no platforms defined', file=sys.stderr)
+                          sys.exit(1)
+
+                      if not config_path:
+                          print(f'Error: hpc-module build \"{build_name}\" has no config_path defined', file=sys.stderr)
+                          sys.exit(1)
+
+                      # Validate config file exists
+                      if not os.path.exists(config_path):
+                          print(f'Error: HPC config file not found: {config_path}', file=sys.stderr)
+                          sys.exit(1)
+
+                      # Check prefix_compiler_specific when multiple platforms requested
+                      if len(platforms) > 1:
+                          with open(config_path, 'r') as f:
+                              hpc_config = yaml.safe_load(f)
+
+                          prefix_compiler_specific = hpc_config.get('build', {}).get('prefix_compiler_specific', False)
+                          if not prefix_compiler_specific:
+                              print(
+                                  f'Error: hpc-module build \"{build_name}\" requests {len(platforms)} platforms '
+                                  f'but \"{config_path}\" does not have \"build.prefix_compiler_specific: true\"',
+                                  file=sys.stderr
+                              )
+                              sys.exit(1)
+
+                      # Create one matrix item per platform
+                      for platform in platforms:
+                          matrix_item = {
+                              'name': f'{build_name}-{platform}',
+                              'type': 'hpc-module',
+                              'platform': platform,
+                              'runner': 'self-hosted,linux,hpc',
+                              'config': json.dumps({
+                                  'platform': platform,
+                                  'config_path': config_path
+                              })
+                          }
+                          matrix['include'].append(matrix_item)
+                  else:
+                      matrix_item = {
+                          'name': build_name,
+                          'type': build_type,
+                          'runner': 'self-hosted,platform-builder-Debian-12',
+                          'config': json.dumps(build_config)
+                      }
+                      matrix['include'].append(matrix_item)
+
           print(json.dumps(matrix))
           ")
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
@@ -127,7 +178,7 @@ jobs:
     name: ${{ matrix.name }}
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
-    runs-on: platform-builder-Debian-12
+    runs-on: ${{ matrix.runner || 'platform-builder-Debian-12' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
@@ -162,6 +213,18 @@ jobs:
           is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
           pypi_token: ${{ secrets.PYPI_API_TOKEN }}
           pypi_test_token: ${{ secrets.PYPI_TEST_API_TOKEN }}
+
+      - name: Build with HPC Module
+        if: ${{ matrix.type == 'hpc-module' }}
+        uses: ecmwf/reusable-workflows/cd-actions/hpc-module@cd-hpc
+        with:
+          name: ${{ matrix.name }}
+          config: ${{ matrix.config }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
+          github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
+          troika_user: ${{ secrets.HPC_CI_SSH_USER }}
 
   release:
     name: Create Release
