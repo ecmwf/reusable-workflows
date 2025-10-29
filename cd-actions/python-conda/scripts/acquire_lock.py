@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 
 # Configuration
 LOCK_REPO = "ecmwf/reusable-workflows"
-LOCK_WORKFLOW = "conda-index-lock-self-hosted.yml"
+LOCK_WORKFLOW = "conda-index-lock.yml"
 MAX_WAIT = 1800  # 30 minutes
 POLL_INTERVAL = 10  # seconds
 GITHUB_API = "https://api.github.com"
@@ -68,7 +68,7 @@ def main():
         f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/dispatches",
         method="POST",
         data={
-            "ref": "cd-actions",
+            "ref": "v2",
             "inputs": {
                 "nexus_url": args.nexus_url,
                 "nexus_token": args.nexus_token,

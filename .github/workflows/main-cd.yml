@@ -140,7 +140,7 @@ jobs:
           
       - name: Build with Python Conda
         if: ${{ matrix.type == 'python-conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-conda@cd-actions
+        uses: ecmwf/reusable-workflows/cd-actions/python-conda@v2
         with:
           name: ${{ matrix.name }}
           config: ${{ matrix.config }}
@@ -153,7 +153,7 @@ jobs:
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-actions
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
         with:
           name: ${{ matrix.name }}
           config: ${{ matrix.config }}
@@ -188,7 +188,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub release
-        uses: ecmwf/reusable-workflows/cd-actions/release@cd-actions
+        uses: ecmwf/reusable-workflows/cd-actions/release@v2
         with:
           config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}
