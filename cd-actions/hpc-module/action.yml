@@ -110,7 +110,6 @@ runs:
         print(f"Compiler modules: {compiler_info['compiler_modules']}")
 
     - name: Deploy HPC module
-      if: ${{ inputs.dry_run != 'true' }}
       uses: ecmwf/reusable-workflows/ci-hpc@cd-hpc
       with:
         github_user: ${{ inputs.github_user }}
@@ -123,3 +122,4 @@ runs:
         compiler_cxx: ${{ steps.config.outputs.compiler_cxx }}
         compiler_fc: ${{ steps.config.outputs.compiler_fc }}
         compiler_modules: ${{ steps.config.outputs.compiler_modules }}
+        dry_run: ${{ inputs.dry_run }}

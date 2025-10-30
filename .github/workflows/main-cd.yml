@@ -148,7 +148,7 @@ jobs:
                               'name': f'{build_name}-{platform}',
                               'type': 'hpc-module',
                               'platform': platform,
-                              'runner': 'self-hosted,linux,hpc',
+                              'runner': 'self-hosted,linux,hpc-dev',
                               'config': json.dumps({
                                   'platform': platform,
                                   'config_path': config_path
