@@ -20,4 +20,6 @@ runs:
       with:
         python-version: '3.13'
     - shell: bash
+      run: python -m pip install requests
+    - shell: bash
       run: python $GITHUB_ACTION_PATH/update-pr-description.py --marker ${{ inputs.marker }} --payload "${{ inputs.text }}" --repo ${{ inputs.repo }} --pr ${{ inputs.pr }}
