@@ -23,9 +23,9 @@ repos:
 - repo: https://github.com/pre-commit/pygrep-hooks
   rev: v1.10.0  # Use the ref you want to point at
   hooks:
-  -   id: python-use-type-annotations # Check for missing type annotations
-  -   id: python-check-blanket-noqa # Check for # noqa: all
-  -   id: python-no-log-warn # Check for log.warn
+  - id: python-use-type-annotations # Check for missing type annotations
+  - id: python-check-blanket-noqa # Check for # noqa: all
+  - id: python-no-log-warn # Check for log.warn
 - repo: https://github.com/psf/black-pre-commit-mirror
   rev: 25.9.0
   hooks:
