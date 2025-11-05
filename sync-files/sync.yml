@@ -203,7 +203,7 @@ group:
     template:
       repo_name: anemoi-utils
   repos: |
-registry    ecmwf/anemoi-utils
+    ecmwf/anemoi-utils
 
 # Anemoi specific
 - files:
