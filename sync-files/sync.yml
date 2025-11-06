@@ -205,7 +205,7 @@ group:
   repos: |
     ecmwf/anemoi-utils
 
-# Anemoi specific
+# Anemoi registry specific
 - files:
   - source: sync-files/anemoi/all/.github/pull_request_template.md
     dest: .github/pull_request_template.md
