@@ -103,22 +103,65 @@ group:
     ecmwf/anemoi-inference
 
 
-# Anemoi registry specific
+# Anemoi Registry specific
 - files:
-  - source: sync-files/anemoi/all/
-    dest: ./
+  - source: sync-files/anemoi/all/.github/pull_request_template.md
+    dest: .github/pull_request_template.md
+    template: true
+  - source: sync-files/anemoi/all/.gitignore
+    dest: .gitignore
+  - source: sync-files/anemoi/all/CONTRIBUTORS.md
+    dest: CONTRIBUTORS.md
     template:
       repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-public.yml
+    dest: .github/workflows/pr-label-public.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-conventional-commits.yml
+    dest: .github/workflows/pr-label-conventional-commits.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/python-publish.yml
+    dest: .github/workflows/python-publish.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
+    dest: .github/workflows/pr-conventional-commit.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/pr-label-file-based.yml
+    dest: .github/workflows/pr-label-file-based.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/python-pull-request.yml
+    dest: .github/workflows/python-pull-request.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/readthedocs-pr-update.yml
+    dest: .github/workflows/readthedocs-pr-update.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.github/workflows/release-please.yml
+    dest: .github/workflows/release-please.yml
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/README.md
+    dest: README.md
+    template:
+      repo_name: anemoi-registry
+  - source: sync-files/anemoi/all/.pre-commit-config.yaml
+    dest: .pre-commit-config.yaml
+  - source: sync-files/anemoi/all/.github/labeler.yml
+    dest: .github/labeler.yml
+  - source: sync-files/general/python/LICENSE
+    dest: LICENSE
+    template:
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Registry for data-driven weather forecasts."
-    # exclude: |
-    #   .release-please-manifest.json
-    #   .github/PULL_REQUEST_TEMPLATE/pull_request_template-core.md
-    #   .github/workflows/push-to-private.yml
-    #   .github/workflows/downstream-ci-hpc.yml
   repos: |
     ecmwf/anemoi-registry
+
 
 
 # Anemoi transform specific
