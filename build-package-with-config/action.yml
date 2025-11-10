@@ -141,7 +141,7 @@ runs:
 
     - name: Build package
       id: build
-      uses: ecmwf/build-package@v2
+      uses: ecmwf/build-package@clone-repo-with-submodules
       with: ${{ fromJSON(steps.config.outputs.config) }}
 
     - name: Codecov Upload
