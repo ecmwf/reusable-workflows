@@ -148,7 +148,7 @@ jobs:
                               'name': f'{build_name}-{platform}',
                               'type': 'hpc-module',
                               'platform': platform,
-                              'runner': 'self-hosted,linux,hpc-dev',
+                              'runner': 'hpc-dev',
                               'config': json.dumps({
                                   'platform': platform,
                                   'config_path': config_path
@@ -159,7 +159,7 @@ jobs:
                       matrix_item = {
                           'name': build_name,
                           'type': build_type,
-                          'runner': 'self-hosted,platform-builder-Debian-12',
+                          'runner': 'platform-builder-Debian-12',
                           'config': json.dumps(build_config)
                       }
                       matrix['include'].append(matrix_item)
