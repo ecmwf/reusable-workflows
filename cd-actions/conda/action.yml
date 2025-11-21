@@ -38,9 +38,8 @@ runs:
   steps:
     - name: Parse build configuration
       id: config
-      shell: bash -el {0}
+      shell: python3 {0}
       run: |
-        python3 <<'PY'
         import json
         import os
         import sys
@@ -93,7 +92,6 @@ runs:
         print(f"Artifact pattern: {artifact_pattern}")
         print(f"Conda build args: {conda_build_args}")
         print(f"Nexus URL: {nexus_url}")
-        PY
         
     - name: Validate configuration files
       id: validate

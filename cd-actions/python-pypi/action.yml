@@ -31,9 +31,8 @@ runs:
   steps:
     - name: Parse build configuration
       id: config
-      shell: bash
+      shell: python3 {0}
       run: |
-        python3 <<'PY'
         import json
         import os
         import sys
@@ -73,7 +72,6 @@ runs:
         print(f"Test PyPI: {str(testpypi).lower()}")
         if env_vars:
             print(f"Env vars: {list(env_vars.keys())}")
-        PY
 
     - name: Set environment variables from config
       if: steps.config.outputs.env_vars != ''

@@ -18,9 +18,8 @@ runs:
   steps:
     - name: Parse release configuration
       id: config
-      shell: bash
+      shell: python3 {0}
       run: |
-        python3 <<'PY'
         import yaml
         import os
 
@@ -49,7 +48,6 @@ runs:
         print(f"Prerelease: {prerelease}")
         print(f"Draft: {draft}")
         print(f"Make latest: {make_latest}")
-        PY
         
     - name: Download all artifacts
       uses: actions/download-artifact@v4
