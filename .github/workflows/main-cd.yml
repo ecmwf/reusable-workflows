@@ -28,34 +28,45 @@ jobs:
     steps:
       - name: Detect release type from ref
         id: detect
+        shell: python3 {0}
         run: |
-          ref_name="${{ inputs.ref_name }}"
-          echo "Analyzing ref: $ref_name"
+          import re
+          import os
+
+          ref_name = "${{ inputs.ref_name }}"
+          deployment_regex = r"${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}"
+          prerelease_regex = r"${{ vars.TAG_REGEX_FOR_PRERELEASE }}"
+          dry_run_input = "${{ inputs.dry_run }}"
+
+          print(f"Analyzing ref: {ref_name}")
 
           # Check if it's a standard semantic version tag (e.g., v1.2.3 or 1.2.3)
-          if [[ "$ref_name" =~ ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }} ]]; then
-            echo "Standard release detected"
-            echo "is_dry_run=false" >> $GITHUB_OUTPUT
-            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          if re.match(deployment_regex, ref_name):
+              print("Standard release detected")
+              is_dry_run = "false"
+              is_prerelease = "false"
 
           # Check if it's a pre-release tag (e.g., v1.2.3-RC1, 1.2.3-alpha1)
-          elif [[ "$ref_name" =~ ${{ vars.TAG_REGEX_FOR_PRERELEASE }} ]]; then
-            echo "Pre-release detected"
-            echo "is_dry_run=false" >> $GITHUB_OUTPUT
-            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          elif re.match(prerelease_regex, ref_name):
+              print("Pre-release detected")
+              is_dry_run = "false"
+              is_prerelease = "true"
 
           # Everything else is a dry run (PRs, branches, etc.)
-          else
-            echo "Dry run detected"
-            echo "is_dry_run=true" >> $GITHUB_OUTPUT
-            echo "is_prerelease=false" >> $GITHUB_OUTPUT
-          fi
+          else:
+              print("Dry run detected")
+              is_dry_run = "true"
+              is_prerelease = "false"
 
           # Override with explicit dry_run input if provided
-          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
-            echo "Explicit dry_run input enabled - forcing dry run mode"
-            echo "is_dry_run=true" >> $GITHUB_OUTPUT
-          fi
+          if dry_run_input == "true":
+              print("Explicit dry_run input enabled - forcing dry run mode")
+              is_dry_run = "true"
+
+          # Write outputs
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"is_dry_run={is_dry_run}\n")
+              f.write(f"is_prerelease={is_prerelease}\n")
 
   load-config:
     name: Load and Validate Configuration
@@ -97,12 +108,13 @@ jobs:
           
       - name: Generate build matrix
         id: generate-matrix
+        shell: python3 {0}
         run: |
-          # Parse configuration and generate build matrix
-          matrix=$(echo '${{ steps.load.outputs.config }}' | python3 -c "
-          import sys, yaml, json
-          config = yaml.safe_load(sys.stdin)
-          
+          import yaml, json, os
+
+          config_yaml = '''${{ steps.load.outputs.config }}'''
+          config = yaml.safe_load(config_yaml)
+
           matrix = {'include': []}
           for build in config.get('builds', []):
               if build.get('enabled', True):
@@ -112,10 +124,9 @@ jobs:
                       'config': json.dumps(build.get('config', {}))
                   }
                   matrix['include'].append(matrix_item)
-          
-          print(json.dumps(matrix))
-          ")
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"matrix={json.dumps(matrix)}\n")
           
       - name: Parse release configuration
         id: parse-release
