@@ -1,5 +1,5 @@
-name: Python Conda Builder
-description: Build Python packages using conda/mamba
+name: Conda Builder
+description: Build conda packages using conda/mamba
 
 inputs:
   name:

@@ -128,7 +128,7 @@ jobs:
 
           echo "Indexing packages to: $NEXUS_URL"
 
-          python "${{ github.workspace }}/cd-actions/python-conda/scripts/rebuild_conda_index.py" \
+          python "${{ github.workspace }}/cd-actions/conda/scripts/rebuild_conda_index.py" \
             --package-dir ./packages \
             --nexus-url "$NEXUS_URL" \
             --nexus-token "$NEXUS_TOKEN"

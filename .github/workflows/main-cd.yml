@@ -33,13 +33,13 @@ jobs:
           echo "Analyzing ref: $ref_name"
 
           # Check if it's a standard semantic version tag (e.g., v1.2.3 or 1.2.3)
-          if [[ "$ref_name" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "$ref_name" =~ ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }} ]]; then
             echo "Standard release detected"
             echo "is_dry_run=false" >> $GITHUB_OUTPUT
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
 
           # Check if it's a pre-release tag (e.g., v1.2.3-RC1, 1.2.3-alpha1)
-          elif [[ "$ref_name" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-.+$ ]]; then
+          elif [[ "$ref_name" =~ ${{ vars.TAG_REGEX_FOR_PRERELEASE }} ]]; then
             echo "Pre-release detected"
             echo "is_dry_run=false" >> $GITHUB_OUTPUT
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
@@ -138,9 +138,9 @@ jobs:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
           
-      - name: Build with Python Conda
-        if: ${{ matrix.type == 'python-conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-conda@v2
+      - name: Build with Conda
+        if: ${{ matrix.type == 'conda' }}
+        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
         with:
           name: ${{ matrix.name }}
           config: ${{ matrix.config }}
