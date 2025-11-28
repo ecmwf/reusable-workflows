@@ -117,9 +117,10 @@ runs:
         troika_user: ${{ inputs.troika_user }}
         repository: ${{ github.repository }}@${{ inputs.ref_name }}
         build_config: ${{ steps.config.outputs.config_path }}
+        build_config_key: ${{ steps.config.outputs.platform }}
         compiler: ${{ steps.config.outputs.compiler }}
         compiler_cc: ${{ steps.config.outputs.compiler_cc }}
         compiler_cxx: ${{ steps.config.outputs.compiler_cxx }}
         compiler_fc: ${{ steps.config.outputs.compiler_fc }}
         compiler_modules: ${{ steps.config.outputs.compiler_modules }}
-        dry_run: ${{ inputs.dry_run }}
+        sync_module: ${{ inputs.dry_run == 'true' && 'false' || 'true' }}
