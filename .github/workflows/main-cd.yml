@@ -191,7 +191,7 @@ jobs:
           
       - name: Build with Python Conda
         if: ${{ matrix.type == 'python-conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
         with:
           name: ${{ matrix.name }}
           config: ${{ matrix.config }}
