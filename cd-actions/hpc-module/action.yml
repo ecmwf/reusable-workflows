@@ -110,7 +110,7 @@ runs:
         print(f"Compiler modules: {compiler_info['compiler_modules']}")
 
     - name: Deploy HPC module
-      uses: ecmwf/reusable-workflows/ci-hpc@cd-hpc
+      uses: ecmwf/reusable-workflows/ci-hpc@v2
       with:
         github_user: ${{ inputs.github_user }}
         github_token: ${{ inputs.github_token }}
