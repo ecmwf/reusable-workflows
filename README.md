@@ -387,7 +387,7 @@ jobs:
   quality:
     uses: ecmwf/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
     with:
-      skip_hooks: "no-commit-to-branch"
+      skip-hooks: "no-commit-to-branch"
 ```
 
 ### Inputs
