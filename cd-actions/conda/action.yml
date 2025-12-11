@@ -5,9 +5,6 @@ inputs:
   name:
     description: 'Build name for artifacts'
     required: true
-  config:
-    description: 'Build configuration JSON'
-    required: true
   ref_name:
     description: 'Git ref name for artifacts'
     required: true
@@ -15,8 +12,8 @@ inputs:
     description: 'Dry run mode'
     required: false
     default: 'false'
-  is_prerelease:
-    description: 'Is this a pre-release build'
+  test_nexus:
+    description: 'Use test Nexus repository'
     required: false
     default: 'false'
   gh_pat:
@@ -32,6 +29,18 @@ inputs:
     description: 'Skip testing package installation from Nexus'
     required: false
     default: 'false'
+  conda_dir:
+    description: 'Directory containing conda recipe (meta.yaml)'
+    required: false
+    default: './.cd/.conda'
+  channels:
+    description: 'Comma-separated list of conda channels to use (appended to hardcoded internal ECMWF nexus channels)'
+    required: false
+    default: 'conda-forge'
+  conda_build_args:
+    description: 'Additional arguments for conda mambabuild command'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -40,37 +49,28 @@ runs:
       id: config
       shell: python3 {0}
       run: |
-        import json
         import os
-        import sys
 
-        raw = '''${{ inputs.config }}'''.strip()
-        print(f"Raw config: {raw}")
-        try:
-            cfg = json.loads(raw)
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON config: {e}")
-            sys.exit(1)
+        conda_dir = '${{ inputs.conda_dir }}'
+        channels_input = '${{ inputs.channels }}'
+        conda_build_args = '${{ inputs.conda_build_args }}'
 
-        conda_dir = cfg.get('conda_dir', './.cd/.conda')
-
-        channels_list = cfg.get('channels') or ["conda-forge"]
-        if not isinstance(channels_list, list):
-            channels_list = [str(channels_list)]
-        channels = " ".join([c for c in channels_list if c]) or "conda-forge"
-
-        conda_build_args = cfg.get('conda_build_args', '--no-anaconda-upload') or '--no-anaconda-upload'
+        # Parse comma-separated channels
+        channels_list = [c.strip() for c in channels_input.split(',') if c.strip()]
+        if channels_list:
+            channels = f"-c {' -c '.join(channels_list)}"
+        else:
+            channels = ""
 
         # Determine Nexus URL based on prerelease flag
-        is_prerelease = '${{ inputs.is_prerelease }}' == 'true'
-        if is_prerelease:
+        test_nexus = '${{ inputs.test_nexus }}' == 'true'
+        if test_nexus:
             nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
             nexus_token = '${{ inputs.nexus_test_token }}'
             print("Using test Nexus repository for pre-release")
         else:
-            # TODO: Use production Nexus repository for standard release
-            nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
-            nexus_token = '${{ inputs.nexus_test_token }}'
+            nexus_url = 'https://nexus.ecmwf.int/repository/conda-ecmwf-public'
+            nexus_token = '${{ inputs.nexus_token }}'
             print("Using production Nexus repository for standard release")
 
         meta_file = f"{conda_dir}/meta.yaml"
@@ -86,6 +86,7 @@ runs:
             f.write(f"nexus_url={nexus_url}\n")
             f.write(f"nexus_token={nexus_token}\n")
 
+        print(f"Conda dir: {conda_dir}")
         print(f"Meta file: {meta_file}")
         print(f"Channels: {channels}")
         print(f"Output folder: {output_folder}")
@@ -135,6 +136,8 @@ runs:
         eval "$(conda shell.bash hook)"
         conda activate "$BUILD_ENV"
         meta_dir="${{ steps.validate.outputs.meta_dir }}"
+        nexus_url="${{ steps.config.outputs.nexus_url }}"
+        channels="${{ steps.config.outputs.channels }}"
         output_folder="${{ steps.config.outputs.output_folder }}"
         build_args="${{ steps.config.outputs.conda_build_args }}"
 
@@ -144,7 +147,7 @@ runs:
 
         mkdir -p "$output_folder"
 
-        conda mambabuild "$meta_dir" -c ${{ steps.config.outputs.nexus_url }} -c conda-forge --output-folder "$output_folder" $build_args
+        conda mambabuild "$meta_dir" -c $nexus_url $channels --output-folder "$output_folder" --no-anaconda-upload $build_args
         
     - name: List built packages
       shell: bash -el {0}
