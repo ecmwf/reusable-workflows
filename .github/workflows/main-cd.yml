@@ -70,7 +70,7 @@ jobs:
 
   load-config:
     name: Load and Validate Configuration
-    runs-on: platform-builder
+    runs-on: [self-hosted, platform-builder]
     outputs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}

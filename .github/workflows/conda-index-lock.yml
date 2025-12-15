@@ -32,7 +32,7 @@ concurrency:
 jobs:
   index:
     name: Index Conda Repository
-    runs-on: platform-builder
+    runs-on: [self-hosted, platform-builder]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
