@@ -1,0 +1,105 @@
+name: Tarball Builder
+description: Build source tarballs using ecbuild on platform-builder runners
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  ref_name:
+    description: 'Git ref name for artifacts'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build only, no deployment'
+    required: false
+    default: 'false'
+  ecbuild_version:
+    description: 'ecbuild version/tag to checkout from GitHub'
+    required: false
+    default: 'master'
+  cmake_options:
+    description: 'Additional CMake options for ecbuild'
+    required: false
+    default: ''
+
+outputs:
+  tarball_path:
+    description: 'Path to generated tarball file'
+    value: ${{ steps.find-tarball.outputs.tarball_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Clone ecbuild
+      uses: actions/checkout@v5
+      with:
+        repository: ecmwf/ecbuild
+        ref: ${{ inputs.ecbuild_version }}
+        path: .ecbuild
+
+    - name: Create build directory
+      shell: bash
+      run: |
+        echo "Creating build directory..."
+        mkdir -p build
+
+    - name: Run ecbuild
+      shell: bash
+      run: |
+        cmake_options="${{ inputs.cmake_options }}"
+
+        echo "Running ecbuild in build directory..."
+        cd build
+
+        if [ -n "$cmake_options" ]; then
+            echo "CMake options: $cmake_options"
+            ../.ecbuild/bin/ecbuild $cmake_options ..
+        else
+            ../.ecbuild/bin/ecbuild ..
+        fi
+
+    - name: Build source package
+      shell: bash
+      run: |
+        echo "Building source package..."
+        cd build
+        make package_source
+
+        echo ""
+        echo "Build complete!"
+
+    - name: List generated tarballs
+      shell: bash
+      run: |
+        echo "Generated tarballs:"
+        find build -name "*.tar.gz" -type f | sort
+
+    - name: Verify artifacts
+      shell: bash
+      run: |
+        echo "Checking for tarball in: build"
+
+        if ! find build -name "*.tar.gz" -type f | head -1 | grep -q .; then
+            echo "No tarball found in: build"
+            echo "Available files:"
+            find build -type f | head -20
+            exit 1
+        fi
+
+        echo "Tarball verification successful!"
+
+    - name: Find tarball path
+      id: find-tarball
+      shell: bash
+      run: |
+        tarball=$(find build -name "*.tar.gz" -type f | head -1)
+
+        echo "tarball_path=$tarball" >> $GITHUB_OUTPUT
+        echo "Found tarball: $tarball"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: build/*.tar.gz
+        if-no-files-found: error
+        retention-days: 90
