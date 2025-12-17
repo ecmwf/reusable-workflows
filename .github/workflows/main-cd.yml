@@ -144,6 +144,18 @@ jobs:
                       # Keep env_vars as JSON string
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
 
+                  elif build_type == 'hpc-tarball':
+                      # Override runner for HPC builds
+                      matrix_item['runner'] = ['self-hosted', 'linux', 'hpc']
+                      matrix_item['ecbuild_tag'] = build_config.get('ecbuild_tag', 'latest')
+                      # Convert additional_modules list to comma-separated string
+                      additional_modules = build_config.get('additional_modules', [])
+                      if isinstance(additional_modules, list):
+                          matrix_item['additional_modules'] = ','.join(additional_modules)
+                      else:
+                          matrix_item['additional_modules'] = str(additional_modules)
+                      matrix_item['cmake_options'] = build_config.get('cmake_options', '')
+
                   matrix['include'].append(matrix_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -198,6 +210,17 @@ jobs:
           buildargs: ${{ matrix.buildargs }}
           env_vars: ${{ matrix.env_vars }}
           testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
+
+      - name: Build with HPC Tarball
+        if: ${{ matrix.type == 'hpc-tarball' }}
+        uses: ecmwf/reusable-workflows/cd-actions/hpc-tarball@cd-tarball
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          ecbuild_tag: ${{ matrix.ecbuild_tag }}
+          additional_modules: ${{ matrix.additional_modules }}
+          cmake_options: ${{ matrix.cmake_options }}
 
   release:
     name: Create Release

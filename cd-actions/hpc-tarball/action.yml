@@ -1,0 +1,158 @@
+name: HPC Tarball Builder
+description: Build source tarballs using ecbuild on HPC runners
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  ref_name:
+    description: 'Git ref name for artifacts'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build only, no deployment'
+    required: false
+    default: 'false'
+  ecbuild_tag:
+    description: 'ecbuild module tag/version to load'
+    required: false
+    default: 'latest'
+  additional_modules:
+    description: 'Additional HPC modules to load (comma or newline separated)'
+    required: false
+    default: ''
+  cmake_options:
+    description: 'Additional CMake options for ecbuild'
+    required: false
+    default: ''
+
+outputs:
+  tarball_path:
+    description: 'Path to generated tarball file'
+    value: ${{ steps.find-tarball.outputs.tarball_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse build configuration
+      id: config
+      shell: python3 {0}
+      run: |
+        import os
+
+        ecbuild_tag = '${{ inputs.ecbuild_tag }}'
+        additional_modules_input = '''${{ inputs.additional_modules }}'''
+        cmake_options = '${{ inputs.cmake_options }}'
+
+        # Parse additional modules (support both comma and newline separated)
+        modules_list = []
+        for line in additional_modules_input.split('\n'):
+            for module in line.split(','):
+                module = module.strip()
+                if module:
+                    modules_list.append(module)
+
+        # Build module load commands
+        module_loads = f"module load ecbuild/{ecbuild_tag}"
+        if modules_list:
+            for module in modules_list:
+                module_loads += f"\nmodule load {module}"
+
+        # Set up build directory
+        build_dir = "build"
+        tarball_pattern = "*.tar.gz"
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"module_loads<<EOF\n{module_loads}\nEOF\n")
+            f.write(f"cmake_options={cmake_options}\n")
+            f.write(f"build_dir={build_dir}\n")
+            f.write(f"tarball_pattern={tarball_pattern}\n")
+
+        print(f"ecbuild tag: {ecbuild_tag}")
+        print(f"Additional modules: {', '.join(modules_list) if modules_list else 'none'}")
+        print(f"CMake options: {cmake_options if cmake_options else 'none'}")
+        print(f"Build directory: {build_dir}")
+
+    - name: Load HPC modules
+      shell: bash
+      run: |
+        echo "Loading HPC modules..."
+        ${{ steps.config.outputs.module_loads }}
+        echo ""
+        echo "Loaded modules:"
+        module list
+
+    - name: Create build directory
+      shell: bash
+      run: |
+        build_dir="${{ steps.config.outputs.build_dir }}"
+        echo "Creating build directory: $build_dir"
+        mkdir -p "$build_dir"
+
+    - name: Run ecbuild
+      shell: bash
+      run: |
+        build_dir="${{ steps.config.outputs.build_dir }}"
+        cmake_options="${{ steps.config.outputs.cmake_options }}"
+
+        echo "Running ecbuild in $build_dir..."
+        cd "$build_dir"
+
+        if [ -n "$cmake_options" ]; then
+            echo "CMake options: $cmake_options"
+            ecbuild $cmake_options ..
+        else
+            ecbuild ..
+        fi
+
+    - name: Build source package
+      shell: bash
+      run: |
+        build_dir="${{ steps.config.outputs.build_dir }}"
+
+        echo "Building source package..."
+        cd "$build_dir"
+        make package_source
+
+        echo ""
+        echo "Build complete!"
+
+    - name: List generated tarballs
+      shell: bash
+      run: |
+        build_dir="${{ steps.config.outputs.build_dir }}"
+        echo "Generated tarballs:"
+        find "$build_dir" -name "*.tar.gz" -type f | sort
+
+    - name: Verify artifacts
+      shell: bash
+      run: |
+        build_dir="${{ steps.config.outputs.build_dir }}"
+        echo "Checking for tarball in: $build_dir"
+
+        # Check if tarball exists in build folder
+        if ! find "$build_dir" -name "*.tar.gz" -type f | head -1 | grep -q .; then
+            echo "No tarball found in: $build_dir"
+            echo "Available files:"
+            find "$build_dir" -type f | head -20
+            exit 1
+        fi
+
+        echo "Tarball verification successful!"
+
+    - name: Find tarball path
+      id: find-tarball
+      shell: bash
+      run: |
+        build_dir="${{ steps.config.outputs.build_dir }}"
+        tarball=$(find "$build_dir" -name "*.tar.gz" -type f | head -1)
+
+        echo "tarball_path=$tarball" >> $GITHUB_OUTPUT
+        echo "Found tarball: $tarball"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.config.outputs.build_dir }}/${{ steps.config.outputs.tarball_pattern }}
+        if-no-files-found: error
+        retention-days: 90
