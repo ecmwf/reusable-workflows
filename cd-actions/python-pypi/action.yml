@@ -5,18 +5,11 @@ inputs:
   name:
     description: 'Build name for artifacts'
     required: true
-  config:
-    description: 'Build configuration JSON'
-    required: true
   ref_name:
     description: 'Git ref name for release'
     required: true
   dry_run:
     description: 'Dry run mode - build only, no upload'
-    required: false
-    default: 'false'
-  is_prerelease:
-    description: 'Is this a pre-release build'
     required: false
     default: 'false'
   pypi_token:
@@ -25,6 +18,22 @@ inputs:
   pypi_test_token:
     description: 'TestPyPI API token'
     required: false
+  working_directory:
+    description: 'Working directory for build (for monorepos)'
+    required: false
+    default: './'
+  buildargs:
+    description: 'Additional arguments for uv build command'
+    required: false
+    default: ''
+  env_vars:
+    description: 'Environment variables as JSON object (e.g., {"KEY": "value"})'
+    required: false
+    default: '{}'
+  testpypi:
+    description: 'Publish to TestPyPI instead of PyPI (overrides is_prerelease)'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -37,23 +46,19 @@ runs:
         import os
         import sys
 
-        raw = '''${{ inputs.config }}'''.strip()
-        print(f"Raw config: {raw}")
+        working_directory = '${{ inputs.working_directory }}'
+        buildargs = '${{ inputs.buildargs }}'
+        env_vars_json = '''${{ inputs.env_vars }}'''.strip()
+
+        # Parse env_vars JSON
         try:
-            cfg = json.loads(raw)
+            env_vars = json.loads(env_vars_json) if env_vars_json else {}
         except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON config: {e}")
+            print(f"Failed to parse env_vars JSON: {e}")
             sys.exit(1)
 
-        working_directory = cfg.get('working_directory', './') or './'
-        buildargs = cfg.get('buildargs', '') or ''
-        env_vars = cfg.get('env_vars', {}) or {}
-
-        # Check if config explicitly sets testpypi (overrides is_prerelease)
-        testpypi = cfg.get('testpypi', None)
-        if testpypi is None:
-            # Use is_prerelease to determine target
-            testpypi = '${{ inputs.is_prerelease }}' == 'true'
+        testpypi_input = '${{ inputs.testpypi }}'
+        testpypi = testpypi_input == 'true'
 
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write(f"working_directory={working_directory}\n")

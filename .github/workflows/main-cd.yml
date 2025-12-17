@@ -70,7 +70,7 @@ jobs:
 
   load-config:
     name: Load and Validate Configuration
-    runs-on: platform-builder-Debian-12
+    runs-on: ubuntu-latest
     outputs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
@@ -118,11 +118,32 @@ jobs:
           matrix = {'include': []}
           for build in config.get('builds', []):
               if build.get('enabled', True):
+                  build_config = build.get('config', {})
+                  build_type = build['type']
+
                   matrix_item = {
                       'name': build['name'],
-                      'type': build['type'],
-                      'config': json.dumps(build.get('config', {}))
+                      'runner': ['self-hosted', 'platform-builder'],
+                      'type': build_type,
                   }
+
+                  # Add type-specific config fields as individual matrix values
+                  if build_type == 'conda':
+                      matrix_item['conda_dir'] = build_config.get('conda_dir', './.cd/.conda')
+                      # Convert channels list to comma-separated string
+                      channels = build_config.get('channels', ['conda-forge'])
+                      if isinstance(channels, list):
+                          matrix_item['channels'] = ','.join(channels)
+                      else:
+                          matrix_item['channels'] = str(channels)
+                      matrix_item['conda_build_args'] = build_config.get('conda_build_args', '--no-anaconda-upload')
+
+                  elif build_type == 'python-pypi':
+                      matrix_item['working_directory'] = build_config.get('working_directory', './')
+                      matrix_item['buildargs'] = build_config.get('buildargs', '')
+                      # Keep env_vars as JSON string
+                      matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
+
                   matrix['include'].append(matrix_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -138,7 +159,7 @@ jobs:
     name: ${{ matrix.name }}
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
-    runs-on: platform-builder-Debian-12
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
@@ -154,25 +175,29 @@ jobs:
         uses: ecmwf/reusable-workflows/cd-actions/conda@v2
         with:
           name: ${{ matrix.name }}
-          config: ${{ matrix.config }}
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
-          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
+          test_nexus: 'true'
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN) || '' }}
           nexus_test_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
+          conda_dir: ${{ matrix.conda_dir }}
+          channels: ${{ matrix.channels }}
+          conda_build_args: ${{ matrix.conda_build_args }}
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
         uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
         with:
           name: ${{ matrix.name }}
-          config: ${{ matrix.config }}
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
-          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
           pypi_token: ${{ secrets.PYPI_API_TOKEN }}
           pypi_test_token: ${{ secrets.PYPI_TEST_API_TOKEN }}
+          working_directory: ${{ matrix.working_directory }}
+          buildargs: ${{ matrix.buildargs }}
+          env_vars: ${{ matrix.env_vars }}
+          testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
 
   release:
     name: Create Release
