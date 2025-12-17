@@ -29,12 +29,14 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Clone ecbuild
-      uses: actions/checkout@v5
-      with:
-        repository: ecmwf/ecbuild
-        ref: ${{ inputs.ecbuild_version }}
-        path: .ecbuild
+    - name: Install ecbuild
+      shell: bash
+      run: |
+        echo "Cloning ecbuild to ${{ runner.temp }}/ecbuild..."
+        git clone --depth 1 --branch "${{ inputs.ecbuild_version }}" \
+          https://github.com/ecmwf/ecbuild.git "${{ runner.temp }}/ecbuild"
+        echo "${{ runner.temp }}/ecbuild/bin" >> $GITHUB_PATH
+        echo "Added ecbuild to PATH"
 
     - name: Create build directory
       shell: bash
@@ -52,9 +54,9 @@ runs:
 
         if [ -n "$cmake_options" ]; then
             echo "CMake options: $cmake_options"
-            ../.ecbuild/bin/ecbuild $cmake_options ..
+            ecbuild $cmake_options ..
         else
-            ../.ecbuild/bin/ecbuild ..
+            ecbuild ..
         fi
 
     - name: Build source package
