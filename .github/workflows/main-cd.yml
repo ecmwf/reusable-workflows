@@ -70,7 +70,7 @@ jobs:
 
   load-config:
     name: Load and Validate Configuration
-    runs-on: [self-hosted, platform-builder]
+    runs-on: ubuntu-latest
     outputs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
@@ -123,6 +123,7 @@ jobs:
 
                   matrix_item = {
                       'name': build['name'],
+                      'runner': ['self-hosted', 'platform-builder'],
                       'type': build_type,
                   }
 
@@ -158,7 +159,7 @@ jobs:
     name: ${{ matrix.name }}
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
-    runs-on: platform-builder-Debian-12
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
