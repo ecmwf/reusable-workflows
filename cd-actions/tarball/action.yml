@@ -36,7 +36,9 @@ runs:
 
         if [ -z "$ecbuild_version" ]; then
           echo "Fetching latest ecbuild release from GitHub API..."
-          ecbuild_version=$(curl -sL https://api.github.com/repos/ecmwf/ecbuild/releases/latest | jq -r '.tag_name')
+          ecbuild_version=$(curl -sL https://api.github.com/repos/ecmwf/ecbuild/releases/latest \
+            | grep '"tag_name":' \
+            | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
 
           if [ -z "$ecbuild_version" ]; then
             echo "::error::Failed to fetch latest ecbuild release from GitHub API"
