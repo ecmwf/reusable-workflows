@@ -13,9 +13,9 @@ inputs:
     required: false
     default: 'false'
   ecbuild_version:
-    description: 'ecbuild version/tag to checkout from GitHub'
+    description: 'ecbuild version/tag to checkout (defaults to latest release)'
     required: false
-    default: 'master'
+    default: ''
   cmake_options:
     description: 'Additional CMake options for ecbuild'
     required: false
@@ -32,8 +32,32 @@ runs:
     - name: Install ecbuild
       shell: bash
       run: |
+        ecbuild_version="${{ inputs.ecbuild_version }}"
+
+        if [ -z "$ecbuild_version" ]; then
+          tag_regex="${TAG_REGEX_FOR_DEPLOYMENT:-}"
+
+          if [ -n "$tag_regex" ]; then
+            echo "Fetching latest ecbuild release tag matching: $tag_regex"
+            ecbuild_version=$(git ls-remote --tags --refs https://github.com/ecmwf/ecbuild.git \
+              | awk -F/ '{print $NF}' \
+              | grep -E "$tag_regex" \
+              | sort -V \
+              | tail -1)
+
+            if [ -z "$ecbuild_version" ]; then
+              echo "::error::No ecbuild tags found matching regex: $tag_regex"
+              exit 1
+            fi
+            echo "Using latest release: $ecbuild_version"
+          else
+            echo "::error::ecbuild_version not provided and TAG_REGEX_FOR_DEPLOYMENT not set"
+            exit 1
+          fi
+        fi
+
         echo "Cloning ecbuild to ${{ runner.temp }}/ecbuild..."
-        git clone --depth 1 --branch "${{ inputs.ecbuild_version }}" \
+        git clone --depth 1 --branch "$ecbuild_version" \
           https://github.com/ecmwf/ecbuild.git "${{ runner.temp }}/ecbuild"
         echo "${{ runner.temp }}/ecbuild/bin" >> $GITHUB_PATH
         echo "Added ecbuild to PATH"

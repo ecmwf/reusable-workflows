@@ -145,7 +145,7 @@ jobs:
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
 
                   elif build_type == 'tarball':
-                      matrix_item['ecbuild_version'] = build_config.get('ecbuild_version', 'master')
+                      matrix_item['ecbuild_version'] = build_config.get('ecbuild_version', '')
                       matrix_item['cmake_options'] = build_config.get('cmake_options', '')
 
                   matrix['include'].append(matrix_item)
@@ -206,6 +206,8 @@ jobs:
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
         uses: ecmwf/reusable-workflows/cd-actions/tarball@cd-tarball
+        env:
+          TAG_REGEX_FOR_DEPLOYMENT: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
