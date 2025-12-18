@@ -209,7 +209,6 @@ jobs:
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
-          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           ecbuild_version: ${{ matrix.ecbuild_version }}
           cmake_options: ${{ matrix.cmake_options }}
 

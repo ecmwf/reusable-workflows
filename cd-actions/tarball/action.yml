@@ -4,14 +4,12 @@ description: Build source tarballs using ecbuild on platform-builder runners
 inputs:
   name:
     description: 'Build name for artifacts'
-    required: true
-  ref_name:
-    description: 'Git ref name for artifacts'
-    required: true
-  dry_run:
-    description: 'Dry run mode - build only, no deployment'
     required: false
-    default: 'false'
+    default: 'tarball'
+  ref_name:
+    description: 'Git ref name for artifacts (defaults to github.ref_name)'
+    required: false
+    default: ''
   ecbuild_version:
     description: 'ecbuild version/tag to checkout (defaults to latest release)'
     required: false
@@ -116,7 +114,7 @@ runs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ github.run_id }}-${{ inputs.name }}
-        path: build/*.tar.gz
+        name: ${{ github.run_id }}-${{ inputs.name }}-${{ inputs.ref_name || github.ref_name }}
+        path: ${{ steps.find-tarball.outputs.tarball_path }}
         if-no-files-found: error
         retention-days: 90
