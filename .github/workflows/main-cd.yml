@@ -206,8 +206,6 @@ jobs:
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
         uses: ecmwf/reusable-workflows/cd-actions/tarball@cd-tarball
-        env:
-          TAG_REGEX_FOR_DEPLOYMENT: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}

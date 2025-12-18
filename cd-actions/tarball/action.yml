@@ -35,25 +35,14 @@ runs:
         ecbuild_version="${{ inputs.ecbuild_version }}"
 
         if [ -z "$ecbuild_version" ]; then
-          tag_regex="${TAG_REGEX_FOR_DEPLOYMENT:-}"
+          echo "Fetching latest ecbuild release from GitHub API..."
+          ecbuild_version=$(curl -sL https://api.github.com/repos/ecmwf/ecbuild/releases/latest | jq -r '.tag_name')
 
-          if [ -n "$tag_regex" ]; then
-            echo "Fetching latest ecbuild release tag matching: $tag_regex"
-            ecbuild_version=$(git ls-remote --tags --refs https://github.com/ecmwf/ecbuild.git \
-              | awk -F/ '{print $NF}' \
-              | grep -E "$tag_regex" \
-              | sort -V \
-              | tail -1)
-
-            if [ -z "$ecbuild_version" ]; then
-              echo "::error::No ecbuild tags found matching regex: $tag_regex"
-              exit 1
-            fi
-            echo "Using latest release: $ecbuild_version"
-          else
-            echo "::error::ecbuild_version not provided and TAG_REGEX_FOR_DEPLOYMENT not set"
+          if [ -z "$ecbuild_version" ]; then
+            echo "::error::Failed to fetch latest ecbuild release from GitHub API"
             exit 1
           fi
+          echo "Using latest release: $ecbuild_version"
         fi
 
         echo "Cloning ecbuild to ${{ runner.temp }}/ecbuild..."
