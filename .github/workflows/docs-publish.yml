@@ -46,7 +46,7 @@ jobs:
       # 1. Download artifact containing html to publish
       - name: Download artifact to publish
         id: get-artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           artifact-ids: ${{ inputs.artifact-id }}
           path: ${{ runner.temp }}/html
