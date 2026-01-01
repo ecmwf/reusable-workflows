@@ -77,7 +77,7 @@ jobs:
       release_enabled: ${{ steps.parse-release.outputs.enabled }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         
       - name: Check configuration file exists
         id: check-config
@@ -165,7 +165,7 @@ jobs:
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -208,7 +208,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Prepare release configuration
         id: prepare-config
