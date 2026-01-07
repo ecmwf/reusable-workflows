@@ -52,7 +52,7 @@ runs:
         )
 
         confluence_server.attach_file(
-            file_path=os.environ["FILE_PATH"],
+            os.environ["FILE_PATH"],
             name=None,
             content_type="application/binary",
             title=os.environ["PAGE_TITLE"],
