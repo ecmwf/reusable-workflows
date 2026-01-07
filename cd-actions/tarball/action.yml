@@ -103,12 +103,12 @@ runs:
     - name: Verify artifacts
       shell: bash
       run: |
-        echo "Checking for tarball in: build"
+        echo "Checking for source tarball in: build"
 
-        if ! find build -name "*.tar.gz" -type f | head -1 | grep -q .; then
-            echo "No tarball found in: build"
-            echo "Available files:"
-            find build -type f | head -20
+        if ! find build -maxdepth 1 -name "*-Source.tar.gz" -type f | head -1 | grep -q .; then
+            echo "No source tarball found in: build"
+            echo "Available tar.gz files:"
+            find build -name "*.tar.gz" -type f
             exit 1
         fi
 
@@ -118,7 +118,7 @@ runs:
       id: find-tarball
       shell: bash
       run: |
-        tarball=$(find build -name "*.tar.gz" -type f | head -1)
+        tarball=$(find build -maxdepth 1 -name "*-Source.tar.gz" -type f | head -1)
 
         echo "tarball_path=$tarball" >> $GITHUB_OUTPUT
         echo "Found tarball: $tarball"
