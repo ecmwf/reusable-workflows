@@ -48,7 +48,7 @@ runs:
         confluence_server = Confluence(
             url="https://confluence.ecmwf.int",
             username=os.environ["CONFLUENCE_USERNAME"],
-            password=os.environ["CONFLUENCE_TOKEN"],
+            token=os.environ["CONFLUENCE_TOKEN"],
         )
 
         confluence_server.attach_file(
