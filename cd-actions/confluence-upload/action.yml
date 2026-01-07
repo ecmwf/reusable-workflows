@@ -45,11 +45,15 @@ runs:
         import os
         from atlassian.confluence import Confluence
 
+        print(f"Uploading file '{os.environ['FILE_PATH']}' to Confluence page '{os.environ['PAGE_TITLE']}' in space '{os.environ['SPACE']}'")
+
         confluence_server = Confluence(
             url="https://confluence.ecmwf.int",
             username=os.environ["CONFLUENCE_USERNAME"],
             token=os.environ["CONFLUENCE_TOKEN"],
         )
+
+        print("Connected to Confluence")
 
         confluence_server.attach_file(
             os.environ["FILE_PATH"],
@@ -59,4 +63,6 @@ runs:
             space=os.environ["SPACE"],
             comment=os.environ["COMMENT"],
         )
+
+        print("File uploaded successfully")
         EOF
