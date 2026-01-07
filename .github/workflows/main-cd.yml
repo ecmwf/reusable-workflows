@@ -214,7 +214,7 @@ jobs:
           ref_name: ${{ inputs.ref_name }}
           ecbuild_version: ${{ matrix.ecbuild_version }}
           cmake_options: ${{ matrix.cmake_options }}
-          confluence_token: ${{ needs.detect-release-type.outputs.is_prerelease == 'false' && needs.detect-release-type.outputs.is_dry_run == 'false' && secrets.CONFLUENCE_TARBALL_UPLOAD_TOKEN || '' }}
+          confluence_token: ${{ secrets.CONFLUENCE_TARBALL_UPLOAD_TOKEN || '' }}
           confluence_username: cgi
           confluence_space: ${{ matrix.confluence_space }}
 
