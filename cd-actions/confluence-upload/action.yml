@@ -26,18 +26,13 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup Python
-      uses: actions/setup-python@v6
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v7
       with:
         python-version: '3.13'
-        cache: 'pip'
-
-    - name: Install dependencies
-      shell: bash
-      run: pip install atlassian-python-api
 
     - name: Upload to Confluence
-      shell: python
+      shell: bash
       env:
         CONFLUENCE_USERNAME: ${{ inputs.username }}
         CONFLUENCE_TOKEN: ${{ inputs.token }}
@@ -46,8 +41,8 @@ runs:
         SPACE: ${{ inputs.space }}
         COMMENT: ${{ inputs.comment }}
       run: |
+        uv run --with atlassian-python-api python << 'EOF'
         import os
-
         from atlassian.confluence import Confluence
 
         confluence_server = Confluence(
@@ -64,3 +59,4 @@ runs:
             space=os.environ["SPACE"],
             comment=os.environ["COMMENT"],
         )
+        EOF
