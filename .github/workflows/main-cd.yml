@@ -217,6 +217,7 @@ jobs:
           confluence_token: ${{ secrets.CONFLUENCE_TARBALL_UPLOAD_TOKEN || '' }}
           confluence_username: cgi
           confluence_space: ${{ matrix.confluence_space }}
+          confluence_page_title: ${{ matrix.confluence_page_title }}
 
   release:
     name: Create Release

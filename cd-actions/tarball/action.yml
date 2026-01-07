@@ -30,6 +30,10 @@ inputs:
     description: 'Confluence space key (e.g., MAGP)'
     required: false
     default: ''
+  confluence_page_title:
+    description: 'Confluence page title'
+    required: false
+    default: 'Releases'
 
 outputs:
   tarball_path:
@@ -139,3 +143,4 @@ runs:
         username: ${{ inputs.confluence_username }}
         file_path: ${{ steps.find-tarball.outputs.tarball_path }}
         space: ${{ inputs.confluence_space }}
+        page_title: ${{ inputs.confluence_page_title }}
