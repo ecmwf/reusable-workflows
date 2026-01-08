@@ -172,7 +172,7 @@ jobs:
           
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@debug-cd-conda
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
