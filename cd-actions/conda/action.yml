@@ -126,7 +126,7 @@ runs:
       run: |
         eval "$(conda shell.bash hook)"
         conda activate "$BUILD_ENV"
-        mamba install -y conda conda-build boa conda-verify conda-index
+        mamba install -y -vvv conda conda-build boa conda-verify conda-index
         mamba info
         mamba list
         
