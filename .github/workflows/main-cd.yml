@@ -208,7 +208,7 @@ jobs:
 
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
-        uses: ecmwf/reusable-workflows/cd-actions/tarball@cd-tarball
+        uses: ecmwf/reusable-workflows/cd-actions/tarball@v2
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
