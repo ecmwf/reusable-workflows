@@ -44,6 +44,7 @@ runs:
   using: composite
   steps:
     - name: Install ecbuild
+      if: ${{ github.repository != 'ecmwf/ecbuild' }}
       shell: bash
       run: |
         ecbuild_version="${{ inputs.ecbuild_version }}"
@@ -81,11 +82,18 @@ runs:
         echo "Running ecbuild in build directory..."
         cd build
 
+        if [ "${{ github.repository }}" = "ecmwf/ecbuild" ]; then
+            echo "Bootstrap mode: ecbuild configures its own CMAKE_MODULE_PATH"
+            cmake_cmd="cmake ."
+        else
+            cmake_cmd="ecbuild"
+        fi
+
         if [ -n "$cmake_options" ]; then
             echo "CMake options: $cmake_options"
-            ecbuild $cmake_options ..
+            $cmake_cmd $cmake_options ..
         else
-            ecbuild ..
+            $cmake_cmd ..
         fi
 
     - name: Build source package
