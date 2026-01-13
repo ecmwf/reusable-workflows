@@ -500,6 +500,7 @@ runs:
             name = stage.get('name', f'stage-{i}')
             modules = stage.get('modules', [])
             cmake_opts = stage.get('cmake_options', '')
+            build_command = stage.get('build_command', '')
             install_cmd = stage.get('install_command', '')
 
             lines.append(f'echo "=== Stage: {name} ==="')
@@ -513,8 +514,10 @@ runs:
                 cmake_line = f'cmake .. {generator} -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts
                 lines.append(cmake_line.replace('  ', ' ').strip())
 
-            # Build
-            lines.append(f'{build_cmd} -j{parallel}')
+            if build_command:
+                lines.append(build_command)
+            else:
+                lines.append(f'{build_cmd} -j{parallel}')
 
             # Install
             if install_cmd:
