@@ -239,6 +239,22 @@ runs:
 
         do_sync = not dry_run and sync_module_input
 
+        install_prefix_input = '''${{ inputs.install_prefix }}'''.strip()
+        install_type = '${{ inputs.install_type }}'
+        module_name = '''${{ inputs.module_name }}'''.strip() or '${{ github.repository }}'.split('/')[-1]
+        ref_name = '${{ inputs.ref_name }}'
+        prefix_compiler_specific = '${{ inputs.prefix_compiler_specific }}' == 'true'
+
+        if install_prefix_input:
+            install_prefix = install_prefix_input
+        elif install_type == 'module':
+            install_prefix = f'/usr/local/apps/{module_name}/{ref_name}'
+        else:
+            install_prefix = f'${{TMPDIR}}/install/{module_name}/{ref_name}'
+
+        if prefix_compiler_specific:
+            install_prefix = f"{install_prefix}/{compiler_info['compiler']}"
+
         if stages_input:
             mode = 'multi-stage'
             use_generic = True
@@ -248,10 +264,6 @@ runs:
                 print(f"::error::Failed to parse stages JSON: {e}")
                 print(f"Input was: {stages_input[:200]}...")
                 sys.exit(1)
-        elif install_command:
-            mode = 'custom-install'
-            use_generic = True
-            stages = []
         else:
             mode = 'standard'
             use_generic = False
@@ -263,12 +275,14 @@ runs:
             f.write(f"use_generic={'true' if use_generic else 'false'}\n")
             f.write(f"do_sync={'true' if do_sync else 'false'}\n")
             f.write(f"stages_json={json.dumps(stages)}\n")
+            f.write(f"install_prefix={install_prefix}\n")
             for key, value in compiler_info.items():
                 f.write(f"{key}={value}\n")
 
         print(f"Platform: {platform}")
         print(f"Compiler: {compiler_info['compiler']}")
         print(f"Build mode: {mode}")
+        print(f"Install prefix: {install_prefix}")
         print(f"Do sync: {do_sync}")
 
     - name: Build with build-package-hpc (standard)
@@ -391,115 +405,80 @@ runs:
           echo "Job cancel script not found!"
         fi
 
-    - name: Generate build template (custom/multi-stage)
+    - name: Generate build template
       if: steps.config.outputs.use_generic == 'true'
       id: template
       shell: python3 {0}
       env:
         INPUT_STAGES: ${{ inputs.stages }}
+        INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
       run: |
         import json
         import os
 
-        mode = '${{ steps.config.outputs.mode }}'
-        stages_json = os.environ.get('INPUT_STAGES', '').strip()
-        install_command = '''${{ inputs.install_command }}'''.strip()
-        modules_input = '''${{ inputs.modules }}'''.strip()
+        stages = json.loads(os.environ.get('INPUT_STAGES', '[]'))
+        base_cmake_options = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
+        repository = '${{ github.repository }}'
+        repo_name = repository.split('/')[-1]
+        ref_name = '${{ inputs.ref_name }}'
+        compiler_modules = '${{ steps.config.outputs.compiler_modules }}'
+        module_name = '''${{ inputs.module_name }}'''.strip() or repo_name
+        parallel = '''${{ inputs.parallel }}'''.strip() or '64'
         do_sync = '${{ steps.config.outputs.do_sync }}' == 'true'
         lock_permissions = '${{ inputs.lock_permissions }}' == 'true'
 
-        # Parse single-stage modules
-        single_modules = []
-        if modules_input:
-            try:
-                single_modules = json.loads(modules_input)
-            except json.JSONDecodeError:
-                single_modules = [m.strip() for m in modules_input.replace('\n', ',').split(',') if m.strip()]
-
-        # Build the template
         lines = [
-            '#!/bin/bash',
-            'set -eux',
+            f'# Multi-stage CD build for {repository}@{ref_name}',
             '',
-            f'# CD HPC Build - Mode: {mode}',
+            'INSTALL_PREFIX="{{ install_prefix }}"',
+            'export INSTALL_PREFIX',
             '',
-            '# Load compiler modules',
-            'module load ${{ steps.config.outputs.compiler_modules }}',
+            '# Load compiler',
+            f'module load {compiler_modules}',
+            '',
+            '# Clone repository',
+            f'git clone --depth 1 --branch "{ref_name}" "https://{{{{ github_user }}}}:{{{{ github_token }}}}@github.com/{repository}.git"',
+            f'cd {repo_name}',
+            'mkdir -p build && cd build',
             '',
         ]
 
-        if mode == 'multi-stage':
-            stages = json.loads(stages_json)
-            parallel = '''${{ inputs.parallel }}'''.strip() or '64'
+        for i, stage in enumerate(stages):
+            name = stage.get('name', f'stage-{i}')
+            modules = stage.get('modules', [])
+            cmake_opts = stage.get('cmake_options', '')
+            install_cmd = stage.get('install_command', '')
 
-            for i, stage in enumerate(stages):
-                stage_name = stage.get('name', f'stage-{i}')
-                stage_modules = stage.get('modules', [])
-                stage_cmake_options = stage.get('cmake_options', '')
-                stage_build_cmd = stage.get('build_command', '')
-                stage_install_cmd = stage.get('install_command', '')
+            lines.append(f'echo "=== Stage: {name} ==="')
 
-                lines.append(f'# === Stage {i+1}: {stage_name} ===')
-
-                # Load stage-specific modules
-                for mod in stage_modules:
-                    lines.append(f'module load {mod}')
-
-                lines.append('')
-
-                # Configure if cmake_options provided for this stage
-                if stage_cmake_options:
-                    lines.append('# Configure')
-                    lines.append(f'cmake {stage_cmake_options} .')
-                    lines.append('')
-
-                # Build if build_command provided or cmake_options triggered a reconfigure
-                if stage_build_cmd:
-                    lines.append('# Build')
-                    lines.append(stage_build_cmd)
-                    lines.append('')
-                elif stage_cmake_options:
-                    # If we reconfigured, we need to rebuild
-                    lines.append('# Build')
-                    lines.append(f'make -j{parallel}')
-                    lines.append('')
-
-                # Install
-                lines.append('# Install')
-                if stage_install_cmd:
-                    lines.append(stage_install_cmd)
-                else:
-                    lines.append('cmake --install .')
-
-                lines.append('')
-
-                # Unload stage-specific modules
-                for mod in reversed(stage_modules):
-                    lines.append(f'module unload {mod}')
-                lines.append('')
-        else:
-            for mod in single_modules:
+            # Load stage modules
+            for mod in modules:
                 lines.append(f'module load {mod}')
-            if single_modules:
-                lines.append('')
 
-            lines.append('# Build and install')
-            if install_command:
-                lines.append(install_command)
+            if i == 0 or cmake_opts:
+                opts = f'{base_cmake_options} {cmake_opts}'.strip()
+                lines.append(f'cmake .. -DCMAKE_INSTALL_PREFIX="${{INSTALL_PREFIX}}" {opts}')
+
+            # Build
+            lines.append(f'make -j{parallel}')
+
+            # Install
+            if install_cmd:
+                lines.append(install_cmd)
             else:
                 lines.append('cmake --install .')
+
+            for mod in reversed(modules):
+                lines.append(f'module unload {mod}')
+
             lines.append('')
 
         if lock_permissions:
-            lines.append('# Lock permissions')
-            lines.append('chmod -R a-w "$INSTALL_PREFIX" || true')
-            lines.append('')
+            lines.append('chmod -R a-w "${INSTALL_PREFIX}" || true')
 
         if do_sync:
-            lines.append('# Sync module')
             lines.append('module load modulemgr')
-            lines.append('modulemgr -v -f sync "$MODULE_NAME"')
-            lines.append('')
+            lines.append(f'modulemgr -v -f sync "{module_name}"')
 
         template = '\n'.join(lines)
 
@@ -521,6 +500,6 @@ runs:
         output_dir: ${{ inputs.output_dir }}
         template: ${{ steps.template.outputs.template }}
         template_data: |
-          repository: ${{ github.repository }}
-          ref_name: ${{ inputs.ref_name }}
-          platform: ${{ inputs.platform }}
+          github_user: ${{ inputs.github_user }}
+          github_token: ${{ inputs.github_token }}
+          install_prefix: ${{ steps.config.outputs.install_prefix }}
