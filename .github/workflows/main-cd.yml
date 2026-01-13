@@ -144,6 +144,19 @@ jobs:
                       # Keep env_vars as JSON string
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
 
+                  elif build_type == 'hpc':
+                      matrix_item['runner'] = ['self-hosted', 'linux', 'hpc-dev']
+                      matrix_item['config_path'] = build_config.get('config_path', '')
+                      matrix_item['platform'] = build_config.get('platform', 'gnu-12.2.0')
+                      matrix_item['dependencies'] = build_config.get('dependencies', '')
+                      matrix_item['python_dependencies'] = build_config.get('python_dependencies', '')
+                      matrix_item['conda_deps'] = build_config.get('conda_deps', '')
+                      matrix_item['stages'] = json.dumps(build_config.get('stages', []))
+                      matrix_item['modules'] = json.dumps(build_config.get('modules', []))
+                      matrix_item['install_command'] = build_config.get('install_command', '')
+                      finalize = build_config.get('finalize', {})
+                      matrix_item['lock_permissions'] = str(finalize.get('lock_permissions', True)).lower()
+
                   matrix['include'].append(matrix_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -198,6 +211,26 @@ jobs:
           buildargs: ${{ matrix.buildargs }}
           env_vars: ${{ matrix.env_vars }}
           testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
+
+      - name: Build with HPC
+        if: ${{ matrix.type == 'hpc' }}
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
+          github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
+          troika_user: ${{ secrets.HPC_CI_SSH_USER }}
+          config_path: ${{ matrix.config_path }}
+          platform: ${{ matrix.platform }}
+          dependencies: ${{ matrix.dependencies }}
+          python_dependencies: ${{ matrix.python_dependencies }}
+          conda_deps: ${{ matrix.conda_deps }}
+          stages: ${{ matrix.stages }}
+          modules: ${{ matrix.modules }}
+          install_command: ${{ matrix.install_command }}
+          lock_permissions: ${{ matrix.lock_permissions }}
 
   release:
     name: Create Release

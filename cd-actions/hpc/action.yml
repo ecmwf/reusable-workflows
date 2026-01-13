@@ -1,0 +1,360 @@
+name: HPC Module Deployer
+description: Build and deploy HPC modules with support for multi-stage builds and custom install commands
+
+inputs:
+  name:
+    description: 'Build name for identification'
+    required: true
+  ref_name:
+    description: 'Git ref name for deployment'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build on HPC but skip module sync'
+    required: false
+    default: 'false'
+
+  # HPC Authentication
+  github_user:
+    description: 'GitHub user for authentication'
+    required: true
+  github_token:
+    description: 'GitHub PAT for repository access'
+    required: true
+  troika_user:
+    description: 'HPC submission user'
+    required: true
+
+  # Build Configuration
+  config_path:
+    description: 'Path to HPC build configuration file (for build-package-hpc)'
+    required: true
+  platform:
+    description: 'Compiler platform (gnu-12.2.0, gnu-8.5.0, nvidia-22.11, intel-2021.4.0)'
+    required: true
+  dependencies:
+    description: 'Build dependencies (owner/repo@ref format, one per line)'
+    required: false
+    default: ''
+  python_dependencies:
+    description: 'Python dependencies to build from source (owner/repo@ref format, one per line)'
+    required: false
+    default: ''
+  conda_deps:
+    description: 'Conda packages to install'
+    required: false
+    default: ''
+
+  # Stage Configuration (for multi-stage builds)
+  stages:
+    description: 'JSON array of build stages. Each stage: {name, modules: [...], install_command}'
+    required: false
+    default: ''
+
+  # Single-stage options (used when stages not provided)
+  modules:
+    description: 'JSON array of modules to load for single-stage build (e.g., ["python/3.12", "boost/1.87"])'
+    required: false
+    default: ''
+  install_command:
+    description: 'Custom install command (overrides default cmake --install). Use $INSTALL_PREFIX for install path.'
+    required: false
+    default: ''
+
+  # Finalization
+  lock_permissions:
+    description: 'Lock install directory permissions after build (chmod a-w)'
+    required: false
+    default: 'true'
+  sync_module:
+    description: 'Sync module to other clusters after build'
+    required: false
+    default: 'true'
+
+  # Advanced Options
+  site:
+    description: 'HPC site name'
+    required: false
+    default: 'hpc-batch'
+  workdir:
+    description: 'Work directory on HPC'
+    required: false
+    default: ''
+  output_dir:
+    description: 'Output directory on HPC'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Parse platform configuration
+      id: platform
+      shell: python3 {0}
+      run: |
+        import json
+        import os
+        import sys
+
+        platform = "${{ inputs.platform }}"
+
+        # Platform to compiler mapping
+        platform_map = {
+            'gnu-12.2.0': {
+                'compiler': 'gnu-12.2.0',
+                'compiler_cc': 'gcc',
+                'compiler_cxx': 'g++',
+                'compiler_fc': 'gfortran',
+                'compiler_modules': 'gcc/12.2.0'
+            },
+            'gnu-8.5.0': {
+                'compiler': 'gnu-8.5.0',
+                'compiler_cc': 'gcc',
+                'compiler_cxx': 'g++',
+                'compiler_fc': 'gfortran',
+                'compiler_modules': 'gcc/8.5.0'
+            },
+            'nvidia-22.11': {
+                'compiler': 'nvidia-22.11',
+                'compiler_cc': 'nvc',
+                'compiler_cxx': 'nvc++',
+                'compiler_fc': 'nvfortran',
+                'compiler_modules': 'prgenv/nvidia,nvidia/22.11'
+            },
+            'intel-2021.4.0': {
+                'compiler': 'intel-2021.4.0',
+                'compiler_cc': 'icc',
+                'compiler_cxx': 'icpc',
+                'compiler_fc': 'ifort',
+                'compiler_modules': 'prgenv/intel,intel/2021.4.0'
+            }
+        }
+
+        if platform not in platform_map:
+            print(f"::error::Unknown platform '{platform}'")
+            print(f"Available platforms: {', '.join(platform_map.keys())}")
+            sys.exit(1)
+
+        info = platform_map[platform]
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            for key, value in info.items():
+                f.write(f"{key}={value}\n")
+
+        print(f"Platform: {platform}")
+        print(f"Compiler: {info['compiler']}")
+        print(f"Compiler modules: {info['compiler_modules']}")
+
+    - name: Determine build mode
+      id: mode
+      shell: python3 {0}
+      run: |
+        import json
+        import os
+
+        stages_input = '''${{ inputs.stages }}'''.strip()
+        install_command = '''${{ inputs.install_command }}'''.strip()
+        dry_run = '${{ inputs.dry_run }}' == 'true'
+        sync_module_input = '${{ inputs.sync_module }}' == 'true'
+
+        # Determine sync behavior: sync only if not dry_run and sync_module is true
+        do_sync = not dry_run and sync_module_input
+
+        # Determine build mode
+        if stages_input:
+            # Multi-stage build - use ci-hpc-generic with custom template
+            mode = 'multi-stage'
+            use_generic = 'true'
+            try:
+                stages = json.loads(stages_input)
+                stages_json = json.dumps(stages)
+            except json.JSONDecodeError as e:
+                print(f"::error::Failed to parse stages JSON: {e}")
+                import sys
+                sys.exit(1)
+        elif install_command:
+            # Single-stage with custom install - use ci-hpc-generic
+            mode = 'custom-install'
+            use_generic = 'true'
+            stages_json = '[]'
+        else:
+            # Standard single-stage build - use ci-hpc
+            mode = 'standard'
+            use_generic = 'false'
+            stages_json = '[]'
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"mode={mode}\n")
+            f.write(f"use_generic={use_generic}\n")
+            f.write(f"stages_json={stages_json}\n")
+            f.write(f"do_sync={'true' if do_sync else 'false'}\n")
+
+        print(f"Build mode: {mode}")
+        print(f"Use generic: {use_generic}")
+        print(f"Do sync: {do_sync}")
+        if stages_input:
+            print(f"Stages: {stages_json}")
+
+    - name: Parse dependencies
+      id: deps
+      shell: python3 {0}
+      run: |
+        import os
+
+        deps = ','.join('''${{ inputs.dependencies }}'''.strip().splitlines())
+        py_deps = ','.join('''${{ inputs.python_dependencies }}'''.strip().splitlines())
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"deps={deps}\n")
+            f.write(f"py_deps={py_deps}\n")
+
+    - name: Build with ci-hpc (standard)
+      if: steps.mode.outputs.use_generic != 'true'
+      uses: ecmwf/reusable-workflows/ci-hpc@cd-hpc-staged
+      with:
+        github_user: ${{ inputs.github_user }}
+        github_token: ${{ inputs.github_token }}
+        troika_user: ${{ inputs.troika_user }}
+        repository: ${{ github.repository }}@${{ inputs.ref_name }}
+        build_config: ${{ inputs.config_path }}
+        build_config_key: ${{ inputs.platform }}
+        compiler: ${{ steps.platform.outputs.compiler }}
+        compiler_cc: ${{ steps.platform.outputs.compiler_cc }}
+        compiler_cxx: ${{ steps.platform.outputs.compiler_cxx }}
+        compiler_fc: ${{ steps.platform.outputs.compiler_fc }}
+        compiler_modules: ${{ steps.platform.outputs.compiler_modules }}
+        dependencies: ${{ inputs.dependencies }}
+        python_dependencies: ${{ inputs.python_dependencies }}
+        conda_deps: ${{ inputs.conda_deps }}
+        site: ${{ inputs.site }}
+        workdir: ${{ inputs.workdir }}
+        output_dir: ${{ inputs.output_dir }}
+        sync_module: ${{ steps.mode.outputs.do_sync }}
+
+    - name: Generate build template
+      if: steps.mode.outputs.use_generic == 'true'
+      id: template
+      shell: python3 {0}
+      run: |
+        import json
+        import os
+
+        mode = '${{ steps.mode.outputs.mode }}'
+        stages_json = '''${{ steps.mode.outputs.stages_json }}'''
+        install_command = '''${{ inputs.install_command }}'''.strip()
+        modules_input = '''${{ inputs.modules }}'''.strip()
+        do_sync = '${{ steps.mode.outputs.do_sync }}' == 'true'
+        lock_permissions = '${{ inputs.lock_permissions }}' == 'true'
+
+        # Parse single-stage modules
+        single_modules = []
+        if modules_input:
+            try:
+                single_modules = json.loads(modules_input)
+            except json.JSONDecodeError:
+                # Try as newline-separated list
+                single_modules = [m.strip() for m in modules_input.splitlines() if m.strip()]
+
+        # Build the Jinja2 template for the HPC job
+        template_lines = [
+            '#!/bin/bash',
+            'set -eux',
+            '',
+            '# CD HPC Build - Generated template',
+            f'# Mode: {mode}',
+            '',
+            '# Load compiler modules',
+            'module load ${{ steps.platform.outputs.compiler_modules }}',
+            '',
+        ]
+
+        if mode == 'multi-stage':
+            stages = json.loads(stages_json)
+            for i, stage in enumerate(stages):
+                stage_name = stage.get('name', f'stage-{i}')
+                stage_modules = stage.get('modules', [])
+                stage_install_cmd = stage.get('install_command', '')
+
+                template_lines.append(f'# === Stage {i+1}: {stage_name} ===')
+
+                # Load modules for this stage
+                for mod in stage_modules:
+                    template_lines.append(f'module load {mod}')
+
+                template_lines.append('')
+                template_lines.append('# Build for this stage')
+                template_lines.append('# (Configure and build steps from build-package-hpc config)')
+                template_lines.append('')
+
+                if stage_install_cmd:
+                    template_lines.append('# Custom install command')
+                    template_lines.append(stage_install_cmd)
+                else:
+                    template_lines.append('# Standard install')
+                    template_lines.append('cmake --install .')
+
+                template_lines.append('')
+
+                # Unload modules for next stage (in reverse order)
+                for mod in reversed(stage_modules):
+                    template_lines.append(f'module unload {mod}')
+                template_lines.append('')
+
+        else:
+            # Single custom install
+            for mod in single_modules:
+                template_lines.append(f'module load {mod}')
+            if single_modules:
+                template_lines.append('')
+
+            template_lines.append('# Build')
+            template_lines.append('# (Configure and build steps from build-package-hpc config)')
+            template_lines.append('')
+
+            if install_command:
+                template_lines.append('# Custom install command')
+                template_lines.append(install_command)
+            else:
+                template_lines.append('# Standard install')
+                template_lines.append('cmake --install .')
+
+        template_lines.append('')
+
+        # Finalization
+        if lock_permissions:
+            template_lines.append('# Lock permissions')
+            template_lines.append('chmod -R a-w "$INSTALL_PREFIX" || true')
+            template_lines.append('')
+
+        if do_sync:
+            template_lines.append('# Sync module to other clusters')
+            template_lines.append('module load modulemgr')
+            template_lines.append('modulemgr -v -f sync "$MODULE_NAME"')
+            template_lines.append('')
+
+        template = '\n'.join(template_lines)
+
+        # Write template to output (escape for GitHub Actions)
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write("template<<EOF\n")
+            f.write(template)
+            f.write("\nEOF\n")
+
+        print("Generated template:")
+        print(template)
+
+    - name: Build with ci-hpc-generic (custom/multi-stage)
+      if: steps.mode.outputs.use_generic == 'true'
+      uses: ecmwf/reusable-workflows/ci-hpc-generic@v2
+      with:
+        troika_user: ${{ inputs.troika_user }}
+        site: ${{ inputs.site }}
+        workdir: ${{ inputs.workdir }}
+        output_dir: ${{ inputs.output_dir }}
+        template: ${{ steps.template.outputs.template }}
+        template_data: |
+          repository: ${{ github.repository }}
+          ref_name: ${{ inputs.ref_name }}
+          config_path: ${{ inputs.config_path }}
+          platform: ${{ inputs.platform }}
+          compiler: ${{ steps.platform.outputs.compiler }}
+          compiler_modules: ${{ steps.platform.outputs.compiler_modules }}
