@@ -250,7 +250,7 @@ runs:
         elif install_type == 'module':
             install_prefix = f'/usr/local/apps/{module_name}/{ref_name}'
         else:
-            install_prefix = f'${{TMPDIR}}/install/{module_name}/{ref_name}'
+            install_prefix = '$' + '{TMPDIR}' + f'/install/{module_name}/{ref_name}'
 
         if prefix_compiler_specific:
             install_prefix = f"{install_prefix}/{compiler_info['compiler']}"
@@ -457,7 +457,7 @@ runs:
 
             if i == 0 or cmake_opts:
                 opts = f'{base_cmake_options} {cmake_opts}'.strip()
-                lines.append(f'cmake .. -DCMAKE_INSTALL_PREFIX="${{INSTALL_PREFIX}}" {opts}')
+                lines.append(f'cmake .. -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts)
 
             # Build
             lines.append(f'make -j{parallel}')
