@@ -510,6 +510,8 @@ runs:
                 lines.append(f'module load {mod}')
 
             if i == 0 or cmake_opts:
+                if i > 0:
+                    lines.append('rm -f CMakeCache.txt')
                 opts = f'{base_cmake_options} {cmake_opts}'.strip()
                 cmake_line = f'cmake .. {generator} -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts
                 lines.append(cmake_line.replace('  ', ' ').strip())
