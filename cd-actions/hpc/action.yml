@@ -412,12 +412,14 @@ runs:
       env:
         INPUT_STAGES: ${{ inputs.stages }}
         INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
+        INPUT_DEPENDENCIES: ${{ inputs.dependencies }}
       run: |
         import json
         import os
 
         stages = json.loads(os.environ.get('INPUT_STAGES', '[]'))
         base_cmake_options = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
+        dependencies_input = os.environ.get('INPUT_DEPENDENCIES', '').strip()
         repository = '${{ github.repository }}'
         repo_name = repository.split('/')[-1]
         ref_name = '${{ inputs.ref_name }}'
@@ -427,21 +429,58 @@ runs:
         do_sync = '${{ steps.config.outputs.do_sync }}' == 'true'
         lock_permissions = '${{ inputs.lock_permissions }}' == 'true'
 
+        deps = [d.strip() for d in dependencies_input.splitlines() if d.strip()]
+
         lines = [
             f'# Multi-stage CD build for {repository}@{ref_name}',
             '',
             'INSTALL_PREFIX="{{ install_prefix }}"',
+            'DEPS_PREFIX="$' + '{PWD}/deps"',
             'export INSTALL_PREFIX',
             '',
             '# Load compiler',
             f'module load {compiler_modules}',
             '',
-            '# Clone repository',
-            f'git clone --depth 1 --branch "{ref_name}" "https://{{{{ github_user }}}}:{{{{ github_token }}}}@github.com/{repository}.git"',
-            f'cd {repo_name}',
-            'mkdir -p build && cd build',
-            '',
         ]
+
+        if deps:
+            lines.append('# === Dependencies ===')
+            lines.append('mkdir -p "$DEPS_PREFIX"')
+            lines.append('')
+
+            for dep in deps:
+                if '@' in dep:
+                    dep_repo, dep_ref = dep.rsplit('@', 1)
+                else:
+                    dep_repo, dep_ref = dep, 'main'
+                dep_name = dep_repo.split('/')[-1]
+
+                lines.append(f'# {dep_name}')
+                lines.append(f'git clone --depth 1 --branch "{dep_ref}" "https://{{{{ github_user }}}}:{{{{ github_token }}}}@github.com/{dep_repo}.git"')
+
+                if dep_name == 'ecbuild':
+                    # ecbuild just needs to be in PATH
+                    lines.append(f'export PATH="$PWD/{dep_name}/bin:$PATH"')
+                else:
+                    # Build and install other deps
+                    lines.append(f'mkdir -p {dep_name}/build && cd {dep_name}/build')
+                    lines.append(f'ecbuild --prefix="$DEPS_PREFIX" ..')
+                    lines.append(f'make -j{parallel}')
+                    lines.append('make install')
+                    lines.append('cd ../..')
+
+                lines.append('')
+
+            lines.append('export CMAKE_PREFIX_PATH="$DEPS_PREFIX:$' + '{CMAKE_PREFIX_PATH:-}"')
+            lines.append('export PATH="$DEPS_PREFIX/bin:$PATH"')
+            lines.append('export LD_LIBRARY_PATH="$DEPS_PREFIX/lib:$' + '{LD_LIBRARY_PATH:-}"')
+            lines.append('')
+
+        lines.append('# === Main package ===')
+        lines.append(f'git clone --depth 1 --branch "{ref_name}" "https://{{{{ github_user }}}}:{{{{ github_token }}}}@github.com/{repository}.git"')
+        lines.append(f'cd {repo_name}')
+        lines.append('mkdir -p build && cd build')
+        lines.append('')
 
         for i, stage in enumerate(stages):
             name = stage.get('name', f'stage-{i}')
