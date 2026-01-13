@@ -511,7 +511,7 @@ runs:
 
             if i == 0 or cmake_opts:
                 if i > 0:
-                    lines.append('rm -f CMakeCache.txt')
+                    lines.append('cd .. && rm -rf build && mkdir build && cd build')
                 opts = f'{base_cmake_options} {cmake_opts}'.strip()
                 cmake_line = f'cmake .. {generator} -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts
                 lines.append(cmake_line.replace('  ', ' ').strip())
