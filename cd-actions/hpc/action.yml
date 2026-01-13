@@ -388,12 +388,14 @@ runs:
       if: steps.config.outputs.use_generic == 'true'
       id: template
       shell: python3 {0}
+      env:
+        INPUT_STAGES: ${{ inputs.stages }}
       run: |
         import json
         import os
 
         mode = '${{ steps.config.outputs.mode }}'
-        stages_json = '''${{ steps.config.outputs.stages_json }}'''
+        stages_json = os.environ.get('INPUT_STAGES', '').strip()
         install_command = '''${{ inputs.install_command }}'''.strip()
         modules_input = '''${{ inputs.modules }}'''.strip()
         do_sync = '${{ steps.config.outputs.do_sync }}' == 'true'
