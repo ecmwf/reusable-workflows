@@ -176,6 +176,8 @@ runs:
     - name: Parse configuration and determine build mode
       id: config
       shell: python3 {0}
+      env:
+        INPUT_STAGES: ${{ inputs.stages }}
       run: |
         import json
         import os
@@ -222,7 +224,8 @@ runs:
         compiler_info = platform_map[platform]
 
         # Determine build mode
-        stages_input = '''${{ inputs.stages }}'''.strip()
+        # Use environment variable for stages to avoid JSON parsing issues with newlines
+        stages_input = os.environ.get('INPUT_STAGES', '').strip()
         install_command = '''${{ inputs.install_command }}'''.strip()
         dry_run = '${{ inputs.dry_run }}' == 'true'
         sync_module_input = '${{ inputs.sync_module }}' == 'true'
@@ -236,6 +239,7 @@ runs:
                 stages = json.loads(stages_input)
             except json.JSONDecodeError as e:
                 print(f"::error::Failed to parse stages JSON: {e}")
+                print(f"Input was: {stages_input[:200]}...")
                 sys.exit(1)
         elif install_command:
             mode = 'custom-install'
