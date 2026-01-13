@@ -65,6 +65,10 @@ inputs:
     description: 'Number of parallel build jobs'
     required: false
     default: ''
+  use_ninja:
+    description: 'Use ninja build system instead of make'
+    required: false
+    default: 'true'
 
   # Dependencies
   dependencies:
@@ -428,6 +432,14 @@ runs:
         parallel = '''${{ inputs.parallel }}'''.strip() or '64'
         do_sync = '${{ steps.config.outputs.do_sync }}' == 'true'
         lock_permissions = '${{ inputs.lock_permissions }}' == 'true'
+        use_ninja = '${{ inputs.use_ninja }}' == 'true'
+
+        if use_ninja:
+            generator = '-GNinja'
+            build_cmd = 'ninja'
+        else:
+            generator = ''
+            build_cmd = 'make'
 
         deps = [d.strip() for d in dependencies_input.splitlines() if d.strip()]
 
@@ -438,10 +450,11 @@ runs:
             'DEPS_PREFIX="$' + '{PWD}/deps"',
             'export INSTALL_PREFIX',
             '',
-            '# Load compiler',
             f'module load {compiler_modules}',
-            '',
         ]
+        if use_ninja:
+            lines.append('module load ninja')
+        lines.append('')
 
         if deps:
             lines.append('# === Dependencies ===')
@@ -464,9 +477,10 @@ runs:
                 else:
                     # Build and install other deps
                     lines.append(f'mkdir -p {dep_name}/build && cd {dep_name}/build')
-                    lines.append(f'ecbuild --prefix="$DEPS_PREFIX" ..')
-                    lines.append(f'make -j{parallel}')
-                    lines.append('make install')
+                    cmake_cmd = f'ecbuild --prefix="$DEPS_PREFIX" {generator} ..'.replace('  ', ' ').strip()
+                    lines.append(cmake_cmd)
+                    lines.append(f'{build_cmd} -j{parallel}')
+                    lines.append(f'{build_cmd} install')
                     lines.append('cd ../..')
 
                 lines.append('')
@@ -496,10 +510,11 @@ runs:
 
             if i == 0 or cmake_opts:
                 opts = f'{base_cmake_options} {cmake_opts}'.strip()
-                lines.append(f'cmake .. -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts)
+                cmake_line = f'cmake .. {generator} -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts
+                lines.append(cmake_line.replace('  ', ' ').strip())
 
             # Build
-            lines.append(f'make -j{parallel}')
+            lines.append(f'{build_cmd} -j{parallel}')
 
             # Install
             if install_cmd:
@@ -521,13 +536,45 @@ runs:
 
         template = '\n'.join(lines)
 
+        site = '${{ inputs.site }}'
+        queue = '''${{ inputs.queue }}'''.strip() or 'nf'
+        ntasks = '''${{ inputs.ntasks }}'''.strip() or '1'
+        gpus = '''${{ inputs.gpus }}'''.strip()
+
+        if site == 'lumi':
+            sbatch_lines = [
+                '#SBATCH --account=project_465000454',
+                '#SBATCH --time=01:00:00',
+                f'#SBATCH --ntasks={ntasks}',
+                f'#SBATCH --cpus-per-task={parallel}',
+                '#SBATCH --mem-per-cpu=1750',
+                '#SBATCH --partition=small',
+            ]
+        else:
+            sbatch_lines = [
+                f'# TROIKA queue={queue}',
+                '#SBATCH --gres=ssdtmp:30G',
+                '#SBATCH --mem=64GB',
+                f'#SBATCH --cpus-per-task={parallel}',
+                f'#SBATCH --ntasks={ntasks}',
+            ]
+            if gpus:
+                sbatch_lines.append(f'#SBATCH --gres=gpu:{gpus}')
+
+        sbatch = '\n'.join(sbatch_lines)
+
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write("template<<EOF\n")
             f.write(template)
             f.write("\nEOF\n")
+            f.write("sbatch_options<<SBATCH_EOF\n")
+            f.write(sbatch)
+            f.write("\nSBATCH_EOF\n")
 
         print("Generated template:")
         print(template)
+        print("\nSBATCH options:")
+        print(sbatch)
 
     - name: Build with ci-hpc-generic (custom/multi-stage)
       if: steps.config.outputs.use_generic == 'true'
@@ -538,6 +585,7 @@ runs:
         workdir: ${{ inputs.workdir }}
         output_dir: ${{ inputs.output_dir }}
         template: ${{ steps.template.outputs.template }}
+        sbatch_options: ${{ steps.template.outputs.sbatch_options }}
         template_data: |
           github_user: ${{ inputs.github_user }}
           github_token: ${{ inputs.github_token }}
