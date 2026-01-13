@@ -2,6 +2,7 @@ name: HPC Module Deployer
 description: Build and deploy HPC modules with support for multi-stage builds and custom install commands
 
 inputs:
+  # Standard CD inputs
   name:
     description: 'Build name for identification'
     required: true
@@ -24,19 +25,70 @@ inputs:
     description: 'HPC submission user'
     required: true
 
-  # Build Configuration
-  config_path:
-    description: 'Path to HPC build configuration file (for build-package-hpc)'
-    required: true
+  # Compiler/Platform
   platform:
     description: 'Compiler platform (gnu-12.2.0, gnu-8.5.0, nvidia-22.11, intel-2021.4.0)'
     required: true
+
+  # Installation
+  install_type:
+    description: 'Install type: module (to /usr/local/apps), perm (persistent), temp (temporary)'
+    required: false
+    default: 'module'
+  install_prefix:
+    description: 'Custom install prefix (overrides install_type default path)'
+    required: false
+    default: ''
+  prefix_compiler_specific:
+    description: 'Suffix <compiler>/<version> to install prefix'
+    required: false
+    default: 'false'
+
+  # Build Configuration
+  cmake_options:
+    description: 'CMake/ecbuild options (comma-separated, e.g., -DENABLE_TESTS=ON,-DCMAKE_BUILD_TYPE=Release)'
+    required: false
+    default: ''
+  ctest_options:
+    description: 'CTest options for testing'
+    required: false
+    default: ''
+  self_test:
+    description: 'Run tests after building'
+    required: false
+    default: 'true'
+  env_vars:
+    description: 'Environment variables (JSON object, e.g., {"CTEST_PARALLEL_LEVEL": "4"})'
+    required: false
+    default: ''
+  parallel:
+    description: 'Number of parallel build jobs'
+    required: false
+    default: ''
+
+  # Dependencies
   dependencies:
     description: 'Build dependencies (owner/repo@ref format, one per line)'
     required: false
     default: ''
+  dependency_cmake_options:
+    description: 'CMake options for dependencies (YAML format: "owner/repo: -DOPTION=VALUE")'
+    required: false
+    default: ''
   python_dependencies:
     description: 'Python dependencies to build from source (owner/repo@ref format, one per line)'
+    required: false
+    default: ''
+  python_version:
+    description: 'Python version to use for build'
+    required: false
+    default: ''
+  python_requirements:
+    description: 'Path to pip requirements file for python packages'
+    required: false
+    default: ''
+  python_toml_opt_dep_sections:
+    description: 'List of optional dependency sections specified in pyproject.toml'
     required: false
     default: ''
   conda_deps:
@@ -46,13 +98,21 @@ inputs:
 
   # Stage Configuration (for multi-stage builds)
   stages:
-    description: 'JSON array of build stages. Each stage: {name, modules: [...], install_command}'
+    description: |
+      JSON array of build stages for multi-Python or multi-config builds.
+      Each stage object can have:
+        - name: Stage identifier (required)
+        - modules: Array of modules to load for this stage
+        - cmake_options: CMake options for this stage (e.g., Boost/Python paths)
+        - build_command: Custom build command (default: make -j$PARALLEL)
+        - install_command: Custom install command (default: cmake --install .)
+      Example: [{"name":"py312","modules":["python3/3.12","boost/1.87"],"cmake_options":"-DPython3_ROOT=..."}]
     required: false
     default: ''
 
   # Single-stage options (used when stages not provided)
   modules:
-    description: 'JSON array of modules to load for single-stage build (e.g., ["python/3.12", "boost/1.87"])'
+    description: 'Modules to load (JSON array or newline-separated, e.g., ["python/3.12", "boost/1.87"])'
     required: false
     default: ''
   install_command:
@@ -69,6 +129,24 @@ inputs:
     description: 'Sync module to other clusters after build'
     required: false
     default: 'true'
+  module_name:
+    description: 'Module name for sync (if different from repo name)'
+    required: false
+    default: ''
+
+  # Resource Options
+  ntasks:
+    description: 'Number of tasks for the job'
+    required: false
+    default: ''
+  gpus:
+    description: 'Number of GPUs required'
+    required: false
+    default: ''
+  queue:
+    description: 'HPC queue (nf, ng, deploy)'
+    required: false
+    default: ''
 
   # Advanced Options
   site:
@@ -83,19 +161,25 @@ inputs:
     description: 'Output directory on HPC'
     required: false
     default: ''
+  post_script:
+    description: 'Bash script to run after build (path relative to repo root)'
+    required: false
+    default: ''
+  clean_before_install:
+    description: 'Remove existing install directory before install (for nightly builds)'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
   steps:
-    - name: Parse platform configuration
-      id: platform
+    - name: Parse configuration and determine build mode
+      id: config
       shell: python3 {0}
       run: |
         import json
         import os
         import sys
-
-        platform = "${{ inputs.platform }}"
 
         # Platform to compiler mapping
         platform_map = {
@@ -129,120 +213,186 @@ runs:
             }
         }
 
+        platform = "${{ inputs.platform }}"
         if platform not in platform_map:
             print(f"::error::Unknown platform '{platform}'")
             print(f"Available platforms: {', '.join(platform_map.keys())}")
             sys.exit(1)
 
-        info = platform_map[platform]
+        compiler_info = platform_map[platform]
 
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-            for key, value in info.items():
-                f.write(f"{key}={value}\n")
-
-        print(f"Platform: {platform}")
-        print(f"Compiler: {info['compiler']}")
-        print(f"Compiler modules: {info['compiler_modules']}")
-
-    - name: Determine build mode
-      id: mode
-      shell: python3 {0}
-      run: |
-        import json
-        import os
-
+        # Determine build mode
         stages_input = '''${{ inputs.stages }}'''.strip()
         install_command = '''${{ inputs.install_command }}'''.strip()
         dry_run = '${{ inputs.dry_run }}' == 'true'
         sync_module_input = '${{ inputs.sync_module }}' == 'true'
 
-        # Determine sync behavior: sync only if not dry_run and sync_module is true
         do_sync = not dry_run and sync_module_input
 
-        # Determine build mode
         if stages_input:
-            # Multi-stage build - use ci-hpc-generic with custom template
             mode = 'multi-stage'
-            use_generic = 'true'
+            use_generic = True
             try:
                 stages = json.loads(stages_input)
-                stages_json = json.dumps(stages)
             except json.JSONDecodeError as e:
                 print(f"::error::Failed to parse stages JSON: {e}")
-                import sys
                 sys.exit(1)
         elif install_command:
-            # Single-stage with custom install - use ci-hpc-generic
             mode = 'custom-install'
-            use_generic = 'true'
-            stages_json = '[]'
+            use_generic = True
+            stages = []
         else:
-            # Standard single-stage build - use ci-hpc
             mode = 'standard'
-            use_generic = 'false'
-            stages_json = '[]'
+            use_generic = False
+            stages = []
 
+        # Write outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write(f"mode={mode}\n")
-            f.write(f"use_generic={use_generic}\n")
-            f.write(f"stages_json={stages_json}\n")
+            f.write(f"use_generic={'true' if use_generic else 'false'}\n")
             f.write(f"do_sync={'true' if do_sync else 'false'}\n")
+            f.write(f"stages_json={json.dumps(stages)}\n")
+            for key, value in compiler_info.items():
+                f.write(f"{key}={value}\n")
 
+        print(f"Platform: {platform}")
+        print(f"Compiler: {compiler_info['compiler']}")
         print(f"Build mode: {mode}")
-        print(f"Use generic: {use_generic}")
         print(f"Do sync: {do_sync}")
-        if stages_input:
-            print(f"Stages: {stages_json}")
 
-    - name: Parse dependencies
-      id: deps
+    - name: Build with build-package-hpc (standard)
+      if: steps.config.outputs.use_generic != 'true'
       shell: python3 {0}
       run: |
+        import json
         import os
+        import subprocess
+        import sys
 
+        # Build command arguments
+        cmd = ['poetry', 'run', 'python', '-m', 'build_package_hpc', 'build']
+
+        # Required arguments
+        cmd.append(f'--package=${{ github.repository }}@${{ inputs.ref_name }}')
+        cmd.append(f'--github-user=${{ inputs.github_user }}')
+        cmd.append(f'--github-token=${{ inputs.github_token }}')
+        cmd.append(f'--troika-user=${{ inputs.troika_user }}')
+        cmd.append(f'--compiler=${{ steps.config.outputs.compiler }}')
+        cmd.append(f'--compiler-cc=${{ steps.config.outputs.compiler_cc }}')
+        cmd.append(f'--compiler-cxx=${{ steps.config.outputs.compiler_cxx }}')
+        cmd.append(f'--compiler-fc=${{ steps.config.outputs.compiler_fc }}')
+        cmd.append(f'--compiler-modules=${{ steps.config.outputs.compiler_modules }}')
+        cmd.append(f'--site=${{ inputs.site }}')
+        cmd.append(f'--install-type=${{ inputs.install_type }}')
+        cmd.append(f'--sync-module=${{ steps.config.outputs.do_sync }}')
+        cmd.append(f'--self-test=${{ inputs.self_test }}')
+
+        # Optional arguments - only add if non-empty
+        def add_if_set(flag, value):
+            if value and value.strip():
+                cmd.append(f'{flag}={value}')
+
+        def add_bool_if_true(flag, value):
+            if value == 'true':
+                cmd.append(f'{flag}=true')
+
+        add_if_set('--install-prefix', '''${{ inputs.install_prefix }}'''.strip())
+        add_bool_if_true('--prefix-compiler-specific', '${{ inputs.prefix_compiler_specific }}')
+        add_if_set('--cmake-options', '''${{ inputs.cmake_options }}'''.strip())
+        add_if_set('--ctest-options', '''${{ inputs.ctest_options }}'''.strip())
+        add_if_set('--module-name', '''${{ inputs.module_name }}'''.strip())
+        add_if_set('--parallel', '''${{ inputs.parallel }}'''.strip())
+        add_if_set('--ntasks', '''${{ inputs.ntasks }}'''.strip())
+        add_if_set('--gpus', '''${{ inputs.gpus }}'''.strip())
+        add_if_set('--queue', '''${{ inputs.queue }}'''.strip())
+        add_if_set('--workdir', '''${{ inputs.workdir }}'''.strip())
+        add_if_set('--output-dir', '''${{ inputs.output_dir }}'''.strip())
+        add_if_set('--post-script', '''${{ inputs.post_script }}'''.strip())
+        add_bool_if_true('--clean-before-install', '${{ inputs.clean_before_install }}')
+
+        # Dependencies (convert newlines to commas)
         deps = ','.join('''${{ inputs.dependencies }}'''.strip().splitlines())
+        if deps:
+            cmd.append(f'--dependencies={deps}')
+
         py_deps = ','.join('''${{ inputs.python_dependencies }}'''.strip().splitlines())
+        if py_deps:
+            cmd.append(f'--python-dependencies={py_deps}')
 
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-            f.write(f"deps={deps}\n")
-            f.write(f"py_deps={py_deps}\n")
+        add_if_set('--python', '''${{ inputs.python_version }}'''.strip())
+        add_if_set('--requirements', '''${{ inputs.python_requirements }}'''.strip())
+        add_if_set('--toml-opt-dep-sections', '''${{ inputs.python_toml_opt_dep_sections }}'''.strip())
 
-    - name: Build with ci-hpc (standard)
-      if: steps.mode.outputs.use_generic != 'true'
-      uses: ecmwf/reusable-workflows/ci-hpc@cd-hpc-staged
-      with:
-        github_user: ${{ inputs.github_user }}
-        github_token: ${{ inputs.github_token }}
-        troika_user: ${{ inputs.troika_user }}
-        repository: ${{ github.repository }}@${{ inputs.ref_name }}
-        build_config: ${{ inputs.config_path }}
-        build_config_key: ${{ inputs.platform }}
-        compiler: ${{ steps.platform.outputs.compiler }}
-        compiler_cc: ${{ steps.platform.outputs.compiler_cc }}
-        compiler_cxx: ${{ steps.platform.outputs.compiler_cxx }}
-        compiler_fc: ${{ steps.platform.outputs.compiler_fc }}
-        compiler_modules: ${{ steps.platform.outputs.compiler_modules }}
-        dependencies: ${{ inputs.dependencies }}
-        python_dependencies: ${{ inputs.python_dependencies }}
-        conda_deps: ${{ inputs.conda_deps }}
-        site: ${{ inputs.site }}
-        workdir: ${{ inputs.workdir }}
-        output_dir: ${{ inputs.output_dir }}
-        sync_module: ${{ steps.mode.outputs.do_sync }}
+        conda_deps = '''${{ inputs.conda_deps }}'''.strip()
+        if conda_deps:
+            cmd.append(f'--conda-deps={conda_deps}')
 
-    - name: Generate build template
-      if: steps.mode.outputs.use_generic == 'true'
+        dep_cmake = '''${{ inputs.dependency_cmake_options }}'''.strip()
+        if dep_cmake:
+            cmd.append(f'--dependency-cmake-options={dep_cmake}')
+
+        # Modules
+        modules_input = '''${{ inputs.modules }}'''.strip()
+        if modules_input:
+            try:
+                modules = json.loads(modules_input)
+                if modules:
+                    cmd.append(f'--modules={",".join(modules)}')
+            except json.JSONDecodeError:
+                # Try as newline/comma-separated
+                modules = [m.strip() for m in modules_input.replace('\n', ',').split(',') if m.strip()]
+                if modules:
+                    cmd.append(f'--modules={",".join(modules)}')
+
+        # Environment variables
+        env_input = '''${{ inputs.env_vars }}'''.strip()
+        if env_input:
+            try:
+                env_dict = json.loads(env_input)
+                for k, v in env_dict.items():
+                    cmd.append(f'--env={k}={v}')
+            except json.JSONDecodeError:
+                print(f"::warning::Could not parse env_vars as JSON: {env_input}")
+
+        # Run the command
+        os.chdir(os.path.expanduser('~/build-package-hpc'))
+
+        # Remove any existing cancel script
+        cancel_script = 'cancel-job.sh'
+        if os.path.exists(cancel_script):
+            os.remove(cancel_script)
+
+        print("Running command:")
+        print(' '.join(cmd))
+        print()
+
+        result = subprocess.run(cmd)
+        sys.exit(result.returncode)
+
+    - name: Cancel HPC job
+      if: cancelled() && steps.config.outputs.use_generic != 'true'
+      shell: bash
+      run: |
+        cd ~/build-package-hpc
+        if [ -f "cancel-job.sh" ]; then
+            bash cancel-job.sh
+        else
+          echo "Job cancel script not found!"
+        fi
+
+    - name: Generate build template (custom/multi-stage)
+      if: steps.config.outputs.use_generic == 'true'
       id: template
       shell: python3 {0}
       run: |
         import json
         import os
 
-        mode = '${{ steps.mode.outputs.mode }}'
-        stages_json = '''${{ steps.mode.outputs.stages_json }}'''
+        mode = '${{ steps.config.outputs.mode }}'
+        stages_json = '''${{ steps.config.outputs.stages_json }}'''
         install_command = '''${{ inputs.install_command }}'''.strip()
         modules_input = '''${{ inputs.modules }}'''.strip()
-        do_sync = '${{ steps.mode.outputs.do_sync }}' == 'true'
+        do_sync = '${{ steps.config.outputs.do_sync }}' == 'true'
         lock_permissions = '${{ inputs.lock_permissions }}' == 'true'
 
         # Parse single-stage modules
@@ -251,89 +401,95 @@ runs:
             try:
                 single_modules = json.loads(modules_input)
             except json.JSONDecodeError:
-                # Try as newline-separated list
-                single_modules = [m.strip() for m in modules_input.splitlines() if m.strip()]
+                single_modules = [m.strip() for m in modules_input.replace('\n', ',').split(',') if m.strip()]
 
-        # Build the Jinja2 template for the HPC job
-        template_lines = [
+        # Build the template
+        lines = [
             '#!/bin/bash',
             'set -eux',
             '',
-            '# CD HPC Build - Generated template',
-            f'# Mode: {mode}',
+            f'# CD HPC Build - Mode: {mode}',
             '',
             '# Load compiler modules',
-            'module load ${{ steps.platform.outputs.compiler_modules }}',
+            'module load ${{ steps.config.outputs.compiler_modules }}',
             '',
         ]
 
         if mode == 'multi-stage':
             stages = json.loads(stages_json)
+            parallel = '''${{ inputs.parallel }}'''.strip() or '64'
+
             for i, stage in enumerate(stages):
                 stage_name = stage.get('name', f'stage-{i}')
                 stage_modules = stage.get('modules', [])
+                stage_cmake_options = stage.get('cmake_options', '')
+                stage_build_cmd = stage.get('build_command', '')
                 stage_install_cmd = stage.get('install_command', '')
 
-                template_lines.append(f'# === Stage {i+1}: {stage_name} ===')
+                lines.append(f'# === Stage {i+1}: {stage_name} ===')
 
-                # Load modules for this stage
+                # Load stage-specific modules
                 for mod in stage_modules:
-                    template_lines.append(f'module load {mod}')
+                    lines.append(f'module load {mod}')
 
-                template_lines.append('')
-                template_lines.append('# Build for this stage')
-                template_lines.append('# (Configure and build steps from build-package-hpc config)')
-                template_lines.append('')
+                lines.append('')
 
+                # Configure if cmake_options provided for this stage
+                if stage_cmake_options:
+                    lines.append('# Configure')
+                    lines.append(f'cmake {stage_cmake_options} .')
+                    lines.append('')
+
+                # Build if build_command provided or cmake_options triggered a reconfigure
+                if stage_build_cmd:
+                    lines.append('# Build')
+                    lines.append(stage_build_cmd)
+                    lines.append('')
+                elif stage_cmake_options:
+                    # If we reconfigured, we need to rebuild
+                    lines.append('# Build')
+                    lines.append(f'make -j{parallel}')
+                    lines.append('')
+
+                # Install
+                lines.append('# Install')
                 if stage_install_cmd:
-                    template_lines.append('# Custom install command')
-                    template_lines.append(stage_install_cmd)
+                    lines.append(stage_install_cmd)
                 else:
-                    template_lines.append('# Standard install')
-                    template_lines.append('cmake --install .')
+                    lines.append('cmake --install .')
 
-                template_lines.append('')
+                lines.append('')
 
-                # Unload modules for next stage (in reverse order)
+                # Unload stage-specific modules
                 for mod in reversed(stage_modules):
-                    template_lines.append(f'module unload {mod}')
-                template_lines.append('')
-
+                    lines.append(f'module unload {mod}')
+                lines.append('')
         else:
-            # Single custom install
             for mod in single_modules:
-                template_lines.append(f'module load {mod}')
+                lines.append(f'module load {mod}')
             if single_modules:
-                template_lines.append('')
+                lines.append('')
 
-            template_lines.append('# Build')
-            template_lines.append('# (Configure and build steps from build-package-hpc config)')
-            template_lines.append('')
-
+            lines.append('# Build and install')
             if install_command:
-                template_lines.append('# Custom install command')
-                template_lines.append(install_command)
+                lines.append(install_command)
             else:
-                template_lines.append('# Standard install')
-                template_lines.append('cmake --install .')
+                lines.append('cmake --install .')
+            lines.append('')
 
-        template_lines.append('')
-
-        # Finalization
         if lock_permissions:
-            template_lines.append('# Lock permissions')
-            template_lines.append('chmod -R a-w "$INSTALL_PREFIX" || true')
-            template_lines.append('')
+            lines.append('# Lock permissions')
+            lines.append('chmod -R a-w "$INSTALL_PREFIX" || true')
+            lines.append('')
 
         if do_sync:
-            template_lines.append('# Sync module to other clusters')
-            template_lines.append('module load modulemgr')
-            template_lines.append('modulemgr -v -f sync "$MODULE_NAME"')
-            template_lines.append('')
+            lines.append('# Sync module')
+            lines.append('module load modulemgr')
+            lines.append('modulemgr -v -f sync "$MODULE_NAME"')
+            lines.append('')
 
-        template = '\n'.join(template_lines)
+        template = '\n'.join(lines)
 
-        # Write template to output (escape for GitHub Actions)
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write("template<<EOF\n")
             f.write(template)
@@ -343,7 +499,7 @@ runs:
         print(template)
 
     - name: Build with ci-hpc-generic (custom/multi-stage)
-      if: steps.mode.outputs.use_generic == 'true'
+      if: steps.config.outputs.use_generic == 'true'
       uses: ecmwf/reusable-workflows/ci-hpc-generic@v2
       with:
         troika_user: ${{ inputs.troika_user }}
@@ -354,7 +510,4 @@ runs:
         template_data: |
           repository: ${{ github.repository }}
           ref_name: ${{ inputs.ref_name }}
-          config_path: ${{ inputs.config_path }}
           platform: ${{ inputs.platform }}
-          compiler: ${{ steps.platform.outputs.compiler }}
-          compiler_modules: ${{ steps.platform.outputs.compiler_modules }}

@@ -146,16 +146,33 @@ jobs:
 
                   elif build_type == 'hpc':
                       matrix_item['runner'] = ['self-hosted', 'linux', 'hpc-dev']
-                      matrix_item['config_path'] = build_config.get('config_path', '')
                       matrix_item['platform'] = build_config.get('platform', 'gnu-12.2.0')
+                      matrix_item['install_type'] = build_config.get('install_type', 'module')
+                      matrix_item['install_prefix'] = build_config.get('install_prefix', '')
+                      matrix_item['prefix_compiler_specific'] = str(build_config.get('prefix_compiler_specific', False)).lower()
+                      matrix_item['cmake_options'] = build_config.get('cmake_options', '')
+                      matrix_item['ctest_options'] = build_config.get('ctest_options', '')
+                      matrix_item['self_test'] = str(build_config.get('self_test', True)).lower()
+                      matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
+                      matrix_item['parallel'] = str(build_config.get('parallel', ''))
                       matrix_item['dependencies'] = build_config.get('dependencies', '')
+                      matrix_item['dependency_cmake_options'] = build_config.get('dependency_cmake_options', '')
                       matrix_item['python_dependencies'] = build_config.get('python_dependencies', '')
+                      matrix_item['python_version'] = build_config.get('python_version', '')
+                      matrix_item['python_requirements'] = build_config.get('python_requirements', '')
+                      matrix_item['python_toml_opt_dep_sections'] = build_config.get('python_toml_opt_dep_sections', '')
                       matrix_item['conda_deps'] = build_config.get('conda_deps', '')
                       matrix_item['stages'] = json.dumps(build_config.get('stages', []))
                       matrix_item['modules'] = json.dumps(build_config.get('modules', []))
                       matrix_item['install_command'] = build_config.get('install_command', '')
                       finalize = build_config.get('finalize', {})
                       matrix_item['lock_permissions'] = str(finalize.get('lock_permissions', True)).lower()
+                      matrix_item['module_name'] = build_config.get('module_name', '')
+                      matrix_item['ntasks'] = str(build_config.get('ntasks', ''))
+                      matrix_item['gpus'] = str(build_config.get('gpus', ''))
+                      matrix_item['queue'] = build_config.get('queue', '')
+                      matrix_item['post_script'] = build_config.get('post_script', '')
+                      matrix_item['clean_before_install'] = str(build_config.get('clean_before_install', False)).lower()
 
                   matrix['include'].append(matrix_item)
 
@@ -222,15 +239,32 @@ jobs:
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ secrets.HPC_CI_SSH_USER }}
-          config_path: ${{ matrix.config_path }}
           platform: ${{ matrix.platform }}
+          install_type: ${{ matrix.install_type }}
+          install_prefix: ${{ matrix.install_prefix }}
+          prefix_compiler_specific: ${{ matrix.prefix_compiler_specific }}
+          cmake_options: ${{ matrix.cmake_options }}
+          ctest_options: ${{ matrix.ctest_options }}
+          self_test: ${{ matrix.self_test }}
+          env_vars: ${{ matrix.env_vars }}
+          parallel: ${{ matrix.parallel }}
           dependencies: ${{ matrix.dependencies }}
+          dependency_cmake_options: ${{ matrix.dependency_cmake_options }}
           python_dependencies: ${{ matrix.python_dependencies }}
+          python_version: ${{ matrix.python_version }}
+          python_requirements: ${{ matrix.python_requirements }}
+          python_toml_opt_dep_sections: ${{ matrix.python_toml_opt_dep_sections }}
           conda_deps: ${{ matrix.conda_deps }}
           stages: ${{ matrix.stages }}
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
           lock_permissions: ${{ matrix.lock_permissions }}
+          module_name: ${{ matrix.module_name }}
+          ntasks: ${{ matrix.ntasks }}
+          gpus: ${{ matrix.gpus }}
+          queue: ${{ matrix.queue }}
+          post_script: ${{ matrix.post_script }}
+          clean_before_install: ${{ matrix.clean_before_install }}
 
   release:
     name: Create Release
