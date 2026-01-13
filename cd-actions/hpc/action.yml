@@ -185,6 +185,13 @@ runs:
 
         # Platform to compiler mapping
         platform_map = {
+            'gnu-14.2.0': {
+                'compiler': 'gnu-14.2.0',
+                'compiler_cc': 'gcc',
+                'compiler_cxx': 'g++',
+                'compiler_fc': 'gfortran',
+                'compiler_modules': 'gcc/14.2.0'
+            },
             'gnu-12.2.0': {
                 'compiler': 'gnu-12.2.0',
                 'compiler_cc': 'gcc',
