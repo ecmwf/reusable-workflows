@@ -111,7 +111,11 @@ runs:
 
         combined["self_coverage"] = "${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}"
 
-        if "${{ inputs.python_version }}":
+        # Get python_version from inputs or config
+        python_version = "${{ inputs.python_version }}" or combined.get("python_version", "")
+        python_requirements = combined.get("python_requirements", "")
+
+        if python_version:
           combined["cmake_options"] = f'{combined.get("cmake_options", "")} -DPython3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python'
 
         print("Combined inputs:\n", yaml.dump(combined, sort_keys=False), sep='')
@@ -120,6 +124,8 @@ runs:
           print(f"config<<EOF", file=f)
           print(json.dumps(combined, separators=(',', ':')), file=f)
           print("EOF", file=f)
+          print(f"python_version={python_version}", file=f)
+          print(f"python_requirements={python_requirements}", file=f)
 
     - name: Check upstream build status
       uses: ecmwf/reusable-workflows/check-upstream-conclusion@v2
@@ -129,15 +135,29 @@ runs:
 
     - name: Setup python
       shell: bash -e {0}
-      if: ${{ inputs.python_version }}
+      if: ${{ steps.config.outputs.python_version }}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda create -y -p $RUNNER_TEMP/bpvenv python=${{ inputs.python_version }}
+        uv venv --python ${{ steps.config.outputs.python_version }} $RUNNER_TEMP/bpvenv
         echo "Python3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python" >> "$GITHUB_ENV"
-        echo "Python3_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
-        echo "pythonLocation=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
-        echo "Python_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
+        echo "Python3_ROOT_DIR=$RUNNER_TEMP/bpvenv" >> "$GITHUB_ENV"
+        echo "pythonLocation=$RUNNER_TEMP/bpvenv" >> "$GITHUB_ENV"
+        echo "Python_ROOT_DIR=$RUNNER_TEMP/bpvenv" >> "$GITHUB_ENV"
         echo "PATH=$RUNNER_TEMP/bpvenv/bin:$PATH" >> "$GITHUB_ENV"
+        echo "VIRTUAL_ENV=$RUNNER_TEMP/bpvenv" >> "$GITHUB_ENV"
+
+    - name: Install Python test dependencies
+      shell: bash -e {0}
+      if: ${{ steps.config.outputs.python_version && steps.config.outputs.python_requirements }}
+      run: |
+        source $RUNNER_TEMP/bpvenv/bin/activate
+        REQUIREMENTS="${{ steps.config.outputs.python_requirements }}"
+        if [ -f "$REQUIREMENTS" ]; then
+          echo "Installing dependencies from $REQUIREMENTS"
+          uv pip install -r "$REQUIREMENTS"
+        else
+          echo "::error::Requirements file not found: $REQUIREMENTS"
+          exit 1
+        fi
 
     - name: Build package
       id: build

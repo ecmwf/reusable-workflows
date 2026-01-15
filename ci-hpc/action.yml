@@ -129,11 +129,11 @@ runs:
         --compiler-cxx=${{ inputs.compiler_cxx }} \
         --compiler-fc=${{ inputs.compiler_fc }} \
         --compiler-modules=${{ inputs.compiler_modules }} \
-        --python=${{ inputs.python_version }} \
-        --conda-deps="${{ inputs.conda_deps }}" \
+        ${{ inputs.python_version && format('--python={0}', inputs.python_version) }} \
+        ${{ inputs.conda_deps && format('--conda-deps={0}', inputs.conda_deps) }} \
         ${{ inputs.python_requirements && format('--requirements={0}', inputs.python_requirements) }} \
         ${{ inputs.python_toml_opt_dep_sections && format('--toml-opt-dep-sections={0}', inputs.python_toml_opt_dep_sections) }} \
-        --python-dependencies=${{ steps.inputs.outputs.py_deps }} \
+        ${{ steps.inputs.outputs.py_deps && format('--python-dependencies={0}', steps.inputs.outputs.py_deps) }} \
         --workdir=${{ inputs.workdir }} \
         --output-dir=${{ inputs.output_dir }}
 
