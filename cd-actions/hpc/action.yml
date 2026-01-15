@@ -109,8 +109,9 @@ inputs:
         - modules: Array of modules to load for this stage
         - cmake_options: CMake options for this stage (e.g., Boost/Python paths)
         - build_command: Custom build command (default: make -j$PARALLEL)
+        - test_command: Optional test command to run before install (e.g., ctest --output-on-failure -j 8)
         - install_command: Custom install command (default: cmake --install .)
-      Example: [{"name":"py312","modules":["python3/3.12","boost/1.87"],"cmake_options":"-DPython3_ROOT=..."}]
+      Example: [{"name":"py312","modules":["python3/3.12","boost/1.87"],"cmake_options":"-DPython3_ROOT=...","test_command":"ctest --output-on-failure -j 8"}]
     required: false
     default: ''
 
@@ -173,6 +174,10 @@ inputs:
     description: 'Remove existing install directory before install (for nightly builds)'
     required: false
     default: 'false'
+  install_lib_dir:
+    description: 'CMake INSTALL_LIB_DIR value (lib or lib64). If set, adds -DINSTALL_LIB_DIR to cmake options.'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -417,6 +422,7 @@ runs:
         INPUT_STAGES: ${{ inputs.stages }}
         INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
         INPUT_DEPENDENCIES: ${{ inputs.dependencies }}
+        INPUT_INSTALL_LIB_DIR: ${{ inputs.install_lib_dir }}
       run: |
         import json
         import os
@@ -424,6 +430,10 @@ runs:
         stages = json.loads(os.environ.get('INPUT_STAGES', '[]'))
         base_cmake_options = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
         dependencies_input = os.environ.get('INPUT_DEPENDENCIES', '').strip()
+        install_lib_dir = os.environ.get('INPUT_INSTALL_LIB_DIR', '').strip()
+
+        if install_lib_dir:
+            base_cmake_options = f'-DINSTALL_LIB_DIR={install_lib_dir} {base_cmake_options}'.strip()
         repository = '${{ github.repository }}'
         repo_name = repository.split('/')[-1]
         ref_name = '${{ inputs.ref_name }}'
@@ -454,6 +464,14 @@ runs:
         ]
         if use_ninja:
             lines.append('module load ninja')
+        lines.append('')
+
+        lines.append('# === Build Log Setup ===')
+        lines.append('BUILD_LOG="${INSTALL_PREFIX}/build.log"')
+        lines.append('mkdir -p "${INSTALL_PREFIX}"')
+        lines.append('exec > >(tee -a "$BUILD_LOG") 2>&1')
+        lines.append('echo "Build started: $(date -u)"')
+        lines.append(f'echo "Repository: {repository}@{ref_name}"')
         lines.append('')
 
         if deps:
@@ -501,6 +519,7 @@ runs:
             modules = stage.get('modules', [])
             cmake_opts = stage.get('cmake_options', '')
             build_command = stage.get('build_command', '')
+            test_command = stage.get('test_command', '')
             install_cmd = stage.get('install_command', '')
 
             lines.append(f'echo "=== Stage: {name} ==="')
@@ -520,6 +539,10 @@ runs:
                 lines.append(build_command)
             else:
                 lines.append(f'{build_cmd} -j{parallel}')
+
+            if test_command:
+                lines.append(f'echo "Running tests for stage: {name}"')
+                lines.append(test_command)
 
             # Install
             if install_cmd:
