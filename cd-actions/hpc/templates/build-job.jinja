@@ -67,6 +67,8 @@ fi
 module load {{ mod }}
 {% endfor %}
 
+echo "::STAGE_MARKER::{{ stage.name }}"
+
 {# Configure if first stage or stage has custom cmake_options #}
 {% if loop.index0 == 0 or stage.cmake_options %}
 {% if loop.index0 > 0 %}

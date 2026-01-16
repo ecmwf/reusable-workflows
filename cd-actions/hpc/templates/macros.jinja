@@ -379,8 +379,16 @@ log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
 # Extract package version lines (deduplicated)
 seen = set()
 readme_lines = []
+current_stage = None
 
 for line in log_content.splitlines():
+    # Track stage markers for staged builds
+    if "::STAGE_MARKER::" in line:
+        stage_match = re.search(r'::STAGE_MARKER::(\S+)', line)
+        if stage_match:
+            current_stage = stage_match.group(1)
+        continue
+
     if re.match(r'^--\s+\[', line):
         match = re.search(r'\[([^\]]+)\]', line)
         if match:
@@ -389,7 +397,10 @@ for line in log_content.splitlines():
                 seen.add(package)
                 readme_lines.append(line.strip())
     elif line.startswith("-- system"):
-        readme_lines.append(line.strip())
+        system_line = line.strip()
+        if current_stage:
+            system_line += f" [stage: {current_stage}]"
+        readme_lines.append(system_line)
 
 if readme_lines:
     with open(readme_file, "w") as f:
