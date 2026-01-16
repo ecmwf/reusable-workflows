@@ -546,10 +546,11 @@ runs:
         }
 
         # === RENDER TEMPLATE ===
-        if use_staged:
-            template = env.get_template('build-job-staged.jinja')
+        template = env.get_template('build-job.jinja')
 
-            # Parse stages
+        # Parse stages if provided
+        stages = []
+        if use_staged:
             try:
                 stages = json.loads(stages_input)
             except json.JSONDecodeError as e:
@@ -567,26 +568,15 @@ runs:
                 stage.setdefault('test_command', '')
                 stage.setdefault('install_command', '')
 
-            # Render staged template (same context + stages)
-            rendered = template.render(
-                packages=packages,
-                ci_options=ci_options,
-                generic_modules=generic_modules,
-                env=env_list,
-                github=github,
-                stages=stages,
-            )
-        else:
-            template = env.get_template('build-job.jinja')
-
-            # Render standard template
-            rendered = template.render(
-                packages=packages,
-                ci_options=ci_options,
-                generic_modules=generic_modules,
-                env=env_list,
-                github=github,
-            )
+        # Render template (stages list is empty for standard builds)
+        rendered = template.render(
+            packages=packages,
+            ci_options=ci_options,
+            generic_modules=generic_modules,
+            env=env_list,
+            github=github,
+            stages=stages,
+        )
 
         # Generate sbatch options using the macro from macros.jinja
         sbatch_template = env.from_string(
