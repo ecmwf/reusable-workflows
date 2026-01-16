@@ -426,7 +426,20 @@ runs:
       run: |
         import json
         import os
+        from pathlib import Path
+        from jinja2 import Environment, FileSystemLoader
 
+        # Load Jinja templates
+        action_dir = Path('${{ github.action_path }}')
+        template_dir = action_dir / 'templates'
+        env = Environment(
+            loader=FileSystemLoader(template_dir),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+        template = env.get_template('build-job.jinja')
+
+        # Parse inputs from environment variables
         stages = json.loads(os.environ.get('INPUT_STAGES', '[]'))
         base_cmake_options = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
         dependencies_input = os.environ.get('INPUT_DEPENDENCIES', '').strip()
@@ -434,6 +447,7 @@ runs:
 
         if install_lib_dir:
             base_cmake_options = f'-DINSTALL_LIB_DIR={install_lib_dir} {base_cmake_options}'.strip()
+
         repository = '${{ github.repository }}'
         repo_name = repository.split('/')[-1]
         ref_name = '${{ inputs.ref_name }}'
@@ -451,210 +465,74 @@ runs:
             generator = ''
             build_cmd = 'make'
 
-        deps = [d.strip() for d in dependencies_input.splitlines() if d.strip()]
+        # Parse dependencies
+        deps = []
+        for dep in dependencies_input.splitlines():
+            dep = dep.strip()
+            if not dep:
+                continue
+            if '@' in dep:
+                dep_repo, dep_ref = dep.rsplit('@', 1)
+            else:
+                dep_repo, dep_ref = dep, 'main'
+            dep_name = dep_repo.split('/')[-1]
+            deps.append({'repo': dep_repo, 'ref': dep_ref, 'name': dep_name})
 
-        lines = [
-            f'# Multi-stage CD build for {repository}@{ref_name}',
-            '',
-            'INSTALL_PREFIX="{{ install_prefix }}"',
-            'DEPS_PREFIX="$' + '{PWD}/deps"',
-            'export INSTALL_PREFIX',
-            '',
-            f'module load {compiler_modules}',
-        ]
-        if use_ninja:
-            lines.append('module load ninja')
-        lines.append('')
-
-        lines.append('# === Build Log Setup ===')
-        lines.append('BUILD_LOG="${INSTALL_PREFIX}/build.log"')
-        lines.append('mkdir -p "${INSTALL_PREFIX}"')
-        lines.append('exec > >(tee "$BUILD_LOG") 2>&1')
-        lines.append('echo "Build started: $(date -u)"')
-        lines.append(f'echo "Repository: {repository}@{ref_name}"')
-        lines.append('')
-
-        if deps:
-            lines.append('# === Dependencies ===')
-            lines.append('mkdir -p "$DEPS_PREFIX"')
-            lines.append('')
-
-            for dep in deps:
-                if '@' in dep:
-                    dep_repo, dep_ref = dep.rsplit('@', 1)
-                else:
-                    dep_repo, dep_ref = dep, 'main'
-                dep_name = dep_repo.split('/')[-1]
-
-                lines.append(f'# {dep_name}')
-                lines.append(f'git clone --depth 1 --branch "{dep_ref}" "https://{{{{ github_user }}}}:{{{{ github_token }}}}@github.com/{dep_repo}.git"')
-
-                if dep_name == 'ecbuild':
-                    # ecbuild just needs to be in PATH
-                    lines.append(f'export PATH="$PWD/{dep_name}/bin:$PATH"')
-                else:
-                    # Build and install other deps
-                    lines.append(f'mkdir -p {dep_name}/build && cd {dep_name}/build')
-                    cmake_cmd = f'ecbuild --prefix="$DEPS_PREFIX" {generator} ..'.replace('  ', ' ').strip()
-                    lines.append(cmake_cmd)
-                    lines.append(f'{build_cmd} -j{parallel}')
-                    lines.append(f'{build_cmd} install')
-                    lines.append('cd ../..')
-
-                lines.append('')
-
-            lines.append('export CMAKE_PREFIX_PATH="$DEPS_PREFIX:$' + '{CMAKE_PREFIX_PATH:-}"')
-            lines.append('export PATH="$DEPS_PREFIX/bin:$PATH"')
-            lines.append('export LD_LIBRARY_PATH="$DEPS_PREFIX/lib:$' + '{LD_LIBRARY_PATH:-}"')
-            lines.append('')
-
-        lines.append('# === Main package ===')
-        lines.append(f'git clone --depth 1 --branch "{ref_name}" "https://{{{{ github_user }}}}:{{{{ github_token }}}}@github.com/{repository}.git"')
-        lines.append(f'cd {repo_name}')
-        lines.append('mkdir -p build && cd build')
-        lines.append('')
-
+        # Normalize stages to ensure required fields
         for i, stage in enumerate(stages):
-            name = stage.get('name', f'stage-{i}')
-            modules = stage.get('modules', [])
-            cmake_opts = stage.get('cmake_options', '')
-            build_command = stage.get('build_command', '')
-            test_command = stage.get('test_command', '')
-            install_cmd = stage.get('install_command', '')
+            stage.setdefault('name', f'stage-{i}')
+            stage.setdefault('modules', [])
+            stage.setdefault('cmake_options', '')
+            stage.setdefault('build_command', '')
+            stage.setdefault('test_command', '')
+            stage.setdefault('install_command', '')
 
-            lines.append(f'echo "=== Stage: {name} ==="')
+        # Render template
+        rendered = template.render(
+            repository=repository,
+            repo_name=repo_name,
+            ref_name=ref_name,
+            compiler_modules=compiler_modules,
+            use_ninja=use_ninja,
+            parallel=parallel,
+            dependencies=deps,
+            stages=stages,
+            base_cmake_options=base_cmake_options,
+            build_cmd=build_cmd,
+            generator=generator,
+            lock_permissions=lock_permissions,
+            do_sync=do_sync,
+            module_name=module_name,
+        )
 
-            # Load stage modules
-            for mod in modules:
-                lines.append(f'module load {mod}')
-
-            if i == 0 or cmake_opts:
-                if i > 0:
-                    lines.append('cd .. && rm -rf build && mkdir build && cd build')
-                opts = f'{base_cmake_options} {cmake_opts}'.strip()
-                cmake_line = f'cmake .. {generator} -DCMAKE_INSTALL_PREFIX="$' + '{INSTALL_PREFIX}" ' + opts
-                lines.append(cmake_line.replace('  ', ' ').strip())
-
-            if build_command:
-                lines.append(build_command)
-            else:
-                lines.append(f'{build_cmd} -j{parallel}')
-
-            if test_command:
-                lines.append(f'echo "Running tests for stage: {name}"')
-                lines.append(test_command)
-
-            # Install
-            if install_cmd:
-                lines.append(install_cmd)
-            else:
-                lines.append('cmake --install .')
-
-            for mod in reversed(modules):
-                lines.append(f'module unload {mod}')
-
-            lines.append('')
-
-        # Generate README.txt with package versions from build log
-        lines.append('# === Generate README ===')
-        lines.append('echo "Generating README.txt"')
-        lines.append("python3 << 'GENERATE_README'")
-        lines.append('import os')
-        lines.append('import re')
-        lines.append('')
-        lines.append('install_prefix = os.environ.get("INSTALL_PREFIX", "")')
-        lines.append('build_log = os.path.join(install_prefix, "build.log")')
-        lines.append('readme_file = os.path.join(install_prefix, "README.txt")')
-        lines.append('')
-        lines.append('if not os.path.exists(build_log):')
-        lines.append('    print("Build log not found, skipping README generation")')
-        lines.append('    exit(0)')
-        lines.append('')
-        lines.append('with open(build_log, "r", errors="replace") as f:')
-        lines.append('    log_content = f.read()')
-        lines.append('')
-        lines.append("# Remove ANSI color codes")
-        lines.append(r"log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)")
-        lines.append('')
-        lines.append('# Extract package version lines (deduplicated)')
-        lines.append('seen = set()')
-        lines.append('readme_lines = []')
-        lines.append('current_stage = None')
-        lines.append('')
-        lines.append('for line in log_content.splitlines():')
-        lines.append(r"    stage_match = re.match(r'^=== Stage: (.+) ===$', line)")
-        lines.append('    if stage_match:')
-        lines.append('        current_stage = stage_match.group(1)')
-        lines.append('        continue')
-        lines.append(r"    if re.match(r'^--\s+\[', line):")
-        lines.append(r"        match = re.search(r'\[([^\]]+)\]', line)")
-        lines.append('        if match:')
-        lines.append('            package = match.group(1)')
-        lines.append('            if package not in seen:')
-        lines.append('                seen.add(package)')
-        lines.append('                readme_lines.append(line.strip())')
-        lines.append('    elif line.startswith("-- system"):')
-        lines.append('        sys_line = line.strip()')
-        lines.append('        if current_stage:')
-        lines.append('            sys_line = sys_line.replace("-- system :", f"-- system ({current_stage}):")')
-        lines.append('        readme_lines.append(sys_line)')
-        lines.append('')
-        lines.append('if readme_lines:')
-        lines.append('    with open(readme_file, "w") as f:')
-        lines.append(r'        f.write("\n".join(readme_lines) + "\n")')
-        lines.append('    print(f"Generated README.txt with {len(readme_lines)} entries:")')
-        lines.append(r'    print("\n".join(readme_lines))')
-        lines.append('else:')
-        lines.append('    print("No package version info found in build log")')
-        lines.append('GENERATE_README')
-        lines.append('')
-
-        if lock_permissions:
-            lines.append('chmod -R a-w "${INSTALL_PREFIX}" || true')
-
-        if do_sync:
-            lines.append('module load modulemgr')
-            lines.append(f'modulemgr -v -f sync "{module_name}"')
-
-        template = '\n'.join(lines)
-
+        # Generate sbatch options using the macro from macros.jinja
         site = '${{ inputs.site }}'
         queue = '''${{ inputs.queue }}'''.strip() or 'nf'
         ntasks = '''${{ inputs.ntasks }}'''.strip() or '1'
         gpus = '''${{ inputs.gpus }}'''.strip()
 
-        if site == 'lumi':
-            sbatch_lines = [
-                '#SBATCH --account=project_465000454',
-                '#SBATCH --time=01:00:00',
-                f'#SBATCH --ntasks={ntasks}',
-                f'#SBATCH --cpus-per-task={parallel}',
-                '#SBATCH --mem-per-cpu=1750',
-                '#SBATCH --partition=small',
-            ]
-        else:
-            sbatch_lines = [
-                f'# TROIKA queue={queue}',
-                '#SBATCH --gres=ssdtmp:30G',
-                '#SBATCH --mem=64GB',
-                f'#SBATCH --cpus-per-task={parallel}',
-                f'#SBATCH --ntasks={ntasks}',
-            ]
-            if gpus:
-                sbatch_lines.append(f'#SBATCH --gres=gpu:{gpus}')
+        sbatch_template = env.from_string(
+            "{% from 'macros.jinja' import sbatch_options with context %}{{ sbatch_options() }}"
+        )
+        sbatch = sbatch_template.render(
+            site=site,
+            queue=queue,
+            ntasks=ntasks,
+            parallel=parallel,
+            gpus=gpus,
+        ).strip()
 
-        sbatch = '\n'.join(sbatch_lines)
-
+        # Write outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write("template<<EOF\n")
-            f.write(template)
+            f.write(rendered)
             f.write("\nEOF\n")
             f.write("sbatch_options<<SBATCH_EOF\n")
             f.write(sbatch)
             f.write("\nSBATCH_EOF\n")
 
         print("Generated template:")
-        print(template)
+        print(rendered)
         print("\nSBATCH options:")
         print(sbatch)
 

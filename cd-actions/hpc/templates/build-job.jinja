@@ -1,0 +1,5 @@
+{% from 'macros.jinja' import job_header, build_dependencies, build_stages, job_footer with context %}
+{{ job_header() }}
+{{ build_dependencies() }}
+{{ build_stages() }}
+{{ job_footer() }}

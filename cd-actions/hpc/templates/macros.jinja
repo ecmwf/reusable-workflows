@@ -1,0 +1,186 @@
+{# Reusable macros for HPC build templates #}
+
+{# SBATCH options for job submission #}
+{% macro sbatch_options() %}
+{% if site == 'lumi' %}
+#SBATCH --account=project_465000454
+#SBATCH --time=01:00:00
+#SBATCH --ntasks={{ ntasks }}
+#SBATCH --cpus-per-task={{ parallel }}
+#SBATCH --mem-per-cpu=1750
+#SBATCH --partition=small
+{% else %}
+# TROIKA queue={{ queue }}
+#SBATCH --gres=ssdtmp:30G
+#SBATCH --mem=64GB
+#SBATCH --cpus-per-task={{ parallel }}
+#SBATCH --ntasks={{ ntasks }}
+{% if gpus %}
+#SBATCH --gres=gpu:{{ gpus }}
+{% endif %}
+{% endif %}
+{% endmacro %}
+
+{# Job header: environment setup, modules, build log #}
+{% macro job_header() %}
+# Multi-stage CD build for {{ repository }}@{{ ref_name }}
+
+INSTALL_PREFIX="{{ '{{' }} install_prefix {{ '}}' }}"
+DEPS_PREFIX="${PWD}/deps"
+export INSTALL_PREFIX
+
+module load {{ compiler_modules }}
+{% if use_ninja %}
+module load ninja
+{% endif %}
+
+# === Build Log Setup ===
+BUILD_LOG="${INSTALL_PREFIX}/build.log"
+mkdir -p "${INSTALL_PREFIX}"
+exec > >(tee "$BUILD_LOG") 2>&1
+echo "Build started: $(date -u)"
+echo "Repository: {{ repository }}@{{ ref_name }}"
+{% endmacro %}
+
+{# Load a list of HPC modules #}
+{% macro load_modules(modules) %}
+{% for mod in modules %}
+module load {{ mod }}
+{% endfor %}
+{% endmacro %}
+
+{# Unload modules in reverse order #}
+{% macro unload_modules(modules) %}
+{% for mod in modules|reverse %}
+module unload {{ mod }}
+{% endfor %}
+{% endmacro %}
+
+{# Build all dependencies #}
+{% macro build_dependencies() %}
+{% if dependencies %}
+
+# === Dependencies ===
+mkdir -p "$DEPS_PREFIX"
+
+{% for dep in dependencies %}
+# {{ dep.name }}
+git clone --depth 1 --branch "{{ dep.ref }}" "https://{{ '{{' }} github_user {{ '}}' }}:{{ '{{' }} github_token {{ '}}' }}@github.com/{{ dep.repo }}.git"
+{% if dep.name == 'ecbuild' %}
+export PATH="$PWD/{{ dep.name }}/bin:$PATH"
+{% else %}
+mkdir -p {{ dep.name }}/build && cd {{ dep.name }}/build
+ecbuild --prefix="$DEPS_PREFIX" {{ generator }} ..
+{{ build_cmd }} -j{{ parallel }}
+{{ build_cmd }} install
+cd ../..
+{% endif %}
+
+{% endfor %}
+export CMAKE_PREFIX_PATH="$DEPS_PREFIX:${CMAKE_PREFIX_PATH:-}"
+export PATH="$DEPS_PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$DEPS_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+{% endif %}
+{% endmacro %}
+
+{# Build all stages of the main package #}
+{% macro build_stages() %}
+
+# === Main package ===
+git clone --depth 1 --branch "{{ ref_name }}" "https://{{ '{{' }} github_user {{ '}}' }}:{{ '{{' }} github_token {{ '}}' }}@github.com/{{ repository }}.git"
+cd {{ repo_name }}
+mkdir -p build && cd build
+
+{% for stage in stages %}
+echo "=== Stage: {{ stage.name }} ==="
+{{ load_modules(stage.modules) -}}
+{% if loop.index0 == 0 or stage.cmake_options %}
+{% if loop.index0 > 0 %}
+cd .. && rm -rf build && mkdir build && cd build
+{% endif %}
+cmake .. {{ generator }} -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" {{ base_cmake_options }} {{ stage.cmake_options }}
+{% endif %}
+{% if stage.build_command %}
+{{ stage.build_command }}
+{% else %}
+{{ build_cmd }} -j{{ parallel }}
+{% endif %}
+{% if stage.test_command %}
+echo "Running tests for stage: {{ stage.name }}"
+{{ stage.test_command }}
+{% endif %}
+{% if stage.install_command %}
+{{ stage.install_command }}
+{% else %}
+cmake --install .
+{% endif %}
+{{ unload_modules(stage.modules) }}
+{% endfor %}
+{% endmacro %}
+
+{# Job footer: README generation, permissions, module sync #}
+{% macro job_footer() %}
+
+# === Generate README ===
+echo "Generating README.txt"
+{% raw %}
+python3 << 'GENERATE_README'
+import os
+import re
+
+install_prefix = os.environ.get("INSTALL_PREFIX", "")
+build_log = os.path.join(install_prefix, "build.log")
+readme_file = os.path.join(install_prefix, "README.txt")
+
+if not os.path.exists(build_log):
+    print("Build log not found, skipping README generation")
+    exit(0)
+
+with open(build_log, "r", errors="replace") as f:
+    log_content = f.read()
+
+# Remove ANSI color codes
+log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
+
+# Extract package version lines (deduplicated)
+seen = set()
+readme_lines = []
+current_stage = None
+
+for line in log_content.splitlines():
+    stage_match = re.match(r'^=== Stage: (.+) ===$', line)
+    if stage_match:
+        current_stage = stage_match.group(1)
+        continue
+    if re.match(r'^--\s+\[', line):
+        match = re.search(r'\[([^\]]+)\]', line)
+        if match:
+            package = match.group(1)
+            if package not in seen:
+                seen.add(package)
+                readme_lines.append(line.strip())
+    elif line.startswith("-- system"):
+        sys_line = line.strip()
+        if current_stage:
+            sys_line = sys_line.replace("-- system :", f"-- system ({current_stage}):")
+        readme_lines.append(sys_line)
+
+if readme_lines:
+    with open(readme_file, "w") as f:
+        f.write("\n".join(readme_lines) + "\n")
+    print(f"Generated README.txt with {len(readme_lines)} entries:")
+    print("\n".join(readme_lines))
+else:
+    print("No package version info found in build log")
+GENERATE_README
+{% endraw %}
+{% if lock_permissions %}
+
+chmod -R a-w "${INSTALL_PREFIX}" || true
+{% endif %}
+{% if do_sync %}
+
+module load modulemgr
+modulemgr -v -f sync "{{ module_name }}"
+{% endif %}
+{% endmacro %}
