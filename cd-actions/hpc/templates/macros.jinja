@@ -148,8 +148,68 @@ export PATH="{{ ci_options.workdir }}/{{ package.name }}/bin:$PATH"
 {# === Module Synchronization === #}
 {% macro sync_module(package) -%}
 {% if ci_options.sync_module and package.type == "main" %}
+{{ start_group("Generate README.txt") }}
+python3 << 'GENERATE_README'
+import os
+import re
+
+install_prefix = "{{ package.prefix }}"
+build_log = "{{ ci_options.install_prefix }}/build.log"
+readme_file = os.path.join(install_prefix, "README.txt")
+
+if not os.path.isdir(install_prefix):
+    print(f"Install prefix {install_prefix} not found, skipping README generation")
+    exit(0)
+
+if not os.path.exists(build_log):
+    print(f"Build log not found at {build_log}, skipping README generation")
+    exit(0)
+
+with open(build_log, "r", errors="replace") as f:
+    log_content = f.read()
+
+# Remove ANSI color codes
+log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
+
+# Extract package version lines (deduplicated)
+seen = set()
+readme_lines = []
+current_stage = None
+
+for line in log_content.splitlines():
+    # Track stage markers for staged builds
+    if "::STAGE_MARKER::" in line:
+        stage_match = re.search(r'::STAGE_MARKER::(\S+)', line)
+        if stage_match:
+            current_stage = stage_match.group(1)
+        continue
+
+    if re.match(r'^--\s+\[', line):
+        match = re.search(r'\[([^\]]+)\]', line)
+        if match:
+            pkg = match.group(1)
+            if pkg not in seen:
+                seen.add(pkg)
+                readme_lines.append(line.strip())
+    elif line.startswith("-- system"):
+        system_line = line.strip()
+        if current_stage:
+            system_line += f" [stage: {current_stage}]"
+        readme_lines.append(system_line)
+
+if readme_lines:
+    with open(readme_file, "w") as f:
+        f.write("\n".join(readme_lines) + "\n")
+    print(f"Generated README.txt with {len(readme_lines)} entries:")
+    print("\n".join(readme_lines[:10]))
+    if len(readme_lines) > 10:
+        print(f"... and {len(readme_lines) - 10} more entries")
+else:
+    print("No package version info found in build log")
+GENERATE_README
+{{ end_group() }}
+
 {{ start_group("Synchronize module") }}
-find {{ package.prefix }} -type f -or -type d -exec chmod a-w {} \;
 module load modulemgr
 modulemgr -v -f sync {{ ci_options.module_name or package.name }}
 /home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ ci_options.module_name or package.name }}
