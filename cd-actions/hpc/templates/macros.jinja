@@ -354,32 +354,23 @@ fi
 
 # === Generate README ===
 {{ start_group("Generate README.txt") }}
-{% raw %}
 python3 << 'GENERATE_README'
 import os
 import re
 
-# Get install prefix from main package
-install_prefix = os.environ.get("INSTALL_PATH", "").split(":")[0] if os.environ.get("INSTALL_PATH") else ""
-
-if not install_prefix or not os.path.isdir(install_prefix):
-    print("Install prefix not found or not a directory, skipping README generation")
-    exit(0)
-
-# Look for build log in the output file
-output_path = os.environ.get("OUTPUT_PATH", "")
-if output_path and os.path.exists(output_path):
-    log_path = output_path
-else:
-    log_path = os.path.join(install_prefix, "build.log")
-
+install_prefix = "{{ ci_options.install_prefix }}"
+build_log = os.path.join(install_prefix, "build.log")
 readme_file = os.path.join(install_prefix, "README.txt")
 
-if not os.path.exists(log_path):
-    print(f"Build log not found at {log_path}, skipping README generation")
+if not os.path.isdir(install_prefix):
+    print(f"Install prefix {install_prefix} not found, skipping README generation")
     exit(0)
 
-with open(log_path, "r", errors="replace") as f:
+if not os.path.exists(build_log):
+    print(f"Build log not found at {build_log}, skipping README generation")
+    exit(0)
+
+with open(build_log, "r", errors="replace") as f:
     log_content = f.read()
 
 # Remove ANSI color codes
@@ -410,16 +401,12 @@ if readme_lines:
 else:
     print("No package version info found in build log")
 GENERATE_README
-{% endraw %}
 {{ end_group() }}
 
 {% if ci_options.lock_permissions %}
 {{ start_group("Lock permissions") }}
-{# Find the main package prefix and lock it #}
-{% for package in packages if package.type == "main" %}
-echo "Locking permissions on {{ package.prefix }}"
-chmod -R a-w "{{ package.prefix }}" || true
-{% endfor %}
+echo "Locking permissions on {{ ci_options.install_prefix }}"
+chmod -R a-w "{{ ci_options.install_prefix }}" || true
 {{ end_group() }}
 {% endif %}
 

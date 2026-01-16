@@ -1,5 +1,5 @@
 name: HPC Module Deployer
-description: Build and deploy HPC modules with support for CMake and Python packages
+description: Build and deploy HPC modules with support for CMake, Python packages, and multi-stage builds
 
 inputs:
   # Standard CD inputs
@@ -108,9 +108,28 @@ inputs:
     required: false
     default: ''
 
-  # Single-stage options
+  # Stage Configuration (for multi-stage builds)
+  stages:
+    description: |
+      JSON array of build stages for multi-Python or multi-config builds.
+      Each stage object can have:
+        - name: Stage identifier (required)
+        - modules: Array of modules to load for this stage
+        - cmake_options: CMake options for this stage (e.g., Boost/Python paths)
+        - build_command: Custom build command (default: make -j$PARALLEL)
+        - test_command: Optional test command to run before install (e.g., ctest --output-on-failure -j 8)
+        - install_command: Custom install command (default: cmake --install .)
+      Example: [{"name":"py312","modules":["python3/3.12","boost/1.87"],"cmake_options":"-DPython3_ROOT=...","test_command":"ctest --output-on-failure -j 8"}]
+    required: false
+    default: ''
+
+  # Single-stage options (used when stages not provided)
   modules:
     description: 'Modules to load (JSON array or newline-separated, e.g., ["python/3.12", "boost/1.87"])'
+    required: false
+    default: ''
+  install_command:
+    description: 'Custom install command (overrides default cmake --install). Use $INSTALL_PREFIX for install path.'
     required: false
     default: ''
 
@@ -174,6 +193,8 @@ runs:
     - name: Parse configuration
       id: config
       shell: python3 {0}
+      env:
+        INPUT_STAGES: ${{ inputs.stages }}
       run: |
         import json
         import os
@@ -226,6 +247,10 @@ runs:
 
         compiler_info = platform_map[platform]
 
+        # Check if staged build
+        stages_input = os.environ.get('INPUT_STAGES', '').strip()
+        use_staged = bool(stages_input)
+
         dry_run = '${{ inputs.dry_run }}' == 'true'
         sync_module_input = '${{ inputs.sync_module }}' == 'true'
         do_sync = not dry_run and sync_module_input
@@ -248,6 +273,7 @@ runs:
 
         # Write outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f"use_staged={'true' if use_staged else 'false'}\n")
             f.write(f"do_sync={'true' if do_sync else 'false'}\n")
             f.write(f"install_prefix={install_prefix}\n")
             for key, value in compiler_info.items():
@@ -255,6 +281,7 @@ runs:
 
         print(f"Platform: {platform}")
         print(f"Compiler: {compiler_info['compiler']}")
+        print(f"Build mode: {'staged' if use_staged else 'standard'}")
         print(f"Install prefix: {install_prefix}")
         print(f"Do sync: {do_sync}")
 
@@ -262,6 +289,7 @@ runs:
       id: template
       shell: python3 {0}
       env:
+        INPUT_STAGES: ${{ inputs.stages }}
         INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
         INPUT_CTEST_OPTIONS: ${{ inputs.ctest_options }}
         INPUT_DEPENDENCIES: ${{ inputs.dependencies }}
@@ -286,7 +314,10 @@ runs:
             trim_blocks=True,
             lstrip_blocks=True,
         )
-        template = env.get_template('build-job.jinja')
+
+        # Check if staged build
+        stages_input = os.environ.get('INPUT_STAGES', '').strip()
+        use_staged = bool(stages_input)
 
         # Parse inputs from environment variables
         cmake_options_input = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
@@ -323,6 +354,19 @@ runs:
         conda_deps = '''${{ inputs.conda_deps }}'''.strip()
         post_script = '''${{ inputs.post_script }}'''.strip() or None
 
+        if use_ninja:
+            generator = '-GNinja'
+            build_cmd = 'ninja'
+        else:
+            generator = ''
+            build_cmd = 'make'
+
+        # Build generic modules list (compiler + ninja if enabled)
+        generic_modules = compiler_modules.split(',')
+        if use_ninja:
+            generic_modules.append('ninja')
+
+        # === BUILD COMMON CONTEXT ===
         # Parse cmake options (comma-separated to list)
         cmake_options = [opt.strip() for opt in cmake_options_input.split(',') if opt.strip()] if cmake_options_input else []
         ctest_options = [opt.strip() for opt in ctest_options_input.split(',') if opt.strip()] if ctest_options_input else []
@@ -356,11 +400,6 @@ runs:
                 env_list = [f'{k}={v}' for k, v in env_dict.items()]
             except json.JSONDecodeError:
                 print(f"::warning::Could not parse env_vars as JSON")
-
-        # Build generic modules list (compiler + ninja if enabled)
-        generic_modules = compiler_modules.split(',')
-        if use_ninja:
-            generic_modules.append('ninja')
 
         # Helper to generate cache key
         def cache_key(name, ref, cmake_opts):
@@ -406,8 +445,8 @@ runs:
                 'subdir': '',
             })
 
-        # Add main package (CMake)
-        if not python_version:
+        # Add main package (CMake) - always add for staged builds, or when no python_version
+        if use_staged or not python_version:
             packages.append({
                 'name': repo_name,
                 'owner': repo_owner,
@@ -506,14 +545,48 @@ runs:
             'token': '{{ github_token }}',
         }
 
-        # Render template
-        rendered = template.render(
-            packages=packages,
-            ci_options=ci_options,
-            generic_modules=generic_modules,
-            env=env_list,
-            github=github,
-        )
+        # === RENDER TEMPLATE ===
+        if use_staged:
+            template = env.get_template('build-job-staged.jinja')
+
+            # Parse stages
+            try:
+                stages = json.loads(stages_input)
+            except json.JSONDecodeError as e:
+                print(f"::error::Failed to parse stages JSON: {e}")
+                print(f"Input was: {stages_input[:200]}...")
+                import sys
+                sys.exit(1)
+
+            # Normalize stages to ensure required fields
+            for i, stage in enumerate(stages):
+                stage.setdefault('name', f'stage-{i}')
+                stage.setdefault('modules', [])
+                stage.setdefault('cmake_options', '')
+                stage.setdefault('build_command', '')
+                stage.setdefault('test_command', '')
+                stage.setdefault('install_command', '')
+
+            # Render staged template (same context + stages)
+            rendered = template.render(
+                packages=packages,
+                ci_options=ci_options,
+                generic_modules=generic_modules,
+                env=env_list,
+                github=github,
+                stages=stages,
+            )
+        else:
+            template = env.get_template('build-job.jinja')
+
+            # Render standard template
+            rendered = template.render(
+                packages=packages,
+                ci_options=ci_options,
+                generic_modules=generic_modules,
+                env=env_list,
+                github=github,
+            )
 
         # Generate sbatch options using the macro from macros.jinja
         sbatch_template = env.from_string(
