@@ -1,6 +1,18 @@
 {# Reusable macros for HPC build templates #}
+{# Combined from build-package-hpc/templates/macros.jinja with enhanced features #}
 
-{# SBATCH options for job submission #}
+{# === GitHub Actions Logging === #}
+{% macro start_group(msg) -%}
+echo "::group::{{ msg }}"
+{%- endmacro %}
+
+
+{% macro end_group() -%}
+echo "::endgroup::"
+{%- endmacro %}
+
+
+{# === SBATCH Options === #}
 {% macro sbatch_options() %}
 {% if site == 'lumi' %}
 #SBATCH --account=project_465000454
@@ -21,122 +33,353 @@
 {% endif %}
 {% endmacro %}
 
-{# Job header: environment setup, modules, build log #}
-{% macro job_header() %}
-# Multi-stage CD build for {{ repository }}@{{ ref_name }}
 
-INSTALL_PREFIX="{{ '{{' }} install_prefix {{ '}}' }}"
-DEPS_PREFIX="${PWD}/deps"
-export INSTALL_PREFIX
+{% macro gpu_directive(gpus) -%}
+{% if (gpus is defined) and gpus > 0 %}
+#SBATCH --gres=gpu:{{ gpus }}
+{%- endif %}
+{%- endmacro %}
 
-module load {{ compiler_modules }}
-{% if use_ninja %}
-module load ninja
+
+{# === Build Log and Output === #}
+{% macro setup_output_file(path) -%}
+touch {{ path }}
+: > {{ path }}
+exec 1> {{ path }} 2>&1
+{%- endmacro %}
+
+
+{% macro print_options(options) -%}
+{% if (options is defined) and options %}
+{{ options|join(" ") }}
+{%- endif %}
+{%- endmacro %}
+
+
+{% macro print_ecbundle_options(options) -%}
+{% if (options is defined) and options %}
+--cmake="{{ options|join(" ") }}"
+{%- endif %}
+{%- endmacro %}
+
+
+{# === Directory Navigation === #}
+{% macro cd_pkg_subdir(package) -%}
+cd {{ ci_options.workdir }}/{{ package.name }}
+{% if (package.subdir is defined) and package.subdir %}
+cd {{ package.subdir }}
 {% endif %}
+{%- endmacro %}
 
-# === Build Log Setup ===
-BUILD_LOG="${INSTALL_PREFIX}/build.log"
-mkdir -p "${INSTALL_PREFIX}"
-exec > >(tee "$BUILD_LOG") 2>&1
-echo "Build started: $(date -u)"
-echo "Repository: {{ repository }}@{{ ref_name }}"
-{% endmacro %}
 
-{# Load a list of HPC modules #}
-{% macro load_modules(modules) %}
-{% for mod in modules %}
-module load {{ mod }}
+{# === Git Operations === #}
+{% macro git_fetch(package) -%}
+    {# Note that for the benefit of packages that use auto versioning, we need a fetch deeper than 1, plus tags #}
+    {{ start_group( "Fetching " + package.type + " package: " + package.name) }}
+    cd {{ ci_options.workdir }}
+    mkdir {{ ci_options.workdir }}/{{ package.name }}
+    cd {{ ci_options.workdir }}/{{ package.name }}
+    git init
+    git remote add origin https://{{ github.user }}:{{ github.token }}@github.com/{{ package.owner }}/{{ package.repo }}.git
+    git fetch --depth 20 --tags origin {{ package.ref }}
+    git checkout FETCH_HEAD
+    {{ end_group() }}
+{%- endmacro %}
+
+
+{# === Version Extraction === #}
+{% macro set_package_version(package) -%}
+    {{ cd_pkg_subdir(package) }}
+
+    if [ -e VERSION ]; then
+        export PACKAGE_VERSION=$(cat VERSION)
+    elif [ -e CMakeLists.txt ]; then
+        export PACKAGE_VERSION=$(grep -oP {% raw %} 'project\(.*VERSION\s+\K[0-9]+(\.[0-9]+){0,3}' {% endraw %} CMakeLists.txt)
+    elif [ -e bundle.yml ];then
+        export PACKAGE_VERSION=$(python3 -c "import yaml; print(yaml.safe_load(open('bundle.yml', 'r'))['version'])")
+    else
+        echo "Error: Could not find CMakeLists.txt, VERSION, or bundle.yml"
+        error_trap
+    fi
+
+    if [ -z "$PACKAGE_VERSION" ]; then
+        echo "Error: Could not parse package version."
+        error_trap
+    fi
+
+    echo "{{ package.name }} detected version $PACKAGE_VERSION"
+{%- endmacro %}
+
+
+{# === Environment Setup === #}
+{% macro set_env(variables) -%}
+{{ start_group("Export environment variables") }}
+{% for item in variables %}
+echo "{{ item }}"
+export {{ item }}
 {% endfor %}
-{% endmacro %}
+{{ end_group() }}
+{%- endmacro %}
 
-{# Unload modules in reverse order #}
-{% macro unload_modules(modules) %}
-{% for mod in modules|reverse %}
-module unload {{ mod }}
+
+{% macro load_modules(generic_modules, package_modules) -%}
+{{ start_group("Loading modules") }}
+module reset
+{% for item in generic_modules %}
+echo "Loading {{ item }}"
+module load {{ item }}
 {% endfor %}
-{% endmacro %}
-
-{# Build all dependencies #}
-{% macro build_dependencies() %}
-{% if dependencies %}
-
-# === Dependencies ===
-mkdir -p "$DEPS_PREFIX"
-
-{% for dep in dependencies %}
-# {{ dep.name }}
-git clone --depth 1 --branch "{{ dep.ref }}" "https://{{ '{{' }} github_user {{ '}}' }}:{{ '{{' }} github_token {{ '}}' }}@github.com/{{ dep.repo }}.git"
-{% if dep.name == 'ecbuild' %}
-export PATH="$PWD/{{ dep.name }}/bin:$PATH"
-{% else %}
-mkdir -p {{ dep.name }}/build && cd {{ dep.name }}/build
-ecbuild --prefix="$DEPS_PREFIX" {{ generator }} ..
-{{ build_cmd }} -j{{ parallel }}
-{{ build_cmd }} install
-cd ../..
-{% endif %}
-
+{% for item in package_modules %}
+echo "Loading {{ item }}"
+module load {{ item }}
 {% endfor %}
-export CMAKE_PREFIX_PATH="$DEPS_PREFIX:${CMAKE_PREFIX_PATH:-}"
-export PATH="$DEPS_PREFIX/bin:$PATH"
-export LD_LIBRARY_PATH="$DEPS_PREFIX/lib:${LD_LIBRARY_PATH:-}"
-{% endif %}
-{% endmacro %}
+module list
+{{ end_group() }}
+{%- endmacro %}
 
-{# Build all stages of the main package #}
-{% macro build_stages() %}
 
-# === Main package ===
-git clone --depth 1 --branch "{{ ref_name }}" "https://{{ '{{' }} github_user {{ '}}' }}:{{ '{{' }} github_token {{ '}}' }}@github.com/{{ repository }}.git"
-cd {{ repo_name }}
-mkdir -p build && cd build
+{# === ecbundle Support === #}
+{% macro setup_ecbundle(package) -%}
+{{ git_fetch(package) }}
+export PATH="{{ ci_options.workdir }}/{{ package.name }}/bin:$PATH"
+{%- endmacro %}
 
-{% for stage in stages %}
-echo "=== Stage: {{ stage.name }} ==="
-{{ load_modules(stage.modules) -}}
-{% if loop.index0 == 0 or stage.cmake_options %}
-{% if loop.index0 > 0 %}
-cd .. && rm -rf build && mkdir build && cd build
-{% endif %}
-cmake .. {{ generator }} -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" {{ base_cmake_options }} {{ stage.cmake_options }}
-{% endif %}
-{% if stage.build_command %}
-{{ stage.build_command }}
-{% else %}
-{{ build_cmd }} -j{{ parallel }}
-{% endif %}
-{% if stage.test_command %}
-echo "Running tests for stage: {{ stage.name }}"
-{{ stage.test_command }}
-{% endif %}
-{% if stage.install_command %}
-{{ stage.install_command }}
-{% else %}
-cmake --install .
-{% endif %}
-{{ unload_modules(stage.modules) }}
-{% endfor %}
-{% endmacro %}
 
-{# Job footer: README generation, permissions, module sync #}
+{# === Module Synchronization === #}
+{% macro sync_module(package) -%}
+{% if ci_options.sync_module and package.type == "main" %}
+{{ start_group("Synchronize module") }}
+find {{ package.prefix }} -type f -or -type d -exec chmod a-w {} \;
+module load modulemgr
+modulemgr -v -f sync {{ ci_options.module_name or package.name }}
+/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ ci_options.module_name or package.name }}
+modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ ci_options.module_name or package.name }}
+{{ end_group() }}
+{% endif %}
+{%- endmacro %}
+
+
+{# === CMake Package Build === #}
+{% macro cmake_package(package) -%}
+{{ git_fetch(package) }}
+{{ set_package_version(package=package) }}
+{{ start_group("Check cache: " + package.name) }}
+{% if ci_options.force_build %}
+echo "Ignoring cache"
+{% endif %}
+export ARTIFACT_CACHE_DIR=$SCRATCH/github-artifacts-cache
+if {{ (not ci_options.force_build and ci_options.hpc_config.enable_cache)|lower }} && [ -f $ARTIFACT_CACHE_DIR/{{ package.cache_key }}.tar.gz ]; then
+    echo "Cache hit: {{ package.cache_key }}"
+    echo "Restore cache: {{ package.name }}"
+    mkdir -p {{ package.prefix }}
+    cd $ARTIFACT_CACHE_DIR
+    tar -xzf {{ package.cache_key }}.tar.gz -C {{ package.prefix }}
+    {{ end_group() }}
+else
+    {% if not ci_options.force_build and ci_options.hpc_config.enable_cache %}
+    echo "Cache miss: {{ package.cache_key }}"
+    {% endif %}
+    {{ end_group() }}
+
+    {{ load_modules(generic_modules, package.modules) }}
+    {{ set_env(env) }}
+
+    {{ start_group( "Building " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    mkdir build
+    cd build
+    {% if package.name == "ecbuild" %}
+    ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
+    {% elif ci_options.ecbundle %}
+    {{ cd_pkg_subdir(package) }}
+    ecbundle create --github-token={{ github.token }} --shallow --threads={{ ci_options.cpus_per_task }}
+    {% else %}
+    ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_options(package.cmake_options) }}
+    {% endif %}
+
+    {% if ci_options.ecbundle %}
+    {{ cd_pkg_subdir(package) }}
+    ecbundle build --install --threads={{ ci_options.cpus_per_task }} --install-dir={{ package.prefix }} {{ print_ecbundle_options(package.cmake_options) }}
+    {% else %}
+    {{ cd_pkg_subdir(package) }}
+    cd build
+    time cmake --build .
+    {% endif %}
+    {{ end_group() }}
+
+    {% if package.type == "main" and ci_options.clean_before_install %}
+    {{ start_group("Cleaning before install: " + package.name) }}
+    if cd {{ package.prefix }}; then
+      if [[ "{{ package.prefix }}" == *"/nightly/"* ]]; then
+        echo "Removing the previous install: {{ package.prefix }}"
+        find . -type f -or -type d -exec chmod u+w {} \;
+        rm -rfv ./*
+      fi
+      cd -
+    else
+      echo "Nothing to clean up."
+    fi
+    {{ end_group() }}
+    {% endif %}
+
+    {% if not ci_options.ecbundle %}
+    {{ start_group("Installing: " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    cd build
+    time cmake --install . > /dev/null
+    {{ end_group() }}
+    {% endif %}
+
+    {% if package.type == "main" and ci_options.self_test %}
+    {{ start_group("Testing: " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    cd build
+    time ctest {{ print_options(package.ctest_options) }}
+    {{ end_group() }}
+    {% endif %}
+
+    {% if ci_options.hpc_config.enable_cache %}
+    {{ start_group("Save cache: " + package.name) }}
+    cd {{ ci_options.workdir }}
+    tar -czf {{ package.cache_key + ".tar.gz" }} -C {{ package.prefix }} .
+    mv {{ package.cache_key + ".tar.gz" }} $ARTIFACT_CACHE_DIR/
+    {{ end_group() }}
+    {% endif %}
+
+    {{ sync_module(package=package) }}
+fi
+
+cd {{ ci_options.workdir }}
+
+export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
+export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
+export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
+export PATH="{{ package.prefix }}/bin:$PATH"
+export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
+export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
+export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
+export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
+export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+{%- endmacro %}
+
+
+{# === Python Package Build === #}
+{% macro python_package(package) -%}
+    {{ set_env(env) }}
+    {{ git_fetch(package) }}
+    {{ cd_pkg_subdir(package) }}
+
+    {% if ci_options.conda_deps %}
+    {% set pip_cmd = "pip" %}
+    {% set python_build_cmd = "python -m build --sdist" %}
+
+    {{ start_group("Setup Conda environment") }}
+    module load conda/new
+    conda create -y -p {{ ci_options.workdir }}/env_{{ package.name }}
+    conda activate {{ ci_options.workdir }}/env_{{ package.name }}
+    conda install -y python={{ ci_options.python_version }} {{ ci_options.conda_deps }} -c conda-forge
+    {% else %}
+    {% set pip_cmd = "uv pip" %}
+    {% set python_build_cmd = "uv build --sdist --no-sources" %}
+
+    {{ start_group("Setup uv environment") }}
+    module load uv
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
+    uv venv --python {{ ci_options.python_version }} {{ ci_options.workdir }}/env_{{ package.name }}
+    source {{ ci_options.workdir }}/env_{{ package.name }}/bin/activate
+    {% endif %}
+
+    {{ pip_cmd }} install pytest pytest-cov build
+    if [ -f {{ ci_options.workdir }}/{{ package.name}}/{{ ci_options.requirements_path}} ]; then
+        {{ pip_cmd }} install -r {{ ci_options.workdir }}/{{ package.name}}/{{ ci_options.requirements_path}}
+    fi
+    if [ -n {{ ci_options.toml_opt_dep_sections }} ]; then
+        {{ pip_cmd }} install -e .[{{ ci_options.toml_opt_dep_sections }}]
+    fi
+    cd -
+    {{ end_group() }}
+
+    {% for dep in packages if dep.type == "dependency-python" %}
+    {{ git_fetch(dep) }}
+    {{ start_group("Installing dependency " + dep.name) }}
+    {{ cd_pkg_subdir(dep) }}
+    {{ python_build_cmd }}
+    {{ pip_cmd }} install dist/*
+    {{ end_group() }}
+    {% endfor %}
+
+    {{ start_group("Building " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    {{ python_build_cmd }}
+    {{ end_group() }}
+
+    {{ start_group("Installing: " + package.name) }}
+    {{ pip_cmd }} install dist/*
+    {{ end_group() }}
+
+    {% if ci_options.self_test %}
+    {{ start_group("Testing: " + package.name) }}
+    export DYLD_LIBRARY_PATH=$LIB_PATH
+    export FINDLIBS_DISABLE_PACKAGE=yes
+    {% if ci_options.pytest_cmd %}
+    {{ ci_options.pytest_cmd }}
+    {% else %}
+    DYLD_LIBRARY_PATH=$LIB_PATH pytest --cov=./ --cov-report=xml
+    python -m coverage report
+    {% endif %}
+    {{ end_group() }}
+    {% endif %}
+
+    module reset
+{%- endmacro %}
+
+
+{# === Post Script Execution === #}
+{% macro post_script() -%}
+{% if ci_options.post_script %}
+{{ start_group("Executing post script") }}
+if [ -f {{ ci_options.workdir }}/{{ ci_options.main_package_name }}/{{ ci_options.post_script }} ]; then
+    bash {{ ci_options.workdir }}/{{ ci_options.main_package_name }}/{{ ci_options.post_script }}
+else
+    echo "::error::Post script {{ ci_options.post_script }} not found!"
+    error_trap
+fi
+{{ end_group() }}
+{% endif %}
+{%- endmacro %}
+
+
+{# === Job Footer with README Generation and Permission Locking === #}
 {% macro job_footer() %}
 
 # === Generate README ===
-echo "Generating README.txt"
+{{ start_group("Generate README.txt") }}
 {% raw %}
 python3 << 'GENERATE_README'
 import os
 import re
 
-install_prefix = os.environ.get("INSTALL_PREFIX", "")
-build_log = os.path.join(install_prefix, "build.log")
-readme_file = os.path.join(install_prefix, "README.txt")
+# Get install prefix from main package
+install_prefix = os.environ.get("INSTALL_PATH", "").split(":")[0] if os.environ.get("INSTALL_PATH") else ""
 
-if not os.path.exists(build_log):
-    print("Build log not found, skipping README generation")
+if not install_prefix or not os.path.isdir(install_prefix):
+    print("Install prefix not found or not a directory, skipping README generation")
     exit(0)
 
-with open(build_log, "r", errors="replace") as f:
+# Look for build log in the output file
+output_path = os.environ.get("OUTPUT_PATH", "")
+if output_path and os.path.exists(output_path):
+    log_path = output_path
+else:
+    log_path = os.path.join(install_prefix, "build.log")
+
+readme_file = os.path.join(install_prefix, "README.txt")
+
+if not os.path.exists(log_path):
+    print(f"Build log not found at {log_path}, skipping README generation")
+    exit(0)
+
+with open(log_path, "r", errors="replace") as f:
     log_content = f.read()
 
 # Remove ANSI color codes
@@ -145,13 +388,8 @@ log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
 # Extract package version lines (deduplicated)
 seen = set()
 readme_lines = []
-current_stage = None
 
 for line in log_content.splitlines():
-    stage_match = re.match(r'^=== Stage: (.+) ===$', line)
-    if stage_match:
-        current_stage = stage_match.group(1)
-        continue
     if re.match(r'^--\s+\[', line):
         match = re.search(r'\[([^\]]+)\]', line)
         if match:
@@ -160,27 +398,39 @@ for line in log_content.splitlines():
                 seen.add(package)
                 readme_lines.append(line.strip())
     elif line.startswith("-- system"):
-        sys_line = line.strip()
-        if current_stage:
-            sys_line = sys_line.replace("-- system :", f"-- system ({current_stage}):")
-        readme_lines.append(sys_line)
+        readme_lines.append(line.strip())
 
 if readme_lines:
     with open(readme_file, "w") as f:
         f.write("\n".join(readme_lines) + "\n")
     print(f"Generated README.txt with {len(readme_lines)} entries:")
-    print("\n".join(readme_lines))
+    print("\n".join(readme_lines[:10]))
+    if len(readme_lines) > 10:
+        print(f"... and {len(readme_lines) - 10} more entries")
 else:
     print("No package version info found in build log")
 GENERATE_README
 {% endraw %}
-{% if lock_permissions %}
+{{ end_group() }}
 
-chmod -R a-w "${INSTALL_PREFIX}" || true
+{% if ci_options.lock_permissions %}
+{{ start_group("Lock permissions") }}
+{# Find the main package prefix and lock it #}
+{% for package in packages if package.type == "main" %}
+echo "Locking permissions on {{ package.prefix }}"
+chmod -R a-w "{{ package.prefix }}" || true
+{% endfor %}
+{{ end_group() }}
 {% endif %}
-{% if do_sync %}
 
+{% if ci_options.sync_module %}
+{{ start_group("Final module sync") }}
 module load modulemgr
-modulemgr -v -f sync "{{ module_name }}"
+modulemgr -v -f sync {{ ci_options.module_name or ci_options.main_package_name }}
+{% if ci_options.sync_clusters %}
+/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ ci_options.module_name or ci_options.main_package_name }}
+modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ ci_options.module_name or ci_options.main_package_name }}
 {% endif %}
-{% endmacro %}
+{{ end_group() }}
+{% endif %}
+{%- endmacro %}

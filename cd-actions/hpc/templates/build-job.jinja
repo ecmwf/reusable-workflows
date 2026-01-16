@@ -1,5 +1,29 @@
-{% from 'macros.jinja' import job_header, build_dependencies, build_stages, job_footer with context %}
-{{ job_header() }}
-{{ build_dependencies() }}
-{{ build_stages() }}
+{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle with context %}
+
+{# Build in work directory #}
+cd {{ ci_options.workdir }}
+
+{# Make requested directories #}
+{% if ci_options.mkdir %}
+{% for dir in ci_options.mkdir %}
+mkdir -p {{ ci_options.workdir }}/{{ dir }}
+{% endfor %}
+{% endif %}
+
+{# Render build script for CMake based projects #}
+{% for package in packages if package.type in ["main", "dependency"] %}
+{% if package.name == "ecbundle" and ci_options.ecbundle %}
+{{ setup_ecbundle(package=package) }}
+{% else %}
+{{ cmake_package(package=package) }}
+{% endif %}
+{% endfor %}
+
+{# Render build script for python based projects #}
+{% for package in packages if package.type == "main-python" %}
+{{ python_package(package=package) }}
+{% endfor %}
+
+{{ post_script() }}
+
 {{ job_footer() }}
