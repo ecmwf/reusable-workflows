@@ -41,6 +41,9 @@ mkdir -p {{ ci_options.workdir }}/{{ dir }}
 cd {{ ci_options.workdir }}/{{ package.name }}
 mkdir -p build && cd build
 
+INSTALL_PREFIX="{{ ci_options.install_prefix }}"
+export INSTALL_PREFIX
+
 {% if ci_options.clean_before_install %}
 {{ start_group("Cleaning before install: " + package.name) }}
 if cd {{ package.prefix }}; then
