@@ -6,6 +6,7 @@ cd {{ ci_options.workdir }}
 {# === Build Log Setup === #}
 BUILD_LOG="{{ ci_options.install_prefix }}/build.log"
 mkdir -p "{{ ci_options.install_prefix }}"
+chmod -R u+w "{{ ci_options.install_prefix }}" 2>/dev/null || true
 : > "$BUILD_LOG"
 exec > >(tee "$BUILD_LOG") 2>&1
 echo "Build started: $(date -u)"
