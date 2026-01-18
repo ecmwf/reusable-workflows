@@ -60,35 +60,44 @@ runs:
       shell: bash
       run: |
         echo "Downloaded artifacts:"
-        find ${{ inputs.artifacts_dir }} -type f | sort
-        
+        if [ -d "${{ inputs.artifacts_dir }}" ]; then
+          find ${{ inputs.artifacts_dir }} -type f | sort || true
+        else
+          echo "No artifacts found"
+        fi
+
     - name: Create release file list
       id: files
       shell: bash
       run: |
         echo "Creating file list for release..."
-        # Find all files in the artifacts directory
-        files_list=$(find ${{ inputs.artifacts_dir }} -type f | sort)
-        
-        if [[ -z "$files_list" ]]; then
-            echo "No files found for release in ${{ inputs.artifacts_dir }}"
-            exit 1
+        # Find all files in the artifacts directory (if it exists)
+        if [ -d "${{ inputs.artifacts_dir }}" ]; then
+            files_list=$(find ${{ inputs.artifacts_dir }} -type f | sort)
+        else
+            files_list=""
         fi
-        
-        echo "Files to be released:"
-        echo "$files_list"
-        
-        echo "files_list<<EOF" >> $GITHUB_OUTPUT
-        echo "$files_list" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        
-    - name: Create GitHub release
+
+        if [[ -z "$files_list" ]]; then
+            echo "No artifact files found - creating release without attached files"
+            echo "has_files=false" >> $GITHUB_OUTPUT
+        else
+            echo "Files to be released:"
+            echo "$files_list"
+            echo "has_files=true" >> $GITHUB_OUTPUT
+            echo "files_list<<EOF" >> $GITHUB_OUTPUT
+            echo "$files_list" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create GitHub release with artifacts
+      if: ${{ steps.files.outputs.has_files == 'true' }}
       uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
       with:
         tag_name: ${{ inputs.ref_name }}
         name: ${{ steps.config.outputs.release_name }}
         body: ${{ steps.config.outputs.release_body }}
-        files: ${{ steps.files.outputs.files_list }}
+        files: ${{ steps.files.outputs.files_list || '' }}
         prerelease: ${{ steps.config.outputs.prerelease }}
         draft: ${{ steps.config.outputs.draft }}
         make_latest: ${{ steps.config.outputs.make_latest }}

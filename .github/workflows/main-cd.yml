@@ -291,7 +291,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub release
-        uses: ecmwf/reusable-workflows/cd-actions/release@v2
+        uses: ecmwf/reusable-workflows/cd-actions/release@cd-hpc-staged
         with:
           config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}
