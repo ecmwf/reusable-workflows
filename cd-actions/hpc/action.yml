@@ -462,11 +462,11 @@ runs:
 
             # Extract projects from bundle
             projects = {}
-            for key, value in bundle_data.items():
-                if key in ('version', 'name', 'cmake', 'options'):
-                    continue
-                if isinstance(value, dict) and 'git' in value:
-                    projects[key] = value
+            for item in bundle_data.get('projects', []):
+                if isinstance(item, dict):
+                    for name, config in item.items():
+                        if isinstance(config, dict) and 'git' in config:
+                            projects[name] = config
 
             # Build dependency graph and project info
             graph = {name: [] for name in projects}
