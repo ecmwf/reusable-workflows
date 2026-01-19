@@ -181,24 +181,17 @@ fi
 {{ end_group() }}
 {% endif %}
 
-{# ecbundle-build: Generate and run build #}
+{# ecbundle-build: Configure, build, and install #}
 {{ start_group("ecbundle-build") }}
 cd {{ ci_options.workdir }}/{{ package.name }}
 ecbundle-build \
     --cmake="{{ package.cmake_options|join(' ') }}" \
     -j{{ ci_options.parallel }} \
     --no-colour \
+    --install \
     --src-dir={{ ci_options.workdir }}/{{ package.name }}/source \
     --build-dir={{ ci_options.workdir }}/builds \
     --install-dir={{ package.prefix }}
-{{ end_group() }}
-
-{# Run generated scripts #}
-{{ start_group("Configure and Build") }}
-cd {{ ci_options.workdir }}/builds
-./configure.sh
-./build.sh --without-configure
-./install.sh --without-build
 {{ end_group() }}
 
 {# Cleanup credentials #}
