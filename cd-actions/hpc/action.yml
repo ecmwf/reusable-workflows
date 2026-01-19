@@ -244,6 +244,13 @@ runs:
                 'compiler_cxx': 'icpc',
                 'compiler_fc': 'ifort',
                 'compiler_modules': 'prgenv/intel,intel/2021.4.0'
+            },
+            'intel-2025.0.1': {
+                'compiler': 'intel-2025.0.1',
+                'compiler_cc': 'icx',
+                'compiler_cxx': 'icpx',
+                'compiler_fc': 'ifx',
+                'compiler_modules': 'prgenv/intel-llvm,intel/2025.0.1'
             }
         }
 
