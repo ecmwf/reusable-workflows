@@ -321,6 +321,19 @@ GENERATE_README
 {%- endmacro %}
 
 
+{# === Redact Build Log === #}
+{% macro redact_build_log(build_log) -%}
+{{ start_group("Redact build log") }}
+if [ -f "{{ build_log }}" ]; then
+    sed -i \
+        -e 's|{{ github.user }}|[REDACTED]|g' \
+        -e 's|{{ github.token }}|[REDACTED]|g' \
+        "{{ build_log }}"
+fi
+{{ end_group() }}
+{%- endmacro %}
+
+
 {# === Module Sync Commands === #}
 {% macro sync_module_commands(module_name) -%}
 {{ start_group("Synchronize module") }}
@@ -527,6 +540,8 @@ fi
 
 {# === Job Footer with README Generation and Permission Locking === #}
 {% macro job_footer() %}
+
+{{ redact_build_log(build_log=ci_options.install_prefix + "/build.log") }}
 
 {{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
 
