@@ -258,6 +258,13 @@ runs:
                 'compiler_cxx': 'icpx',
                 'compiler_fc': 'ifx',
                 'compiler_modules': 'prgenv/intel-llvm,intel/2025.0.1'
+            },
+            'amd-4.0.0': {
+                'compiler': 'aocc-4.0.0',
+                'compiler_cc': 'clang',
+                'compiler_cxx': 'clang++',
+                'compiler_fc': 'flang',
+                'compiler_modules': 'prgenv/amd,aocc/4.0.0'
             }
         }
 
