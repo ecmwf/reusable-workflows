@@ -1,4 +1,4 @@
-{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, sync_module with context %}
+{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, sync_module, bundle_project, generate_readme, sync_module_commands with context %}
 
 {# Build in work directory #}
 cd {{ ci_options.workdir }}
@@ -18,6 +18,25 @@ echo "Repository: {{ ci_options.main_package_name }}"
 mkdir -p {{ ci_options.workdir }}/{{ dir }}
 {% endfor %}
 {% endif %}
+
+{# === Build bundle.yml projects === #}
+{% if ci_options.use_bundle_yml %}
+{{ load_modules(generic_modules, []) }}
+{{ set_env(env) }}
+
+{% for package in packages if package.type == "bundle-project" %}
+{{ bundle_project(package=package) }}
+{% endfor %}
+
+{# Sync module for the last bundle project (which is the main package) #}
+{% set last_bundle_project = packages|selectattr("type", "eq", "bundle-project")|list|last %}
+{% if ci_options.sync_module and last_bundle_project %}
+{{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
+{{ sync_module_commands(module_name=ci_options.module_name or ci_options.main_package_name) }}
+{% endif %}
+
+{% else %}
+{# === Standard build path (dependencies + main + python) === #}
 
 {# === Build dependencies (with caching) === #}
 {% for package in packages if package.type == "dependency" %}
@@ -120,6 +139,9 @@ export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
 export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
 export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
 
+{% if ci_options.sync_module %}
+{{ generate_readme(install_prefix=package.prefix, build_log=ci_options.install_prefix + "/build.log") }}
+{% endif %}
 {{ sync_module(package=package) }}
 
 {% else %}
@@ -132,6 +154,8 @@ export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
 {% for package in packages if package.type == "main-python" %}
 {{ python_package(package=package) }}
 {% endfor %}
+
+{% endif %}
 
 {{ post_script() }}
 

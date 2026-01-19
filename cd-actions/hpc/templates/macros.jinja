@@ -145,16 +145,66 @@ export PATH="{{ ci_options.workdir }}/{{ package.name }}/bin:$PATH"
 {%- endmacro %}
 
 
-{# === Module Synchronization === #}
-{% macro sync_module(package) -%}
-{% if ci_options.sync_module and package.type == "main" %}
+{# === Bundle Project Build (ecmwf-toolbox )=== #}
+{% macro bundle_project(package) -%}
+{# Fetch the project using git with auth in URL #}
+{{ start_group("Fetching bundle project: " + package.name) }}
+cd {{ ci_options.workdir }}
+mkdir -p {{ ci_options.workdir }}/{{ package.name }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+git init
+git remote add origin {{ package.git_url }}
+git fetch --depth 20 --tags origin {{ package.ref }}
+git checkout FETCH_HEAD
+{{ end_group() }}
+
+{{ set_package_version(package=package) }}
+
+{# Build and install the project #}
+{{ start_group("Building bundle project: " + package.name) }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+mkdir -p build
+cd build
+
+{% if package.name == "ecbuild" %}
+{# ecbuild builds itself differently #}
+../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
+{% else %}
+ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_options(package.cmake_options) }}
+{% endif %}
+
+time cmake --build .
+{{ end_group() }}
+
+{{ start_group("Installing bundle project: " + package.name) }}
+cd {{ ci_options.workdir }}/{{ package.name }}/build
+time cmake --install . > /dev/null
+{{ end_group() }}
+
+{# Export environment for downstream packages #}
+cd {{ ci_options.workdir }}
+export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
+export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
+export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
+export PATH="{{ package.prefix }}/bin:$PATH"
+export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
+export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
+export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
+export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
+export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
+{%- endmacro %}
+
+
+{# === README Generation === #}
+{% macro generate_readme(install_prefix, build_log) -%}
 {{ start_group("Generate README.txt") }}
 python3 << 'GENERATE_README'
 import os
 import re
 
-install_prefix = "{{ package.prefix }}"
-build_log = "{{ ci_options.install_prefix }}/build.log"
+install_prefix = "{{ install_prefix }}"
+build_log = "{{ build_log }}"
 readme_file = os.path.join(install_prefix, "README.txt")
 
 if not os.path.isdir(install_prefix):
@@ -208,13 +258,26 @@ else:
     print("No package version info found in build log")
 GENERATE_README
 {{ end_group() }}
+{%- endmacro %}
 
+
+{# === Module Sync Commands === #}
+{% macro sync_module_commands(module_name) -%}
 {{ start_group("Synchronize module") }}
 module load modulemgr
-modulemgr -v -f sync {{ ci_options.module_name or package.name }}
-/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ ci_options.module_name or package.name }}
-modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ ci_options.module_name or package.name }}
+modulemgr -v -f sync {{ module_name }}
+{% if ci_options.sync_clusters %}
+/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ module_name }}
+modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ module_name }}
+{% endif %}
 {{ end_group() }}
+{%- endmacro %}
+
+
+{# === Module Synchronization === #}
+{% macro sync_module(package) -%}
+{% if ci_options.sync_module and package.type == "main" %}
+{{ sync_module_commands(module_name=ci_options.module_name or package.name) }}
 {% endif %}
 {%- endmacro %}
 
@@ -306,6 +369,9 @@ else
     {{ end_group() }}
     {% endif %}
 
+    {% if ci_options.sync_module and package.type == "main" %}
+    {{ generate_readme(install_prefix=package.prefix, build_log=ci_options.install_prefix + "/build.log") }}
+    {% endif %}
     {{ sync_module(package=package) }}
 fi
 
@@ -412,67 +478,7 @@ fi
 {# === Job Footer with README Generation and Permission Locking === #}
 {% macro job_footer() %}
 
-# === Generate README ===
-{{ start_group("Generate README.txt") }}
-python3 << 'GENERATE_README'
-import os
-import re
-
-install_prefix = "{{ ci_options.install_prefix }}"
-build_log = os.path.join(install_prefix, "build.log")
-readme_file = os.path.join(install_prefix, "README.txt")
-
-if not os.path.isdir(install_prefix):
-    print(f"Install prefix {install_prefix} not found, skipping README generation")
-    exit(0)
-
-if not os.path.exists(build_log):
-    print(f"Build log not found at {build_log}, skipping README generation")
-    exit(0)
-
-with open(build_log, "r", errors="replace") as f:
-    log_content = f.read()
-
-# Remove ANSI color codes
-log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
-
-# Extract package version lines (deduplicated)
-seen = set()
-readme_lines = []
-current_stage = None
-
-for line in log_content.splitlines():
-    # Track stage markers for staged builds
-    if "::STAGE_MARKER::" in line:
-        stage_match = re.search(r'::STAGE_MARKER::(\S+)', line)
-        if stage_match:
-            current_stage = stage_match.group(1)
-        continue
-
-    if re.match(r'^--\s+\[', line):
-        match = re.search(r'\[([^\]]+)\]', line)
-        if match:
-            package = match.group(1)
-            if package not in seen:
-                seen.add(package)
-                readme_lines.append(line.strip())
-    elif line.startswith("-- system"):
-        system_line = line.strip()
-        if current_stage:
-            system_line += f" [stage: {current_stage}]"
-        readme_lines.append(system_line)
-
-if readme_lines:
-    with open(readme_file, "w") as f:
-        f.write("\n".join(readme_lines) + "\n")
-    print(f"Generated README.txt with {len(readme_lines)} entries:")
-    print("\n".join(readme_lines[:10]))
-    if len(readme_lines) > 10:
-        print(f"... and {len(readme_lines) - 10} more entries")
-else:
-    print("No package version info found in build log")
-GENERATE_README
-{{ end_group() }}
+{{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
 
 {% if ci_options.lock_permissions %}
 {{ start_group("Lock permissions") }}
@@ -482,13 +488,6 @@ chmod -R a-w "{{ ci_options.install_prefix }}" || true
 {% endif %}
 
 {% if ci_options.sync_module %}
-{{ start_group("Final module sync") }}
-module load modulemgr
-modulemgr -v -f sync {{ ci_options.module_name or ci_options.main_package_name }}
-{% if ci_options.sync_clusters %}
-/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ ci_options.module_name or ci_options.main_package_name }}
-modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ ci_options.module_name or ci_options.main_package_name }}
-{% endif %}
-{{ end_group() }}
+{{ sync_module_commands(module_name=ci_options.module_name or ci_options.main_package_name) }}
 {% endif %}
 {%- endmacro %}
