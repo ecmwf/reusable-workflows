@@ -21,7 +21,8 @@ mkdir -p {{ ci_options.workdir }}/{{ dir }}
 
 {# === Build with ecbundle === #}
 {% if ci_options.use_ecbundle %}
-{{ load_modules(generic_modules, []) }}
+{% set ecbundle_pkg = packages|selectattr('type', 'equalto', 'ecbundle')|first %}
+{{ load_modules(generic_modules, ecbundle_pkg.modules if ecbundle_pkg else []) }}
 {{ set_env(env) }}
 
 {% for package in packages if package.type == "ecbundle" %}
