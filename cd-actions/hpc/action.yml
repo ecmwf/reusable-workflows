@@ -238,6 +238,13 @@ runs:
                 'compiler_fc': 'nvfortran',
                 'compiler_modules': 'prgenv/nvidia,nvidia/22.11'
             },
+            'nvidia-24.11': {
+                'compiler': 'nvidia-24.11',
+                'compiler_cc': 'nvc',
+                'compiler_cxx': 'nvc++',
+                'compiler_fc': 'nvfortran',
+                'compiler_modules': 'prgenv/nvidia,nvidia/24.11'
+            },
             'intel-2021.4.0': {
                 'compiler': 'intel-2021.4.0',
                 'compiler_cc': 'icc',
