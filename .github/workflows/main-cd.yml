@@ -173,6 +173,7 @@ jobs:
                       matrix_item['queue'] = build_config.get('queue', '')
                       matrix_item['post_script'] = build_config.get('post_script', '')
                       matrix_item['clean_before_install'] = str(build_config.get('clean_before_install', False)).lower()
+                      matrix_item['site'] = build_config.get('site', 'hpc-batch')
 
                   matrix['include'].append(matrix_item)
 
@@ -265,6 +266,7 @@ jobs:
           queue: ${{ matrix.queue }}
           post_script: ${{ matrix.post_script }}
           clean_before_install: ${{ matrix.clean_before_install }}
+          site: ${{ matrix.site }}
 
   release:
     name: Create Release
