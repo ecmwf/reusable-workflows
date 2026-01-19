@@ -450,7 +450,7 @@ runs:
                 if not text:
                     return text
                 for var, val in var_map.items():
-                    text = text.replace(f'${{{var}}}', val)
+                    text = text.replace('${' + var + '}', val)
                 return text
 
             def inject_auth(url, user, token):
