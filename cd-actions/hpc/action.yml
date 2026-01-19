@@ -269,13 +269,17 @@ runs:
             install_prefix = '$' + '{TMPDIR}' + f'/install/{module_name}/{ref_name}'
 
         if prefix_compiler_specific:
+            base_install_prefix = install_prefix
             install_prefix = f"{install_prefix}/{compiler_info['compiler']}"
+        else:
+            base_install_prefix = install_prefix
 
         # Write outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write(f"use_staged={'true' if use_staged else 'false'}\n")
             f.write(f"do_sync={'true' if do_sync else 'false'}\n")
             f.write(f"install_prefix={install_prefix}\n")
+            f.write(f"base_install_prefix={base_install_prefix}\n")
             for key, value in compiler_info.items():
                 f.write(f"{key}={value}\n")
 
@@ -335,6 +339,7 @@ runs:
         compiler = '${{ steps.config.outputs.compiler }}'
         compiler_modules = '${{ steps.config.outputs.compiler_modules }}'
         install_prefix = '${{ steps.config.outputs.install_prefix }}'
+        base_install_prefix = '${{ steps.config.outputs.base_install_prefix }}'
         module_name = '''${{ inputs.module_name }}'''.strip() or repo_name
         parallel = '''${{ inputs.parallel }}'''.strip() or '64'
         ntasks = '''${{ inputs.ntasks }}'''.strip() or '1'
@@ -530,6 +535,7 @@ runs:
             'prefix_compiler_specific': '${{ inputs.prefix_compiler_specific }}' == 'true',
             'clean_before_install': clean_before_install,
             'install_prefix': install_prefix,
+            'base_install_prefix': base_install_prefix,
             'sync_clusters': ['aa', 'ab'],
             'sync_module': do_sync,
             'module_name': module_name,
