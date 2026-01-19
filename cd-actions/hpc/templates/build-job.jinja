@@ -1,4 +1,4 @@
-{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, sync_module, bundle_project, generate_readme, sync_module_commands with context %}
+{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, sync_module, bundle_project, generate_readme, sync_module_commands, ecbundle_workflow with context %}
 
 {# Build in work directory #}
 cd {{ ci_options.workdir }}
@@ -19,18 +19,16 @@ mkdir -p {{ ci_options.workdir }}/{{ dir }}
 {% endfor %}
 {% endif %}
 
-{# === Build bundle.yml projects === #}
-{% if ci_options.use_bundle_yml %}
+{# === Build with ecbundle === #}
+{% if ci_options.use_ecbundle %}
 {{ load_modules(generic_modules, []) }}
 {{ set_env(env) }}
 
-{% for package in packages if package.type == "bundle-project" %}
-{{ bundle_project(package=package) }}
+{% for package in packages if package.type == "ecbundle" %}
+{{ ecbundle_workflow(package=package) }}
 {% endfor %}
 
-{# Sync module for the last bundle project (which is the main package) #}
-{% set last_bundle_project = packages|selectattr("type", "eq", "bundle-project")|list|last %}
-{% if ci_options.sync_module and last_bundle_project %}
+{% if ci_options.sync_module %}
 {{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
 {{ sync_module_commands(module_name=ci_options.module_name or ci_options.main_package_name) }}
 {% endif %}

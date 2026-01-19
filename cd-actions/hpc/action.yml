@@ -423,160 +423,39 @@ runs:
             key_data = f"{name}:{ref}:{compiler}:{':'.join(cmake_opts or [])}"
             return f"{name}-{hashlib.sha256(key_data.encode()).hexdigest()[:12]}"
 
-        # Parse bundle.yml (ecmwf-toolbox)
-        def parse_bundle_yml(bundle_path, bundle_vars, github_user, github_token, install_prefix):
-            """Parse bundle.yml and return packages in dependency order."""
-            import re
-            from collections import deque
-
-            with open(bundle_path, 'r') as f:
-                bundle_data = yaml.safe_load(f)
-
-            # Default variable substitutions
-            var_map = {
-                'BITBUCKET': 'https://github.com',
-                'GITHUB': 'https://github.com',
-            }
-            # Override with user-provided vars
-            if bundle_vars:
-                try:
-                    user_vars = json.loads(bundle_vars)
-                    var_map.update(user_vars)
-                except json.JSONDecodeError:
-                    print(f"::warning::Could not parse bundle_vars as JSON")
-
-            def substitute_vars(text):
-                """Replace ${VAR} patterns with values from var_map."""
-                if not text:
-                    return text
-                for var, val in var_map.items():
-                    text = text.replace('${' + var + '}', val)
-                return text
-
-            def inject_auth(url, user, token):
-                """Inject auth credentials into git URL."""
-                if url.startswith('https://'):
-                    # https://github.com/... -> https://user:token@github.com/...
-                    return url.replace('https://', f'https://{user}:{token}@', 1)
-                return url
-
-            # Extract projects from bundle
-            projects = {}
-            for item in bundle_data.get('projects', []):
-                if isinstance(item, dict):
-                    for name, config in item.items():
-                        if isinstance(config, dict) and 'git' in config:
-                            projects[name] = config
-
-            # Build dependency graph and project info
-            graph = {name: [] for name in projects}
-            in_degree = {name: 0 for name in projects}
-
-            for name, proj in projects.items():
-                requires = proj.get('require', '')
-                if requires:
-                    # require can be space-separated list
-                    deps = requires.split()
-                    for dep in deps:
-                        if dep in graph:
-                            graph[dep].append(name)
-                            in_degree[name] += 1
-
-            # Topological sort (Kahn's algorithm)
-            sorted_projects = []
-            queue = deque([name for name, deg in in_degree.items() if deg == 0])
-
-            while queue:
-                current = queue.popleft()
-                sorted_projects.append(current)
-                for neighbor in graph[current]:
-                    in_degree[neighbor] -= 1
-                    if in_degree[neighbor] == 0:
-                        queue.append(neighbor)
-
-            if len(sorted_projects) != len(projects):
-                print(f"::error::Circular dependency detected in bundle.yml")
-                import sys
-                sys.exit(1)
-
-            # Build packages list
-            packages = []
-            for i, name in enumerate(sorted_projects):
-                proj = projects[name]
-                git_url = substitute_vars(proj.get('git', ''))
-                git_url_with_auth = inject_auth(git_url, github_user, github_token)
-
-                # Parse owner/repo from git URL
-                # https://github.com/ecmwf/ecbuild.git -> ecmwf, ecbuild
-                match = re.search(r'github\.com[/:]([^/]+)/([^/.]+)', git_url)
-                if match:
-                    owner, repo = match.groups()
-                else:
-                    owner, repo = 'ecmwf', name
-
-                ref = proj.get('version', proj.get('branch', proj.get('tag', 'main')))
-
-                # Parse cmake options
-                proj_cmake = proj.get('cmake', '')
-                if isinstance(proj_cmake, str):
-                    cmake_opts = [opt.strip() for opt in proj_cmake.split() if opt.strip()]
-                else:
-                    cmake_opts = []
-
-                # First project (ecbuild) goes to temp deps, others to install_prefix
-                if i == 0:
-                    prefix = '$' + '{TMPDIR}' + f'/deps/{name}'
-                else:
-                    prefix = install_prefix
-
-                packages.append({
-                    'name': name,
-                    'owner': owner,
-                    'repo': repo,
-                    'ref': ref,
-                    'type': 'bundle-project',
-                    'prefix': prefix,
-                    'cmake_options': cmake_opts,
-                    'ctest_options': [],
-                    'modules': [],
-                    'cache_key': cache_key(name, ref, cmake_opts),
-                    'subdir': '',
-                    'git_url': git_url_with_auth,
-                })
-
-            return packages
-
         # Auto-detect bundle.yml
-        use_bundle_yml = False
-        bundle_packages = []
+        use_ecbundle = False
+        bundle_yml_path = None
 
         if bundle_yml_input:
-            bundle_yml_path = bundle_yml_input
-            if os.path.exists(bundle_yml_path):
-                use_bundle_yml = True
-        else:
-            # Auto-detect in current directory
-            if os.path.exists('bundle.yml'):
-                bundle_yml_path = 'bundle.yml'
-                use_bundle_yml = True
+            if os.path.exists(bundle_yml_input):
+                bundle_yml_path = bundle_yml_input
+                use_ecbundle = True
+        elif os.path.exists('bundle.yml'):
+            bundle_yml_path = 'bundle.yml'
+            use_ecbundle = True
 
-        if use_bundle_yml:
-            print(f"Detected bundle.yml at: {bundle_yml_path}")
-            bundle_packages = parse_bundle_yml(
-                bundle_yml_path,
-                bundle_vars_input,
-                '{{ github_user }}',  # Template placeholder
-                '{{ github_token }}',  # Template placeholder
-                install_prefix
-            )
-            print(f"Bundle projects (in dependency order): {[p['name'] for p in bundle_packages]}")
+        if use_ecbundle:
+            print(f"Detected bundle.yml at: {bundle_yml_path} - using ecbundle")
 
         # Build packages list
         packages = []
 
-        # Use bundle packages if bundle.yml detected, otherwise parse dependencies normally
-        if use_bundle_yml:
-            packages = bundle_packages
+        # Use ecbundle workflow if bundle.yml detected
+        if use_ecbundle:
+            packages = [{
+                'name': repo_name,
+                'owner': repo_owner,
+                'repo': repo_name,
+                'ref': ref_name,
+                'type': 'ecbundle',
+                'prefix': install_prefix,
+                'cmake_options': cmake_options,
+                'ctest_options': ctest_options,
+                'modules': package_modules,
+                'cache_key': cache_key(repo_name, ref_name, cmake_options),
+                'subdir': '',
+            }]
         else:
             # Parse dependencies
             for dep in dependencies_input.splitlines():
@@ -694,7 +573,7 @@ runs:
             'compiler': compiler,
             'mkdir': [],
             'ecbundle': ecbundle,
-            'use_bundle_yml': use_bundle_yml,
+            'use_ecbundle': use_ecbundle,
             'pytest_cmd': None,
             'install_type': '${{ inputs.install_type }}',
             'prefix_compiler_specific': '${{ inputs.prefix_compiler_specific }}' == 'true',

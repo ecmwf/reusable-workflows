@@ -56,13 +56,6 @@ exec 1> {{ path }} 2>&1
 {%- endmacro %}
 
 
-{% macro print_ecbundle_options(options) -%}
-{% if (options is defined) and options %}
---cmake="{{ options|join(" ") }}"
-{%- endif %}
-{%- endmacro %}
-
-
 {# === Directory Navigation === #}
 {% macro cd_pkg_subdir(package) -%}
 cd {{ ci_options.workdir }}/{{ package.name }}
@@ -145,7 +138,81 @@ export PATH="{{ ci_options.workdir }}/{{ package.name }}/bin:$PATH"
 {%- endmacro %}
 
 
-{# === Bundle Project Build (ecmwf-toolbox )=== #}
+{# === ecbundle Workflow === #}
+{% macro ecbundle_workflow(package) -%}
+{# Clone main repo containing bundle.yml #}
+{{ git_fetch(package) }}
+{{ set_package_version(package=package) }}
+
+{# Setup ecbundle tool #}
+{{ start_group("Setup ecbundle") }}
+cd {{ ci_options.workdir }}
+git clone --depth 1 https://github.com/ecmwf/ecbundle.git ecbundle
+export PATH="{{ ci_options.workdir }}/ecbundle/bin:$PATH"
+{{ end_group() }}
+
+{# Configure git credentials for private repos #}
+{{ start_group("Configure git credentials") }}
+git config --global credential.helper store
+cat > ~/.git-credentials << 'CREDS'
+https://{{ github.user }}:{{ github.token }}@github.com
+https://{{ github.user }}:{{ github.token }}@git.ecmwf.int
+CREDS
+{{ end_group() }}
+
+{# ecbundle-create: Clone all projects from bundle.yml #}
+{{ start_group("ecbundle-create") }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+ecbundle-create --no-colour --verbose --shallow --update
+{{ end_group() }}
+
+{% if ci_options.clean_before_install %}
+{{ start_group("Cleaning before install: " + package.name) }}
+if cd {{ package.prefix }}; then
+  if [[ "{{ package.prefix }}" == *"/nightly/"* ]]; then
+    echo "Removing the previous install: {{ package.prefix }}"
+    find . -type f -or -type d -exec chmod u+w {} \;
+    rm -rfv ./*
+  fi
+  cd -
+else
+  echo "Nothing to clean up."
+fi
+{{ end_group() }}
+{% endif %}
+
+{# ecbundle-build: Generate and run build #}
+{{ start_group("ecbundle-build") }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+ecbundle-build \
+    --cmake="{{ package.cmake_options|join(' ') }}" \
+    -j{{ ci_options.parallel }} \
+    --no-colour \
+    --src-dir={{ ci_options.workdir }}/{{ package.name }}/source \
+    --build-dir={{ ci_options.workdir }}/builds \
+    --install-dir={{ package.prefix }}
+{{ end_group() }}
+
+{# Run generated scripts #}
+{{ start_group("Configure and Build") }}
+cd {{ ci_options.workdir }}/builds
+./configure.sh
+./build.sh --without-configure
+./install.sh --without-build
+{{ end_group() }}
+
+{# Cleanup credentials #}
+rm -f ~/.git-credentials
+git config --global --unset credential.helper || true
+
+{# Export environment for downstream #}
+export PATH="{{ package.prefix }}/bin:$PATH"
+export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
+{%- endmacro %}
+
+
+{# === Bundle Project Build (LEGACY - kept for compatibility) === #}
 {% macro bundle_project(package) -%}
 {# Fetch the project using git with auth in URL #}
 {{ start_group("Fetching bundle project: " + package.name) }}
@@ -313,21 +380,13 @@ else
     cd build
     {% if package.name == "ecbuild" %}
     ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
-    {% elif ci_options.ecbundle %}
-    {{ cd_pkg_subdir(package) }}
-    ecbundle create --github-token={{ github.token }} --shallow --threads={{ ci_options.cpus_per_task }}
     {% else %}
     ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_options(package.cmake_options) }}
     {% endif %}
 
-    {% if ci_options.ecbundle %}
-    {{ cd_pkg_subdir(package) }}
-    ecbundle build --install --threads={{ ci_options.cpus_per_task }} --install-dir={{ package.prefix }} {{ print_ecbundle_options(package.cmake_options) }}
-    {% else %}
     {{ cd_pkg_subdir(package) }}
     cd build
     time cmake --build .
-    {% endif %}
     {{ end_group() }}
 
     {% if package.type == "main" and ci_options.clean_before_install %}
@@ -345,13 +404,11 @@ else
     {{ end_group() }}
     {% endif %}
 
-    {% if not ci_options.ecbundle %}
     {{ start_group("Installing: " + package.name) }}
     {{ cd_pkg_subdir(package) }}
     cd build
     time cmake --install . > /dev/null
     {{ end_group() }}
-    {% endif %}
 
     {% if package.type == "main" and ci_options.self_test %}
     {{ start_group("Testing: " + package.name) }}
