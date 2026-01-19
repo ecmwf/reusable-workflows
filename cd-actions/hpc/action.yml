@@ -278,7 +278,12 @@ runs:
 
         if prefix_compiler_specific:
             base_install_prefix = install_prefix
-            install_prefix = f"{install_prefix}/{compiler_info['compiler']}"
+            compiler = compiler_info['compiler']
+            parts = compiler.split('-', 1)
+            family = parts[0].upper()
+            version_parts = parts[1].split('.')
+            version = '.'.join(version_parts[:2])
+            install_prefix = f"{install_prefix}/{family}/{version}"
         else:
             base_install_prefix = install_prefix
 
