@@ -5,9 +5,6 @@ inputs:
   token:
     description: 'Confluence API token'
     required: true
-  username:
-    description: 'Confluence username'
-    required: true
   file_path:
     description: 'Path to the file to upload'
     required: true
@@ -34,7 +31,6 @@ runs:
     - name: Upload to Confluence
       shell: bash
       env:
-        CONFLUENCE_USERNAME: ${{ inputs.username }}
         CONFLUENCE_TOKEN: ${{ inputs.token }}
         FILE_PATH: ${{ inputs.file_path }}
         PAGE_TITLE: ${{ inputs.page_title }}
@@ -49,7 +45,6 @@ runs:
 
         confluence_server = Confluence(
             url="https://confluence.ecmwf.int",
-            username=os.environ["CONFLUENCE_USERNAME"],
             token=os.environ["CONFLUENCE_TOKEN"],
         )
 

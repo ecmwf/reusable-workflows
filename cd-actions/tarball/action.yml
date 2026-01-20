@@ -22,10 +22,6 @@ inputs:
     description: 'Confluence API token'
     required: false
     default: ''
-  confluence_username:
-    description: 'Confluence username'
-    required: false
-    default: ''
   confluence_space:
     description: 'Confluence space key (e.g., MAGP)'
     required: false
@@ -144,11 +140,10 @@ runs:
         retention-days: 90
 
     - name: Upload to Confluence
-      if: ${{ inputs.confluence_token != '' && inputs.confluence_username != '' && inputs.confluence_space != '' }}
-      uses: ecmwf/reusable-workflows/cd-actions/confluence-upload@v2
+      if: ${{ inputs.confluence_token != '' && inputs.confluence_space != '' }}
+      uses: ecmwf/reusable-workflows/cd-actions/confluence-upload@cd-tarball
       with:
         token: ${{ inputs.confluence_token }}
-        username: ${{ inputs.confluence_username }}
         file_path: ${{ steps.find-tarball.outputs.tarball_path }}
         space: ${{ inputs.confluence_space }}
         page_title: ${{ inputs.confluence_page_title }}
