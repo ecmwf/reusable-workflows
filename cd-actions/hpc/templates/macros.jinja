@@ -168,12 +168,10 @@ ecbundle-create --no-colour --verbose --shallow --update
 
 {% if ci_options.clean_before_install %}
 {{ start_group("Cleaning before install: " + package.name) }}
-if cd {{ package.prefix }}; then
-  if [[ "{{ package.prefix }}" == *"/nightly/"* ]]; then
-    echo "Removing the previous install: {{ package.prefix }}"
-    find . -type f -or -type d -exec chmod u+w {} \;
-    rm -rfv ./*
-  fi
+if cd {{ package.prefix }} 2>/dev/null; then
+  echo "Removing the previous install: {{ package.prefix }}"
+  find . -type f -or -type d -exec chmod u+w {} \;
+  rm -rfv ./*
   cd -
 else
   echo "Nothing to clean up."
@@ -397,12 +395,10 @@ else
 
     {% if package.type == "main" and ci_options.clean_before_install %}
     {{ start_group("Cleaning before install: " + package.name) }}
-    if cd {{ package.prefix }}; then
-      if [[ "{{ package.prefix }}" == *"/nightly/"* ]]; then
-        echo "Removing the previous install: {{ package.prefix }}"
-        find . -type f -or -type d -exec chmod u+w {} \;
-        rm -rfv ./*
-      fi
+    if cd {{ package.prefix }} 2>/dev/null; then
+      echo "Removing the previous install: {{ package.prefix }}"
+      find . -type f -or -type d -exec chmod u+w {} \;
+      rm -rfv ./*
       cd -
     else
       echo "Nothing to clean up."
