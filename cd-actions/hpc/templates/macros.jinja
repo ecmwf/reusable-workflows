@@ -544,7 +544,7 @@ fi
 {% if ci_options.lock_permissions %}
 {{ start_group("Lock permissions") }}
 echo "Locking permissions on {{ ci_options.install_prefix }}"
-chmod -R a-w "{{ ci_options.install_prefix }}" || true
+timeout 300 chmod -R a-w "{{ ci_options.install_prefix }}" || echo "Warning: chmod timed out or failed (continuing anyway)"
 {{ end_group() }}
 {% endif %}
 
