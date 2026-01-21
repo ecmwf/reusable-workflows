@@ -150,13 +150,30 @@ jobs:
                       matrix_item['install_type'] = build_config.get('install_type', 'module')
                       matrix_item['install_prefix'] = build_config.get('install_prefix', '')
                       matrix_item['prefix_compiler_specific'] = str(build_config.get('prefix_compiler_specific', False)).lower()
-                      matrix_item['cmake_options'] = build_config.get('cmake_options', '')
-                      matrix_item['ctest_options'] = build_config.get('ctest_options', '')
+                      cmake_options = build_config.get('cmake_options', [])
+                      if isinstance(cmake_options, list):
+                          matrix_item['cmake_options'] = ','.join(cmake_options)
+                      else:
+                          matrix_item['cmake_options'] = str(cmake_options)
+
+                      ctest_options = build_config.get('ctest_options', [])
+                      if isinstance(ctest_options, list):
+                          matrix_item['ctest_options'] = ','.join(ctest_options)
+                      else:
+                          matrix_item['ctest_options'] = str(ctest_options)
                       matrix_item['self_test'] = str(build_config.get('self_test', True)).lower()
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
                       matrix_item['parallel'] = str(build_config.get('parallel', ''))
                       matrix_item['dependencies'] = build_config.get('dependencies', '')
-                      matrix_item['dependency_cmake_options'] = build_config.get('dependency_cmake_options', '')
+                      dep_cmake_raw = build_config.get('dependency_cmake_options', {})
+                      if not isinstance(dep_cmake_raw, dict):
+                          raise ValueError(f"dependency_cmake_options must be a dict, got {type(dep_cmake_raw).__name__}")
+                      dep_cmake_converted = {}
+                      for repo, opts in dep_cmake_raw.items():
+                          if not isinstance(opts, list):
+                              raise ValueError(f"dependency_cmake_options['{repo}'] must be a list, got {type(opts).__name__}")
+                          dep_cmake_converted[repo] = ','.join(opts)
+                      matrix_item['dependency_cmake_options'] = yaml.dump(dep_cmake_converted, default_flow_style=False) if dep_cmake_converted else ''
                       matrix_item['python_dependencies'] = build_config.get('python_dependencies', '')
                       matrix_item['python_version'] = build_config.get('python_version', '')
                       matrix_item['python_requirements'] = build_config.get('python_requirements', '')
