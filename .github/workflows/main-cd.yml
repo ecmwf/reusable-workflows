@@ -112,14 +112,59 @@ jobs:
         run: |
           import yaml, json, os
 
+          def deep_merge(common, specific, overrides=None, path=''):
+              """
+              Merge common config into specific config with override support.
+
+              Supports:
+              - Wildcard '*' to skip all common config
+              - Dot notation for nested overrides (e.g., 'dependency_cmake_options.ecmwf/atlas')
+              """
+              if overrides is None:
+                  overrides = []
+              if '*' in overrides:
+                  return specific.copy()
+
+              result = {}
+              all_keys = set(common.keys()) | set(specific.keys())
+
+              for key in all_keys:
+                  common_val = common.get(key)
+                  specific_val = specific.get(key)
+                  current_path = f'{path}.{key}' if path else key
+
+                  # Check if this key or path should be overridden
+                  is_override = key in overrides or current_path in overrides
+
+                  if specific_val is None:
+                      result[key] = common_val
+                  elif common_val is None or is_override:
+                      result[key] = specific_val
+                  elif isinstance(common_val, dict) and isinstance(specific_val, dict):
+                      # Filter overrides for nested keys
+                      nested_overrides = [o for o in overrides if o.startswith(f'{key}.') or o.startswith(f'{current_path}.')]
+                      result[key] = deep_merge(common_val, specific_val, nested_overrides, current_path)
+                  elif isinstance(common_val, list) and isinstance(specific_val, list):
+                      result[key] = common_val + specific_val
+                  else:
+                      result[key] = specific_val
+
+              return result
+
           config_yaml = '''${{ steps.load.outputs.config }}'''
           config = yaml.safe_load(config_yaml)
 
+          common_config = config.get('common_config', {})
           matrix = {'include': []}
           for build in config.get('builds', []):
               if build.get('enabled', True):
-                  build_config = build.get('config', {})
                   build_type = build['type']
+                  build_config_raw = build.get('config', {})
+                  overrides = build.get('common_config_overrides', [])
+
+                  # Get type-specific common config and merge
+                  type_common = common_config.get(build_type, {})
+                  build_config = deep_merge(type_common, build_config_raw, overrides)
 
                   matrix_item = {
                       'name': build['name'],
