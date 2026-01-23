@@ -46,11 +46,11 @@ inputs:
 
   # Build Configuration
   cmake_options:
-    description: 'CMake/ecbuild options (comma-separated, e.g., -DENABLE_TESTS=ON,-DCMAKE_BUILD_TYPE=Release)'
+    description: 'CMake options as JSON object (e.g., {"CMAKE_BUILD_TYPE": "Release", "ENABLE_TESTS": "ON"}). Keys are option names without -D prefix.'
     required: false
     default: ''
   ctest_options:
-    description: 'CTest options for testing'
+    description: 'CTest options as JSON object (e.g., {"output-on-failure": "", "j": "8"}). Keys are option names without leading dash.'
     required: false
     default: ''
   self_test:
@@ -410,9 +410,21 @@ runs:
             generic_modules.append('ninja')
 
         # === BUILD COMMON CONTEXT ===
-        # Parse cmake options (comma-separated to list)
-        cmake_options = [opt.strip() for opt in cmake_options_input.split(',') if opt.strip()] if cmake_options_input else []
-        ctest_options = [opt.strip() for opt in ctest_options_input.split(',') if opt.strip()] if ctest_options_input else []
+        # Parse cmake options (JSON dict to list)
+        cmake_options = []
+        if cmake_options_input:
+            cmake_opts_dict = json.loads(cmake_options_input)
+            if not isinstance(cmake_opts_dict, dict):
+                raise ValueError(f"cmake_options must be a dict, got {type(cmake_opts_dict).__name__}")
+            cmake_options = [f'-D{k}={v}' for k, v in cmake_opts_dict.items()]
+
+        # Parse ctest options (JSON dict to list)
+        ctest_options = []
+        if ctest_options_input:
+            ctest_opts_dict = json.loads(ctest_options_input)
+            if not isinstance(ctest_opts_dict, dict):
+                raise ValueError(f"ctest_options must be a dict, got {type(ctest_opts_dict).__name__}")
+            ctest_options = [f'-{k}={v}' if v else f'-{k}' for k, v in ctest_opts_dict.items()]
 
         # Add install lib dir if specified
         if install_lib_dir:
