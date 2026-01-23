@@ -55,6 +55,20 @@ exec 1> {{ path }} 2>&1
 {%- endif %}
 {%- endmacro %}
 
+{# Print cmake options with -D prefix #}
+{% macro print_cmake_options(options) -%}
+{% if (options is defined) and options %}
+{% for opt in options %}-D{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{%- endif %}
+{%- endmacro %}
+
+{# Print ctest options with -- prefix #}
+{% macro print_ctest_options(options) -%}
+{% if (options is defined) and options %}
+{% for opt in options %}--{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{%- endif %}
+{%- endmacro %}
+
 
 {# === Directory Navigation === #}
 {% macro cd_pkg_subdir(package) -%}
@@ -228,7 +242,7 @@ cd build
 {# ecbuild builds itself differently #}
 ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
 {% else %}
-ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_options(package.cmake_options) }}
+ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_cmake_options(package.cmake_options) }}
 {% endif %}
 
 time cmake --build .
@@ -385,7 +399,7 @@ else
     {% if package.name == "ecbuild" %}
     ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
     {% else %}
-    ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_options(package.cmake_options) }}
+    ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_cmake_options(package.cmake_options) }}
     {% endif %}
 
     {{ cd_pkg_subdir(package) }}
@@ -416,7 +430,7 @@ else
     {{ start_group("Testing: " + package.name) }}
     {{ cd_pkg_subdir(package) }}
     cd build
-    time ctest {{ print_options(package.ctest_options) }}
+    time ctest {{ print_ctest_options(package.ctest_options) }}
     {{ end_group() }}
     {% endif %}
 

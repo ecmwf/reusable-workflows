@@ -416,7 +416,7 @@ runs:
             cmake_opts_dict = json.loads(cmake_options_input)
             if not isinstance(cmake_opts_dict, dict):
                 raise ValueError(f"cmake_options must be a dict, got {type(cmake_opts_dict).__name__}")
-            cmake_options = [f'-D{k}={v}' for k, v in cmake_opts_dict.items()]
+            cmake_options = [f'{k}={v}' for k, v in cmake_opts_dict.items()]
 
         # Parse ctest options (JSON dict to list)
         ctest_options = []
@@ -424,7 +424,7 @@ runs:
             ctest_opts_dict = json.loads(ctest_options_input)
             if not isinstance(ctest_opts_dict, dict):
                 raise ValueError(f"ctest_options must be a dict, got {type(ctest_opts_dict).__name__}")
-            ctest_options = [f'-{k}={v}' if v else f'-{k}' for k, v in ctest_opts_dict.items()]
+            ctest_options = [f'{k}={v}' if v else k for k, v in ctest_opts_dict.items()]
 
         # Add install lib dir if specified
         if install_lib_dir:
