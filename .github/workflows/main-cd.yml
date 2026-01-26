@@ -129,7 +129,7 @@ jobs:
 
                   # Add type-specific config fields as individual matrix values
                   if build_type == 'conda':
-                      matrix_item['conda_dir'] = build_config.get('conda_dir', './.cd/.conda')
+                      matrix_item['conda_dir'] = build_config.get('conda_dir', './.cd/conda')
                       # Convert channels list to comma-separated string
                       channels = build_config.get('channels', ['conda-forge'])
                       if isinstance(channels, list):
