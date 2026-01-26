@@ -144,6 +144,13 @@ jobs:
                       # Keep env_vars as JSON string
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
 
+                  elif build_type == 'tarball':
+                      matrix_item['ecbuild_version'] = build_config.get('ecbuild_version', '')
+                      matrix_item['cmake_options'] = build_config.get('cmake_options', '')
+
+                      matrix_item['confluence_space'] = build_config.get('confluence_space', '')
+                      matrix_item['confluence_page_title'] = build_config.get('confluence_page_title', 'Releases')
+
                   matrix['include'].append(matrix_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -198,6 +205,18 @@ jobs:
           buildargs: ${{ matrix.buildargs }}
           env_vars: ${{ matrix.env_vars }}
           testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
+
+      - name: Build Tarball
+        if: ${{ matrix.type == 'tarball' }}
+        uses: ecmwf/reusable-workflows/cd-actions/tarball@cd-tarball
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          ecbuild_version: ${{ matrix.ecbuild_version }}
+          cmake_options: ${{ matrix.cmake_options }}
+          confluence_token: ${{ needs.detect-release-type.outputs.is_prerelease == 'false' && needs.detect-release-type.outputs.is_dry_run == 'false' && secrets.CONFLUENCE_TARBALL_UPLOAD_TOKEN || '' }}
+          confluence_space: ${{ matrix.confluence_space }}
+          confluence_page_title: ${{ matrix.confluence_page_title }}
 
   release:
     name: Create Release

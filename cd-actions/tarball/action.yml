@@ -1,0 +1,149 @@
+name: Tarball Builder
+description: Build source tarballs using ecbuild on platform-builder runners
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: false
+    default: 'tarball'
+  ref_name:
+    description: 'Git ref name for artifacts (defaults to github.ref_name)'
+    required: false
+    default: ''
+  ecbuild_version:
+    description: 'ecbuild version/tag to checkout (defaults to latest release)'
+    required: false
+    default: ''
+  cmake_options:
+    description: 'Additional CMake options for ecbuild'
+    required: false
+    default: ''
+  confluence_token:
+    description: 'Confluence API token'
+    required: false
+    default: ''
+  confluence_space:
+    description: 'Confluence space key (e.g., MAGP)'
+    required: false
+    default: ''
+  confluence_page_title:
+    description: 'Confluence page title'
+    required: false
+    default: 'Releases'
+
+outputs:
+  tarball_path:
+    description: 'Path to generated tarball file'
+    value: ${{ steps.find-tarball.outputs.tarball_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install ecbuild
+      if: ${{ github.repository != 'ecmwf/ecbuild' }}
+      shell: bash
+      run: |
+        ecbuild_version="${{ inputs.ecbuild_version }}"
+
+        if [ -z "$ecbuild_version" ]; then
+          echo "Fetching latest ecbuild release from GitHub API..."
+          ecbuild_version=$(curl -sL https://api.github.com/repos/ecmwf/ecbuild/releases/latest \
+            | grep '"tag_name":' \
+            | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+
+          if [ -z "$ecbuild_version" ]; then
+            echo "::error::Failed to fetch latest ecbuild release from GitHub API"
+            exit 1
+          fi
+          echo "Using latest release: $ecbuild_version"
+        fi
+
+        echo "Cloning ecbuild to ${{ runner.temp }}/ecbuild..."
+        git clone --depth 1 --branch "$ecbuild_version" \
+          https://github.com/ecmwf/ecbuild.git "${{ runner.temp }}/ecbuild"
+        echo "${{ runner.temp }}/ecbuild/bin" >> $GITHUB_PATH
+        echo "Added ecbuild to PATH"
+
+    - name: Create build directory
+      shell: bash
+      run: |
+        echo "Creating build directory..."
+        mkdir -p build
+
+    - name: Run ecbuild
+      shell: bash
+      run: |
+        cmake_options="${{ inputs.cmake_options }}"
+
+        echo "Running ecbuild in build directory..."
+        cd build
+
+        if [ "${{ github.repository }}" = "ecmwf/ecbuild" ]; then
+            echo "Bootstrap mode: ecbuild configures its own CMAKE_MODULE_PATH"
+            cmake_cmd="cmake ."
+        else
+            cmake_cmd="ecbuild"
+        fi
+
+        if [ -n "$cmake_options" ]; then
+            echo "CMake options: $cmake_options"
+            $cmake_cmd $cmake_options ..
+        else
+            $cmake_cmd ..
+        fi
+
+    - name: Build source package
+      shell: bash
+      run: |
+        echo "Building source package..."
+        cd build
+        make package_source
+
+        echo ""
+        echo "Build complete!"
+
+    - name: List generated tarballs
+      shell: bash
+      run: |
+        echo "Generated tarballs:"
+        find build -name "*.tar.gz" -type f | sort
+
+    - name: Verify artifacts
+      shell: bash
+      run: |
+        echo "Checking for source tarball in: build"
+
+        if ! find build -maxdepth 1 -name "*-Source.tar.gz" -type f | head -1 | grep -q .; then
+            echo "No source tarball found in: build"
+            echo "Available tar.gz files:"
+            find build -name "*.tar.gz" -type f
+            exit 1
+        fi
+
+        echo "Tarball verification successful!"
+
+    - name: Find tarball path
+      id: find-tarball
+      shell: bash
+      run: |
+        tarball=$(find build -maxdepth 1 -name "*-Source.tar.gz" -type f | head -1)
+
+        echo "tarball_path=$tarball" >> $GITHUB_OUTPUT
+        echo "Found tarball: $tarball"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}-${{ inputs.ref_name || github.ref_name }}
+        path: ${{ steps.find-tarball.outputs.tarball_path }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Upload to Confluence
+      if: ${{ inputs.confluence_token != '' && inputs.confluence_space != '' }}
+      uses: ecmwf/reusable-workflows/cd-actions/confluence-upload@cd-tarball
+      with:
+        token: ${{ inputs.confluence_token }}
+        file_path: ${{ steps.find-tarball.outputs.tarball_path }}
+        space: ${{ inputs.confluence_space }}
+        page_title: ${{ inputs.confluence_page_title }}
