@@ -141,7 +141,7 @@ runs:
 
     - name: Upload to Confluence
       if: ${{ inputs.confluence_token != '' && inputs.confluence_space != '' }}
-      uses: ecmwf/reusable-workflows/cd-actions/confluence-upload@cd-tarball
+      uses: ecmwf/reusable-workflows/cd-actions/confluence-upload@v2
       with:
         token: ${{ inputs.confluence_token }}
         file_path: ${{ steps.find-tarball.outputs.tarball_path }}
