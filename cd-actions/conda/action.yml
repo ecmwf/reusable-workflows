@@ -32,7 +32,7 @@ inputs:
   conda_dir:
     description: 'Directory containing conda recipe (meta.yaml)'
     required: false
-    default: './.cd/.conda'
+    default: './.cd/conda'
   channels:
     description: 'Comma-separated list of conda channels to use (appended to hardcoded internal ECMWF nexus channels)'
     required: false
