@@ -1,4 +1,4 @@
-{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, ecbundle_workflow with context %}
+{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, ecbundle_workflow, print_cmake_options, export_package_env, clean_install_dir with context %}
 
 {# Build in work directory #}
 cd {{ ci_options.workdir }}
@@ -31,9 +31,8 @@ mkdir -p {{ ci_options.workdir }}/{{ dir }}
 {% endfor %}
 
 {% else %}
-{# === Standard build path (dependencies + main + python) === #}
 
-{# === Build dependencies (with caching) === #}
+{# === Build dependencies === #}
 {% for package in packages if package.type == "dependency" %}
 {% if package.name == "ecbundle" and ci_options.ecbundle %}
 {{ setup_ecbundle(package=package) }}
@@ -58,18 +57,7 @@ mkdir -p build && cd build
 INSTALL_PREFIX="{{ ci_options.install_prefix }}"
 export INSTALL_PREFIX
 
-{% if ci_options.clean_before_install %}
-{{ start_group("Cleaning before install: " + package.name) }}
-if cd {{ package.prefix }} 2>/dev/null; then
-  echo "Removing the previous install: {{ package.prefix }}"
-  find . -type f -or -type d -exec chmod u+w {} \;
-  rm -rfv ./*
-  cd -
-else
-  echo "Nothing to clean up."
-fi
-{{ end_group() }}
-{% endif %}
+{{ clean_install_dir(package) }}
 
 {% for stage in stages %}
 {{ start_group("Stage: " + stage.name) }}
@@ -87,7 +75,7 @@ echo "::STAGE_MARKER::{{ stage.name }}"
 cd {{ ci_options.workdir }}/{{ package.name }}
 rm -rf build && mkdir build && cd build
 {% endif %}
-ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ stage.cmake_options }} {{ package.cmake_options|join(" ") if package.cmake_options else "" }}
+ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ stage.cmake_options }} {{ print_cmake_options(package.cmake_options) }}
 {% endif %}
 
 {# Build #}
@@ -121,16 +109,7 @@ module unload {{ mod }}
 {% endfor %}
 
 {# Export paths for main package #}
-cd {{ ci_options.workdir }}
-export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
-export PATH="{{ package.prefix }}/bin:$PATH"
-export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
-export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
-export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
-export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
-export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+{{ export_package_env(package) }}
 
 {% else %}
 {# --- Standard build: single cmake_package call --- #}

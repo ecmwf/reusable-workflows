@@ -1,5 +1,4 @@
 {# Reusable macros for HPC build templates #}
-{# Combined from build-package-hpc/templates/macros.jinja with enhanced features #}
 
 {# === GitHub Actions Logging === #}
 {% macro start_group(msg) -%}
@@ -33,28 +32,6 @@ echo "::endgroup::"
 {% endif %}
 {% endmacro %}
 
-
-{% macro gpu_directive(gpus) -%}
-{% if (gpus is defined) and gpus > 0 %}
-#SBATCH --gres=gpu:{{ gpus }}
-{%- endif %}
-{%- endmacro %}
-
-
-{# === Build Log and Output === #}
-{% macro setup_output_file(path) -%}
-touch {{ path }}
-: > {{ path }}
-exec 1> {{ path }} 2>&1
-{%- endmacro %}
-
-
-{% macro print_options(options) -%}
-{% if (options is defined) and options %}
-{{ options|join(" ") }}
-{%- endif %}
-{%- endmacro %}
-
 {# Print cmake options with -D prefix #}
 {% macro print_cmake_options(options) -%}
 {% if (options is defined) and options %}
@@ -66,6 +43,13 @@ exec 1> {{ path }} 2>&1
 {% macro print_ctest_options(options) -%}
 {% if (options is defined) and options %}
 {% for opt in options %}--{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{%- endif %}
+{%- endmacro %}
+
+{# Print ecbundle cmake options #}
+{% macro print_ecbundle_options(options) -%}
+{% if (options is defined) and options %}
+--cmake="{{ options|join(" ") }}"
 {%- endif %}
 {%- endmacro %}
 
@@ -145,6 +129,41 @@ module list
 {%- endmacro %}
 
 
+{# === Export Package Environment === #}
+{% macro export_package_env(package, include_cmake_prefix=false) -%}
+cd {{ ci_options.workdir }}
+export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
+export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
+export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
+export PATH="{{ package.prefix }}/bin:$PATH"
+export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
+export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
+export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
+export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
+export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+{% if include_cmake_prefix %}
+export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
+{% endif %}
+{%- endmacro %}
+
+
+{# === Clean Install Directory === #}
+{% macro clean_install_dir(package) -%}
+{% if ci_options.clean_before_install %}
+{{ start_group("Cleaning before install: " + package.name) }}
+if cd {{ package.prefix }} 2>/dev/null; then
+  echo "Removing the previous install: {{ package.prefix }}"
+  find . -type f -or -type d -exec chmod u+w {} \;
+  rm -rfv ./*
+  cd -
+else
+  echo "Nothing to clean up."
+fi
+{{ end_group() }}
+{% endif %}
+{%- endmacro %}
+
+
 {# === ecbundle Support === #}
 {% macro setup_ecbundle(package) -%}
 {{ git_fetch(package) }}
@@ -158,7 +177,7 @@ export PATH="{{ ci_options.workdir }}/{{ package.name }}/bin:$PATH"
 {{ git_fetch(package) }}
 {{ set_package_version(package=package) }}
 
-{# Setup ecbundle tool #}
+{# Setup ecbundle #}
 {{ start_group("Setup ecbundle") }}
 cd {{ ci_options.workdir }}
 git clone --depth 1 https://github.com/ecmwf/ecbundle.git ecbundle
@@ -180,18 +199,7 @@ cd {{ ci_options.workdir }}/{{ package.name }}
 ecbundle-create --no-colour --verbose --shallow --update
 {{ end_group() }}
 
-{% if ci_options.clean_before_install %}
-{{ start_group("Cleaning before install: " + package.name) }}
-if cd {{ package.prefix }} 2>/dev/null; then
-  echo "Removing the previous install: {{ package.prefix }}"
-  find . -type f -or -type d -exec chmod u+w {} \;
-  rm -rfv ./*
-  cd -
-else
-  echo "Nothing to clean up."
-fi
-{{ end_group() }}
-{% endif %}
+{{ clean_install_dir(package) }}
 
 {# ecbundle-build: Configure, build, and install #}
 {{ start_group("ecbundle-build") }}
@@ -211,60 +219,7 @@ rm -f ~/.git-credentials
 git config --global --unset credential.helper || true
 
 {# Export environment for downstream #}
-export PATH="{{ package.prefix }}/bin:$PATH"
-export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
-export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
-{%- endmacro %}
-
-
-{# === Bundle Project Build (LEGACY - kept for compatibility) === #}
-{% macro bundle_project(package) -%}
-{# Fetch the project using git with auth in URL #}
-{{ start_group("Fetching bundle project: " + package.name) }}
-cd {{ ci_options.workdir }}
-mkdir -p {{ ci_options.workdir }}/{{ package.name }}
-cd {{ ci_options.workdir }}/{{ package.name }}
-git init
-git remote add origin {{ package.git_url }}
-git fetch --depth 20 --tags origin {{ package.ref }}
-git checkout FETCH_HEAD
-{{ end_group() }}
-
-{{ set_package_version(package=package) }}
-
-{# Build and install the project #}
-{{ start_group("Building bundle project: " + package.name) }}
-cd {{ ci_options.workdir }}/{{ package.name }}
-mkdir -p build
-cd build
-
-{% if package.name == "ecbuild" %}
-{# ecbuild builds itself differently #}
-../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
-{% else %}
-ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_cmake_options(package.cmake_options) }}
-{% endif %}
-
-time cmake --build .
-{{ end_group() }}
-
-{{ start_group("Installing bundle project: " + package.name) }}
-cd {{ ci_options.workdir }}/{{ package.name }}/build
-time cmake --install . > /dev/null
-{{ end_group() }}
-
-{# Export environment for downstream packages #}
-cd {{ ci_options.workdir }}
-export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
-export PATH="{{ package.prefix }}/bin:$PATH"
-export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
-export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
-export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
-export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
-export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
-export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
+{{ export_package_env(package, include_cmake_prefix=true) }}
 {%- endmacro %}
 
 
@@ -393,33 +348,36 @@ else
     {{ set_env(env) }}
 
     {{ start_group( "Building " + package.name) }}
+    {% if package.name == "ecbuild" %}
     {{ cd_pkg_subdir(package) }}
     mkdir build
     cd build
-    {% if package.name == "ecbuild" %}
     ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
+    {% elif ci_options.ecbundle %}
+    {{ cd_pkg_subdir(package) }}
+    ecbundle create --github-token={{ github.token }} --shallow --threads={{ ci_options.cpus_per_task }}
     {% else %}
+    {{ cd_pkg_subdir(package) }}
+    mkdir build
+    cd build
     ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_cmake_options(package.cmake_options) }}
     {% endif %}
 
+    {% if ci_options.ecbundle %}
+    {{ cd_pkg_subdir(package) }}
+    ecbundle build --install --threads={{ ci_options.cpus_per_task }} --install-dir={{ package.prefix }} {{ print_ecbundle_options(package.cmake_options) }}
+    {% else %}
     {{ cd_pkg_subdir(package) }}
     cd build
     time cmake --build .
+    {% endif %}
     {{ end_group() }}
 
-    {% if package.type == "main" and ci_options.clean_before_install %}
-    {{ start_group("Cleaning before install: " + package.name) }}
-    if cd {{ package.prefix }} 2>/dev/null; then
-      echo "Removing the previous install: {{ package.prefix }}"
-      find . -type f -or -type d -exec chmod u+w {} \;
-      rm -rfv ./*
-      cd -
-    else
-      echo "Nothing to clean up."
-    fi
-    {{ end_group() }}
+    {% if package.type == "main" %}
+    {{ clean_install_dir(package) }}
     {% endif %}
 
+    {% if not ci_options.ecbundle %}
     {{ start_group("Installing: " + package.name) }}
     {{ cd_pkg_subdir(package) }}
     cd build
@@ -430,6 +388,7 @@ else
     time cmake --install . > /dev/null
     {% endif %}
     {{ end_group() }}
+    {% endif %}
 
     {% if package.type == "main" and ci_options.self_test %}
     {{ start_group("Testing: " + package.name) }}
@@ -448,17 +407,7 @@ else
     {% endif %}
 fi
 
-cd {{ ci_options.workdir }}
-
-export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
-export PATH="{{ package.prefix }}/bin:$PATH"
-export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
-export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
-export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
-export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
-export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+{{ export_package_env(package) }}
 {%- endmacro %}
 
 

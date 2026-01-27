@@ -116,7 +116,7 @@ jobs:
               """
               Merge common config into specific config with override support.
 
-              Supports:
+              Overrides:
               - Wildcard '*' to skip all common config
               - Dot notation for nested overrides (e.g., 'dependency_cmake_options.ecmwf/atlas')
               """

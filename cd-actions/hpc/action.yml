@@ -27,7 +27,7 @@ inputs:
 
   # Compiler/Platform
   platform:
-    description: 'Compiler platform (gnu-12.2.0, gnu-8.5.0, nvidia-22.11, intel-2021.4.0)'
+    description: 'Compiler platform (gnu-14.2.0, gnu-12.2.0, gnu-8.5.0, nvidia-22.11, nvidia-24.11, intel-2021.4.0, intel-2025.0.1, amd-4.0.0)'
     required: true
 
   # Installation
@@ -127,7 +127,6 @@ inputs:
     required: false
     default: ''
 
-  # Single-stage options (used when stages not provided)
   modules:
     description: 'Modules to load (JSON array or newline-separated, e.g., ["python/3.12", "boost/1.87"])'
     required: false
@@ -188,6 +187,14 @@ inputs:
     default: 'false'
   install_lib_dir:
     description: 'CMake INSTALL_LIB_DIR value (lib or lib64). If set, adds -DINSTALL_LIB_DIR to cmake options.'
+    required: false
+    default: ''
+  mkdir:
+    description: 'Directories to create in workdir before build (JSON array or newline-separated)'
+    required: false
+    default: ''
+  pytest_cmd:
+    description: 'Custom pytest command for Python package testing'
     required: false
     default: ''
 
@@ -392,6 +399,16 @@ runs:
         post_script = '''${{ inputs.post_script }}'''.strip() or None
         bundle_yml_input = os.environ.get('INPUT_BUNDLE_YML', '').strip()
         install_command = os.environ.get('INPUT_INSTALL_COMMAND', '').strip()
+        mkdir_input = '''${{ inputs.mkdir }}'''.strip()
+        pytest_cmd_input = '''${{ inputs.pytest_cmd }}'''.strip()
+
+        # Parse mkdir (similar to modules parsing)
+        mkdir_list = []
+        if mkdir_input:
+            try:
+                mkdir_list = json.loads(mkdir_input)
+            except json.JSONDecodeError:
+                mkdir_list = [d.strip() for d in mkdir_input.replace('\n', ',').split(',') if d.strip()]
 
         if use_ninja:
             generator = '-GNinja'
@@ -610,10 +627,10 @@ runs:
             'post_script': post_script,
             'main_package_name': repo_name,
             'compiler': compiler,
-            'mkdir': [],
+            'mkdir': mkdir_list,
             'ecbundle': ecbundle,
             'use_ecbundle': use_ecbundle,
-            'pytest_cmd': None,
+            'pytest_cmd': pytest_cmd_input or None,
             'install_type': '${{ inputs.install_type }}',
             'prefix_compiler_specific': '${{ inputs.prefix_compiler_specific }}' == 'true',
             'clean_before_install': clean_before_install,
