@@ -81,10 +81,6 @@ inputs:
     description: 'Path to bundle.yml for declarative bundle builds (auto-detected if present)'
     required: false
     default: ''
-  bundle_vars:
-    description: 'Variable substitutions for bundle.yml (JSON, e.g., {"BITBUCKET": "https://git.ecmwf.int"})'
-    required: false
-    default: ''
 
   # Dependencies
   dependencies:
@@ -337,7 +333,7 @@ runs:
         INPUT_ENV_VARS: ${{ inputs.env_vars }}
         INPUT_INSTALL_LIB_DIR: ${{ inputs.install_lib_dir }}
         INPUT_BUNDLE_YML: ${{ inputs.bundle_yml }}
-        INPUT_BUNDLE_VARS: ${{ inputs.bundle_vars }}
+        INPUT_INSTALL_COMMAND: ${{ inputs.install_command }}
       run: |
         import hashlib
         import json
@@ -395,7 +391,7 @@ runs:
         conda_deps = '''${{ inputs.conda_deps }}'''.strip()
         post_script = '''${{ inputs.post_script }}'''.strip() or None
         bundle_yml_input = os.environ.get('INPUT_BUNDLE_YML', '').strip()
-        bundle_vars_input = os.environ.get('INPUT_BUNDLE_VARS', '').strip()
+        install_command = os.environ.get('INPUT_INSTALL_COMMAND', '').strip()
 
         if use_ninja:
             generator = '-GNinja'
@@ -545,6 +541,7 @@ runs:
                     'modules': package_modules,
                     'cache_key': cache_key(repo_name, ref_name, cmake_options),
                     'subdir': '',
+                    'install_command': install_command,
                 })
 
             # Parse Python dependencies
@@ -592,8 +589,12 @@ runs:
                     'subdir': '',
                 })
 
+        # Build name for logging
+        build_name = '''${{ inputs.name }}'''.strip()
+
         # Build ci_options dict
         ci_options = {
+            'build_name': build_name,
             'parallel': int(parallel),
             'cpus_per_task': int(parallel),
             'ntasks': int(ntasks),

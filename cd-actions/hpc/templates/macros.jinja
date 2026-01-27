@@ -423,7 +423,12 @@ else
     {{ start_group("Installing: " + package.name) }}
     {{ cd_pkg_subdir(package) }}
     cd build
+    export INSTALL_PREFIX="{{ package.prefix }}"
+    {% if package.install_command is defined and package.install_command %}
+    {{ package.install_command }}
+    {% else %}
     time cmake --install . > /dev/null
+    {% endif %}
     {{ end_group() }}
 
     {% if package.type == "main" and ci_options.self_test %}
@@ -441,11 +446,6 @@ else
     mv {{ package.cache_key + ".tar.gz" }} $ARTIFACT_CACHE_DIR/
     {{ end_group() }}
     {% endif %}
-
-    {% if ci_options.sync_module and package.type == "main" %}
-    {{ generate_readme(install_prefix=package.prefix, build_log=ci_options.install_prefix + "/build.log") }}
-    {% endif %}
-    {{ sync_module(package=package) }}
 fi
 
 cd {{ ci_options.workdir }}
