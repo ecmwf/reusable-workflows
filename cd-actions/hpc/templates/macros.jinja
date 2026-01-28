@@ -500,6 +500,12 @@ fi
 {# === Job Footer with README Generation and Permission Locking === #}
 {% macro job_footer() %}
 
+{# Close tee subprocess by restoring stdout - ensures all buffered output is flushed #}
+if [ -n "${__BUILD_LOG_TEE:-}" ]; then
+    exec 1>&3 2>&4  # Restore original stdout/stderr (sends EOF to tee)
+    sleep 0.1  # Brief pause to let tee flush
+fi
+
 {{ redact_build_log(build_log=ci_options.install_prefix + "/build.log") }}
 
 {{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}

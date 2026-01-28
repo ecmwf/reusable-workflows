@@ -8,7 +8,13 @@ BUILD_LOG="{{ ci_options.install_prefix }}/build.log"
 chmod -R u+w "{{ ci_options.base_install_prefix }}" 2>/dev/null || chmod -R u+w "{{ ci_options.install_prefix }}" 2>/dev/null || true
 mkdir -p "{{ ci_options.install_prefix }}"
 : > "$BUILD_LOG"
+
+# Save original stdout/stderr before tee redirection
+exec 3>&1 4>&2
 exec > >(tee "$BUILD_LOG") 2>&1
+__BUILD_LOG_TEE=1
+export __BUILD_LOG_TEE
+
 echo "Build started: $(date -u)"
 echo "Build name: {{ ci_options.build_name }}"
 echo "Repository: {{ ci_options.main_package_name }}"
