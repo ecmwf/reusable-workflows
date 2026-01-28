@@ -279,9 +279,15 @@ runs:
 
         compiler_info = platform_map[platform]
 
-        # Check if staged build
+        # Check if staged build (parse JSON to check for actual stages)
         stages_input = os.environ.get('INPUT_STAGES', '').strip()
-        use_staged = bool(stages_input)
+        stages_list = []
+        if stages_input:
+            try:
+                stages_list = json.loads(stages_input)
+            except json.JSONDecodeError:
+                pass
+        use_staged = bool(stages_list)
 
         dry_run = '${{ inputs.dry_run }}' == 'true'
         sync_module_input = '${{ inputs.sync_module }}' == 'true'
@@ -358,9 +364,15 @@ runs:
             lstrip_blocks=True,
         )
 
-        # Check if staged build
+        # Check if staged build (parse JSON to check for actual stages)
         stages_input = os.environ.get('INPUT_STAGES', '').strip()
-        use_staged = bool(stages_input)
+        stages = []
+        if stages_input:
+            try:
+                stages = json.loads(stages_input)
+            except json.JSONDecodeError:
+                pass
+        use_staged = bool(stages)
 
         # Parse inputs from environment variables
         cmake_options_input = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
@@ -657,25 +669,14 @@ runs:
         # === RENDER TEMPLATE ===
         template = env.get_template('build-job.jinja')
 
-        # Parse stages if provided
-        stages = []
-        if use_staged:
-            try:
-                stages = json.loads(stages_input)
-            except json.JSONDecodeError as e:
-                print(f"::error::Failed to parse stages JSON: {e}")
-                print(f"Input was: {stages_input[:200]}...")
-                import sys
-                sys.exit(1)
-
-            # Normalize stages to ensure required fields
-            for i, stage in enumerate(stages):
-                stage.setdefault('name', f'stage-{i}')
-                stage.setdefault('modules', [])
-                stage.setdefault('cmake_options', '')
-                stage.setdefault('build_command', '')
-                stage.setdefault('test_command', '')
-                stage.setdefault('install_command', '')
+        # Normalize stages to ensure required fields
+        for i, stage in enumerate(stages):
+            stage.setdefault('name', f'stage-{i}')
+            stage.setdefault('modules', [])
+            stage.setdefault('cmake_options', '')
+            stage.setdefault('build_command', '')
+            stage.setdefault('test_command', '')
+            stage.setdefault('install_command', '')
 
         # Render template (stages list is empty for standard builds)
         rendered = template.render(
