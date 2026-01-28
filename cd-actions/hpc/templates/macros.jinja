@@ -372,7 +372,8 @@ modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ module_name 
 echo "Ignoring cache"
 {% endif %}
 export ARTIFACT_CACHE_DIR=$SCRATCH/github-artifacts-cache
-if {{ (not ci_options.force_build and ci_options.hpc_config.enable_cache)|lower }} && [ -f $ARTIFACT_CACHE_DIR/{{ package.cache_key }}.tar.gz ]; then
+{% set use_cache = ci_options.hpc_config.enable_cache and package.type != "main" %}
+if {{ (not ci_options.force_build and use_cache)|lower }} && [ -f $ARTIFACT_CACHE_DIR/{{ package.cache_key }}.tar.gz ]; then
     echo "Cache hit: {{ package.cache_key }}"
     echo "Restore cache: {{ package.name }}"
     mkdir -p {{ package.prefix }}
@@ -380,7 +381,7 @@ if {{ (not ci_options.force_build and ci_options.hpc_config.enable_cache)|lower 
     tar -xzf {{ package.cache_key }}.tar.gz -C {{ package.prefix }}
     {{ end_group() }}
 else
-    {% if not ci_options.force_build and ci_options.hpc_config.enable_cache %}
+    {% if not ci_options.force_build and use_cache %}
     echo "Cache miss: {{ package.cache_key }}"
     {% endif %}
     {{ end_group() }}
@@ -443,7 +444,7 @@ else
     {{ end_group() }}
     {% endif %}
 
-    {% if ci_options.hpc_config.enable_cache and not (package.type == "main" and ci_options.dry_run) %}
+    {% if use_cache %}
     {{ start_group("Save cache: " + package.name) }}
     cd {{ ci_options.workdir }}
     tar -czf {{ package.cache_key + ".tar.gz" }} -C {{ package.prefix }} .
