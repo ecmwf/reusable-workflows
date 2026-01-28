@@ -609,6 +609,8 @@ runs:
         # Build name for logging
         build_name = '''${{ inputs.name }}'''.strip()
 
+        dry_run = '${{ inputs.dry_run }}' == 'true'
+
         # Build ci_options dict
         ci_options = {
             'build_name': build_name,
@@ -618,6 +620,7 @@ runs:
             'gpus': int(gpus) if gpus else 0,
             'self_test': self_test,
             'force_build': force_build,
+            'dry_run': dry_run,
             'workdir': '$' + '{TMPDIR}',
             'output_path': '',  # Set by generic.jinja wrapper
             'python_version': python_version or '3.12',

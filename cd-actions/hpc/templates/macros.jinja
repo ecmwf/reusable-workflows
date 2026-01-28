@@ -147,9 +147,34 @@ export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
 {%- endmacro %}
 
 
+{# === Build Log Setup === #}
+{% macro setup_build_log() -%}
+{% if ci_options.dry_run %}
+BUILD_LOG="{{ ci_options.workdir }}/build.log"
+{% else %}
+BUILD_LOG="{{ ci_options.install_prefix }}/build.log"
+chmod -R u+w "{{ ci_options.base_install_prefix }}" 2>/dev/null || chmod -R u+w "{{ ci_options.install_prefix }}" 2>/dev/null || true
+mkdir -p "{{ ci_options.install_prefix }}"
+{% endif %}
+: > "$BUILD_LOG"
+
+# Save original stdout/stderr before tee redirection
+exec 3>&1 4>&2
+exec > >(tee "$BUILD_LOG") 2>&1
+__BUILD_LOG_TEE=1
+export __BUILD_LOG_TEE
+
+echo "Build started: $(date -u)"
+echo "Build name: {{ ci_options.build_name }}"
+echo "Repository: {{ ci_options.main_package_name }}"
+{%- endmacro %}
+
+
 {# === Clean Install Directory === #}
 {% macro clean_install_dir(package) -%}
-{% if ci_options.clean_before_install %}
+{% set is_main = package.type in ["main", "main-python", "ecbundle"] %}
+{% if is_main and ci_options.dry_run %}
+{% elif ci_options.clean_before_install %}
 {{ start_group("Cleaning before install: " + package.name) }}
 if cd {{ package.prefix }} 2>/dev/null; then
   echo "Removing the previous install: {{ package.prefix }}"
@@ -160,6 +185,19 @@ else
   echo "Nothing to clean up."
 fi
 {{ end_group() }}
+{% endif %}
+{%- endmacro %}
+
+
+{# === Staged Build Install === #}
+{% macro staged_install(stage, package) -%}
+{% if ci_options.dry_run %}
+echo "Dry run: skipping install for stage {{ stage.name }}"
+{% elif stage.install_command %}
+{{ stage.install_command }}
+{% else %}
+cd {{ ci_options.workdir }}/{{ package.name }}/build
+time cmake --install . > /dev/null
 {% endif %}
 {%- endmacro %}
 
@@ -208,10 +246,13 @@ ecbundle-build \
     --cmake="{{ package.cmake_options|join(' ') }}" \
     -j{{ ci_options.parallel }} \
     --no-colour \
-    --install \
+    {% if not ci_options.dry_run %}--install{% endif %} \
     --src-dir={{ ci_options.workdir }}/{{ package.name }}/source \
     --build-dir={{ ci_options.workdir }}/builds \
     --install-dir={{ package.prefix }}
+{% if ci_options.dry_run %}
+echo "Dry run: skipping ecbundle install"
+{% endif %}
 {{ end_group() }}
 
 {# Cleanup credentials #}
@@ -378,6 +419,9 @@ else
     {% endif %}
 
     {% if not ci_options.ecbundle %}
+    {% if package.type == "main" and ci_options.dry_run %}
+    echo "Dry run: skipping installation of {{ package.name }}"
+    {% else %}
     {{ start_group("Installing: " + package.name) }}
     {{ cd_pkg_subdir(package) }}
     cd build
@@ -389,6 +433,7 @@ else
     {% endif %}
     {{ end_group() }}
     {% endif %}
+    {% endif %}
 
     {% if package.type == "main" and ci_options.self_test %}
     {{ start_group("Testing: " + package.name) }}
@@ -398,7 +443,7 @@ else
     {{ end_group() }}
     {% endif %}
 
-    {% if ci_options.hpc_config.enable_cache %}
+    {% if ci_options.hpc_config.enable_cache and not (package.type == "main" and ci_options.dry_run) %}
     {{ start_group("Save cache: " + package.name) }}
     cd {{ ci_options.workdir }}
     tar -czf {{ package.cache_key + ".tar.gz" }} -C {{ package.prefix }} .
@@ -462,7 +507,11 @@ fi
     {{ end_group() }}
 
     {{ start_group("Installing: " + package.name) }}
+    {% if ci_options.dry_run %}
+    echo "Dry run: skipping pip install of {{ package.name }}"
+    {% else %}
     {{ pip_cmd }} install dist/*
+    {% endif %}
     {{ end_group() }}
 
     {% if ci_options.self_test %}
@@ -506,6 +555,10 @@ if [ -n "${__BUILD_LOG_TEE:-}" ]; then
     sleep 0.1  # Brief pause to let tee flush
 fi
 
+{% if ci_options.dry_run %}
+{{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
+echo "Dry run: skipping README generation and permission lock"
+{% else %}
 {{ redact_build_log(build_log=ci_options.install_prefix + "/build.log") }}
 
 {{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
@@ -515,6 +568,7 @@ fi
 echo "Locking permissions on {{ ci_options.install_prefix }}"
 timeout 300 chmod -R a-w "{{ ci_options.install_prefix }}" || echo "Warning: chmod timed out or failed (continuing anyway)"
 {{ end_group() }}
+{% endif %}
 {% endif %}
 
 {% if ci_options.sync_module %}
