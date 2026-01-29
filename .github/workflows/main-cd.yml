@@ -292,7 +292,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-staged
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -353,7 +353,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub release
-        uses: ecmwf/reusable-workflows/cd-actions/release@cd-hpc-staged
+        uses: ecmwf/reusable-workflows/cd-actions/release@v2
         with:
           config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}
