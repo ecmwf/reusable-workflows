@@ -130,19 +130,20 @@ module list
 
 
 {# === Export Package Environment === #}
-{% macro export_package_env(package, include_cmake_prefix=false) -%}
+{% macro export_package_env(package, include_cmake_prefix=false, base_path=none) -%}
+{% set path = base_path if base_path else package.prefix %}
 cd {{ ci_options.workdir }}
-export {{ package.name|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_DIR="{{ package.prefix }}"
-export {{ package.name|upper|replace("-", "_") }}_PATH="{{ package.prefix }}"
-export PATH="{{ package.prefix }}/bin:$PATH"
-export BIN_PATH="{{ package.prefix }}/bin:$BIN_PATH"
-export INCLUDE_PATH="{{ package.prefix }}/include:$INCLUDE_PATH"
-export INSTALL_PATH="{{ package.prefix }}:$INSTALL_PATH"
-export LIB_PATH="{{ package.prefix }}/lib:$LIB_PATH"
-export LD_LIBRARY_PATH="{{ package.prefix }}/lib:$LD_LIBRARY_PATH"
+export {{ package.name|replace("-", "_") }}_DIR="{{ path }}"
+export {{ package.name|upper|replace("-", "_") }}_DIR="{{ path }}"
+export {{ package.name|upper|replace("-", "_") }}_PATH="{{ path }}"
+export PATH="{{ path }}/bin:$PATH"
+export BIN_PATH="{{ path }}/bin:$BIN_PATH"
+export INCLUDE_PATH="{{ path }}/include:$INCLUDE_PATH"
+export INSTALL_PATH="{{ path }}:$INSTALL_PATH"
+export LIB_PATH="{{ path }}/lib:$LIB_PATH"
+export LD_LIBRARY_PATH="{{ path }}/lib:$LD_LIBRARY_PATH"
 {% if include_cmake_prefix %}
-export CMAKE_PREFIX_PATH="{{ package.prefix }}:$CMAKE_PREFIX_PATH"
+export CMAKE_PREFIX_PATH="{{ path }}:$CMAKE_PREFIX_PATH"
 {% endif %}
 {%- endmacro %}
 
@@ -453,7 +454,11 @@ else
     {% endif %}
 fi
 
+{% if package.type == "main" and ci_options.dry_run %}
+{{ export_package_env(package, base_path=ci_options.workdir + "/" + package.name + "/build") }}
+{% else %}
 {{ export_package_env(package) }}
+{% endif %}
 {%- endmacro %}
 
 
