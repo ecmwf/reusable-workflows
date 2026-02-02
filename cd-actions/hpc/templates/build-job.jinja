@@ -67,7 +67,7 @@ echo "::STAGE_MARKER::{{ stage.name }}"
 cd {{ ci_options.workdir }}/{{ package.name }}
 rm -rf build && mkdir build && cd build
 {% endif %}
-ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ stage.cmake_options }} {{ print_cmake_options(package.cmake_options) }}
+ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_cmake_options(stage.cmake_options) }} {{ print_cmake_options(package.cmake_options) }}
 {% endif %}
 
 {# Build #}

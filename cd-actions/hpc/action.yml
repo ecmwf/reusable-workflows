@@ -673,7 +673,11 @@ runs:
         for i, stage in enumerate(stages):
             stage.setdefault('name', f'stage-{i}')
             stage.setdefault('modules', [])
-            stage.setdefault('cmake_options', '')
+            stage_cmake = stage.get('cmake_options', {})
+            if isinstance(stage_cmake, dict):
+                stage['cmake_options'] = [f'{k}={v}' for k, v in stage_cmake.items()]
+            else:
+                stage['cmake_options'] = []
             stage.setdefault('build_command', '')
             stage.setdefault('test_command', '')
             stage.setdefault('install_command', '')
