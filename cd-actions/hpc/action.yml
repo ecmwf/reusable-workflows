@@ -188,7 +188,7 @@ inputs:
   install_lib_dir:
     description: 'CMake INSTALL_LIB_DIR value (lib or lib64). If set, adds -DINSTALL_LIB_DIR to cmake options.'
     required: false
-    default: ''
+    default: 'lib'
   mkdir:
     description: 'Directories to create in workdir before build (JSON array or newline-separated)'
     required: false

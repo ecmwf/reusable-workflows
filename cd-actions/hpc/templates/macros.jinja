@@ -395,7 +395,7 @@ else
     {{ cd_pkg_subdir(package) }}
     mkdir build
     cd build
-    ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib'
+    ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} {{ print_cmake_options(package.cmake_options) }}
     {% elif ci_options.ecbundle %}
     {{ cd_pkg_subdir(package) }}
     ecbundle create --github-token={{ github.token }} --shallow --threads={{ ci_options.cpus_per_task }}
@@ -403,7 +403,7 @@ else
     {{ cd_pkg_subdir(package) }}
     mkdir build
     cd build
-    ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} -DINSTALL_LIB_DIR='lib' {{ print_cmake_options(package.cmake_options) }}
+    ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} {{ print_cmake_options(package.cmake_options) }}
     {% endif %}
 
     {% if ci_options.ecbundle %}
