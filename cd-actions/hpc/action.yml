@@ -435,13 +435,18 @@ runs:
             generic_modules.append('ninja')
 
         # === BUILD COMMON CONTEXT ===
+        def cmake_value(v):
+            if isinstance(v, bool):
+                return 'ON' if v else 'OFF'
+            return v
+
         # Parse cmake options (JSON dict to list)
         cmake_options = []
         if cmake_options_input:
             cmake_opts_dict = json.loads(cmake_options_input)
             if not isinstance(cmake_opts_dict, dict):
                 raise ValueError(f"cmake_options must be a dict, got {type(cmake_opts_dict).__name__}")
-            cmake_options = [f'{k}={v}' for k, v in cmake_opts_dict.items()]
+            cmake_options = [f'{k}={cmake_value(v)}' for k, v in cmake_opts_dict.items()]
 
         # Parse ctest options (JSON dict to list)
         ctest_options = []
@@ -675,7 +680,7 @@ runs:
             stage.setdefault('modules', [])
             stage_cmake = stage.get('cmake_options', {})
             if isinstance(stage_cmake, dict):
-                stage['cmake_options'] = [f'{k}={v}' for k, v in stage_cmake.items()]
+                stage['cmake_options'] = [f'{k}={cmake_value(v)}' for k, v in stage_cmake.items()]
             else:
                 stage['cmake_options'] = []
             stage.setdefault('build_command', '')
