@@ -299,7 +299,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-staged
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
