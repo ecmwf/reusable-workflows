@@ -68,7 +68,7 @@ runs:
         print(f"Upload method: {upload_method}")
 
     - name: Check version number
-      if: ${{ inputs.skip_version_check != 'true' }}
+      if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
       shell: python3 {0}
       run: |
         import os
