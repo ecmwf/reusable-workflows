@@ -1,0 +1,176 @@
+name: System Package Builder
+description: Build DEB/RPM system packages using CMake/CPack
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  ref_name:
+    description: 'Git ref name for artifacts'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build only, no uploads'
+    required: false
+    default: 'false'
+  skip_version_check:
+    description: 'Skip tag-vs-VERSION validation'
+    required: false
+    default: 'false'
+  build_config:
+    description: 'Path to ci-config.yml for build-package-with-config'
+    required: false
+    default: '.github/ci-config.yml'
+  cpack_generator:
+    description: 'CPack generator (DEB or RPM)'
+    required: true
+  cpack_options:
+    description: 'Pre-merged CPack options string'
+    required: false
+    default: ''
+  gh_pat:
+    description: 'GitHub PAT for repo access'
+    required: false
+  nexus_token:
+    description: 'Nexus credential (user:token)'
+    required: false
+  nexus_url:
+    description: 'Nexus upload URL'
+    required: false
+
+outputs:
+  package_path:
+    description: 'Absolute path to generated package'
+    value: ${{ steps.build.outputs.package_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse build configuration
+      id: config
+      shell: python3 {0}
+      run: |
+        import os
+
+        cpack_generator = '${{ inputs.cpack_generator }}'
+
+        if cpack_generator == 'DEB':
+            upload_method = 'multipart'
+        elif cpack_generator == 'RPM':
+            upload_method = 'put'
+        else:
+            print(f"::error::Unsupported cpack_generator: {cpack_generator}")
+            raise SystemExit(1)
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"upload_method={upload_method}\n")
+
+        print(f"CPack generator: {cpack_generator}")
+        print(f"Upload method: {upload_method}")
+
+    - name: Check version number
+      if: ${{ inputs.skip_version_check != 'true' }}
+      shell: python3 {0}
+      run: |
+        import os
+        import re
+        import sys
+
+        tag = "${{ inputs.ref_name }}"
+
+        def check_version():
+            file_name = "VERSION"
+            if os.path.isfile(file_name):
+                with open(file_name, 'r') as f:
+                    version = f.read().strip()
+                    return version
+            else:
+                print(f"::warning::{file_name} file not found! Using {file_name} is the preferred method.")
+                return
+
+        def check_cmakelists():
+            file_name = "CMakeLists.txt"
+            if os.path.isfile(file_name):
+                with open(file_name, 'r') as f:
+                    content = f.read()
+                    pattern = r"project\([\s\w]+VERSION\s+((?:\d+)(?:.\d+){0,3})"
+
+                    hit = re.search(pattern, content)
+                    version = hit.group(1)
+                    return version
+            else:
+                print(f"::warning::{file_name} file not found!")
+                return
+
+        version = check_version() or check_cmakelists()
+
+        if not version:
+            print("::error::Version not found!")
+            sys.exit(1)
+
+        if version != tag:
+            print(f"::error::Git tag ({tag}) and project version ({version}) do not match!")
+            sys.exit(1)
+
+        print("OK: Git tag and project versions match.")
+
+    - name: Create package
+      id: build
+      uses: ecmwf/reusable-workflows/build-package-with-config@v2
+      with:
+        repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
+        build_package_inputs: |
+          repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
+          cpack_generator: ${{ inputs.cpack_generator }}
+          cpack_options: ${{ inputs.cpack_options }}
+          force_build: true
+          recreate_cache: true
+          save_cache: false
+          self_test: false
+        build_config: ${{ inputs.build_config }}
+        github_token: ${{ inputs.gh_pat || github.token }}
+
+    - name: Verify package
+      shell: bash
+      run: |
+        if [ -z "${{ steps.build.outputs.package_path }}" ] || [ ! -f "${{ steps.build.outputs.package_path }}" ]; then
+          echo "::error::Built package not found!"
+          exit 1
+        fi
+        echo "Package built successfully: ${{ steps.build.outputs.package_path }}"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.build.outputs.package_path }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Upload to Nexus
+      if: ${{ inputs.dry_run != 'true' }}
+      shell: bash
+      run: |
+        token="${{ inputs.nexus_token }}"
+        url="${{ inputs.nexus_url }}"
+
+        if [ -z "$token" ] || [ -z "$url" ]; then
+          echo "::warning::No Nexus token or URL provided, skipping upload"
+          exit 0
+        fi
+
+        package_path="${{ steps.build.outputs.package_path }}"
+
+        if [ "${{ steps.config.outputs.upload_method }}" == "multipart" ]; then
+          response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${package_path}" "$url")
+        elif [ "${{ steps.config.outputs.upload_method }}" == "put" ]; then
+          file_name=$(basename "$package_path")
+          response=$(curl -w "%{http_code}" --user "$token" --upload-file "${package_path}" "${url}/${file_name}")
+        fi
+
+        status=$(echo "$response" | tail -c 4)
+        if [ "$status" -eq 201 ] || [ "$status" -eq 200 ]; then
+          echo "Successfully uploaded!"
+        else
+          echo "$status: Upload failed"
+          exit 1
+        fi

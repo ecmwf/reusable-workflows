@@ -144,6 +144,78 @@ jobs:
                       # Keep env_vars as JSON string
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
 
+                  elif build_type == 'system-package':
+                      default_platforms = {
+                          'debian-11': {
+                              'runner': ['self-hosted', 'platform-builder-debian-11'],
+                              'cpack_generator': 'DEB',
+                              'cpack_options': '-D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_11',
+                          },
+                          'debian-12': {
+                              'runner': ['self-hosted', 'platform-builder-debian-12'],
+                              'cpack_generator': 'DEB',
+                              'cpack_options': '-D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_12',
+                          },
+                          'rocky-8.6': {
+                              'runner': ['self-hosted', 'platform-builder-rocky-8.6'],
+                              'cpack_generator': 'RPM',
+                              'cpack_options': '-D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
+                          },
+                          'rocky-9.5': {
+                              'runner': ['self-hosted', 'platform-builder-rocky-9.5'],
+                              'cpack_generator': 'RPM',
+                              'cpack_options': '-D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_9',
+                          },
+                      }
+
+                      common_cpack_options = build_config.get('cpack_options', '')
+                      cpack_options_deb = build_config.get('cpack_options_deb', '')
+                      cpack_options_rpm = build_config.get('cpack_options_rpm', '')
+                      skip_version_check = str(build_config.get('skip_version_check', False)).lower()
+                      build_config_path = build_config.get('build_config', '.github/ci-config.yml')
+
+                      for platform in build_config.get('platforms', []):
+                          # Platform can be a string (use defaults) or an object (with overrides)
+                          if isinstance(platform, str):
+                              platform_name = platform
+                              overrides = {}
+                          else:
+                              platform_name = platform['name']
+                              overrides = {k: v for k, v in platform.items() if k != 'name'}
+
+                          if platform_name not in default_platforms:
+                              print(f"::error::Unknown platform: {platform_name}")
+                              raise SystemExit(1)
+
+                          defaults = default_platforms[platform_name]
+
+                          # Merge CPack options: platform defaults + format-specific + common
+                          generator = overrides.get('cpack_generator', defaults['cpack_generator'])
+                          format_options = cpack_options_deb if generator == 'DEB' else cpack_options_rpm
+                          merged_cpack_options = ' '.join(filter(None, [defaults['cpack_options'], format_options, common_cpack_options]))
+
+                          platform_item = {
+                              'name': f"{build['name']}-{platform_name}",
+                              'runner': overrides.get('runner', defaults['runner']),
+                              'type': 'system-package',
+                              'cpack_generator': generator,
+                              'cpack_options': merged_cpack_options,
+                              'build_config_path': build_config_path,
+                              'skip_version_check': skip_version_check,
+                              'nexus_token_secret': overrides.get('nexus_token_secret', defaults['nexus_token_secret']),
+                              'nexus_url_secret': overrides.get('nexus_url_secret', defaults['nexus_url_secret']),
+                          }
+                          matrix['include'].append(platform_item)
+                      continue
+
                   matrix['include'].append(matrix_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -198,6 +270,21 @@ jobs:
           buildargs: ${{ matrix.buildargs }}
           env_vars: ${{ matrix.env_vars }}
           testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
+
+      - name: Build System Package
+        if: ${{ matrix.type == 'system-package' }}
+        uses: ecmwf/reusable-workflows/cd-actions/system-package@cd-sp
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          skip_version_check: ${{ matrix.skip_version_check }}
+          build_config: ${{ matrix.build_config_path }}
+          cpack_generator: ${{ matrix.cpack_generator }}
+          cpack_options: ${{ matrix.cpack_options }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
+          nexus_token: ${{ secrets[matrix.nexus_token_secret] }}
+          nexus_url: ${{ secrets[matrix.nexus_url_secret] }}
 
   release:
     name: Create Release
