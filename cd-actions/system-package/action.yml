@@ -27,6 +27,10 @@ inputs:
     description: 'Pre-merged CPack options string'
     required: false
     default: ''
+  package_deps:
+    description: 'Runtime package dependencies (comma-separated). Translated to CPACK_DEBIAN_PACKAGE_DEPENDS or CPACK_RPM_PACKAGE_REQUIRES.'
+    required: false
+    default: ''
   os:
     description: 'Platform OS identifier (e.g. debian-12, rocky-9.5)'
     required: true
@@ -71,20 +75,29 @@ runs:
         import os
 
         cpack_generator = '${{ inputs.cpack_generator }}'
+        cpack_options = '${{ inputs.cpack_options }}'
+        package_deps = '''${{ inputs.package_deps }}'''.strip()
 
         if cpack_generator == 'DEB':
             upload_method = 'multipart'
+            if package_deps:
+                cpack_options = f'{cpack_options} -DCPACK_DEBIAN_PACKAGE_DEPENDS="{package_deps}"'
         elif cpack_generator == 'RPM':
             upload_method = 'put'
+            if package_deps:
+                cpack_options = f'{cpack_options} -DCPACK_RPM_PACKAGE_REQUIRES="{package_deps}"'
         else:
             print(f"::error::Unsupported cpack_generator: {cpack_generator}")
             raise SystemExit(1)
 
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"upload_method={upload_method}\n")
+            f.write(f"cpack_options={cpack_options}\n")
 
         print(f"CPack generator: {cpack_generator}")
         print(f"Upload method: {upload_method}")
+        print(f"Package deps: {package_deps or '(none)'}")
+        print(f"Final CPack options: {cpack_options}")
 
     - name: Check version number
       if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
@@ -140,7 +153,7 @@ runs:
         build_package_inputs: |
           repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
           cpack_generator: ${{ inputs.cpack_generator }}
-          cpack_options: ${{ inputs.cpack_options }}
+          cpack_options: ${{ steps.config.outputs.cpack_options }}
           os: ${{ inputs.os }}
           compiler: ${{ inputs.compiler }}
           compiler_cc: ${{ inputs.compiler_cc }}
