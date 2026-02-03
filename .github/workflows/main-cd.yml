@@ -188,7 +188,6 @@ jobs:
                       defaults = default_platforms[platform_name]
                       common_cpack_options = build_config.get('cpack_options', '')
                       skip_version_check = str(build_config.get('skip_version_check', False)).lower()
-                      build_config_path = build_config.get('build_config', '.github/ci-config.yml')
                       raw_deps = build_config.get('package_deps', [])
                       if isinstance(raw_deps, list):
                           package_deps = ', '.join(raw_deps)
@@ -204,9 +203,22 @@ jobs:
                           'os': defaults['os'],
                           'cpack_generator': defaults['cpack_generator'],
                           'cpack_options': merged_cpack_options,
-                          'build_config_path': build_config_path,
                           'skip_version_check': skip_version_check,
                           'package_deps': package_deps,
+                          'dependencies': build_config.get('dependencies', ''),
+                          'dependency_branch': build_config.get('dependency_branch', ''),
+                          'cmake_options': build_config.get('cmake_options', ''),
+                          'ctest_options': build_config.get('ctest_options', ''),
+                          'dependency_cmake_options': build_config.get('dependency_cmake_options', ''),
+                          'cmake': str(build_config.get('cmake', False)).lower(),
+                          'ecbundle': str(build_config.get('ecbundle', False)).lower(),
+                          'self_build': str(build_config.get('self_build', True)).lower(),
+                          'self_coverage': str(build_config.get('self_coverage', False)).lower(),
+                          'cache_suffix': build_config.get('cache_suffix', ''),
+                          'toolchain_file': build_config.get('toolchain_file', ''),
+                          'install_dir': build_config.get('install_dir', ''),
+                          'download_dir': build_config.get('download_dir', ''),
+                          'parallelism_factor': str(build_config.get('parallelism_factor', '2')),
                           'nexus_token_secret': defaults['nexus_token_secret'],
                           'nexus_url_secret': defaults['nexus_url_secret'],
                       }
@@ -276,11 +288,24 @@ jobs:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           skip_version_check: ${{ matrix.skip_version_check }}
-          build_config: ${{ matrix.build_config_path }}
           cpack_generator: ${{ matrix.cpack_generator }}
           cpack_options: ${{ matrix.cpack_options }}
           package_deps: ${{ matrix.package_deps }}
           os: ${{ matrix.os }}
+          dependencies: ${{ matrix.dependencies }}
+          dependency_branch: ${{ matrix.dependency_branch }}
+          cmake_options: ${{ matrix.cmake_options }}
+          ctest_options: ${{ matrix.ctest_options }}
+          dependency_cmake_options: ${{ matrix.dependency_cmake_options }}
+          cmake: ${{ matrix.cmake }}
+          ecbundle: ${{ matrix.ecbundle }}
+          self_build: ${{ matrix.self_build }}
+          self_coverage: ${{ matrix.self_coverage }}
+          cache_suffix: ${{ matrix.cache_suffix }}
+          toolchain_file: ${{ matrix.toolchain_file }}
+          install_dir: ${{ matrix.install_dir }}
+          download_dir: ${{ matrix.download_dir }}
+          parallelism_factor: ${{ matrix.parallelism_factor }}
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ secrets[matrix.nexus_token_secret] }}
           nexus_url: ${{ secrets[matrix.nexus_url_secret] }}

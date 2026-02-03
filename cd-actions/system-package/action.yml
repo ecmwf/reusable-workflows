@@ -16,10 +16,62 @@ inputs:
     description: 'Skip tag-vs-VERSION validation'
     required: false
     default: 'false'
-  build_config:
-    description: 'Path to ci-config.yml for build-package-with-config'
+  dependencies:
+    description: 'List of dependency repositories to build (e.g. owner/repo@ref, one per line)'
     required: false
-    default: '.github/ci-config.yml'
+    default: ''
+  dependency_branch:
+    description: 'Default branch/tag for dependency repositories'
+    required: false
+    default: ''
+  cmake_options:
+    description: 'CMake options for the current repository build (-DVAR=value ...)'
+    required: false
+    default: ''
+  ctest_options:
+    description: 'CTest options for the current repository tests (-R regex ...)'
+    required: false
+    default: ''
+  dependency_cmake_options:
+    description: 'CMake options for dependency builds (owner/repo: "-DVAR=value")'
+    required: false
+    default: ''
+  cmake:
+    description: 'Use CMake instead of ecbuild for build configuration'
+    required: false
+    default: 'false'
+  ecbundle:
+    description: 'Use ecbundle for building bundles'
+    required: false
+    default: 'false'
+  self_build:
+    description: 'Whether to build from currently checked out repository'
+    required: false
+    default: 'true'
+  self_coverage:
+    description: 'Whether to collect code coverage'
+    required: false
+    default: 'false'
+  cache_suffix:
+    description: 'String appended to cache key to invalidate build cache'
+    required: false
+    default: ''
+  toolchain_file:
+    description: 'Path to CMake toolchain file'
+    required: false
+    default: ''
+  install_dir:
+    description: 'Directory for installing dependencies and current package'
+    required: false
+    default: ''
+  download_dir:
+    description: 'Directory for downloading dependency repositories and artifacts'
+    required: false
+    default: ''
+  parallelism_factor:
+    description: 'Number of threads for build job'
+    required: false
+    default: '2'
   cpack_generator:
     description: 'CPack generator (DEB or RPM)'
     required: true
@@ -99,6 +151,58 @@ runs:
         print(f"Package deps: {package_deps or '(none)'}")
         print(f"Final CPack options: {cpack_options}")
 
+    - name: Merge build package inputs
+      id: merge-inputs
+      shell: python3 {0}
+      run: |
+        import os, yaml
+
+        merged = {
+            'repository': '${{ format('{0}@{1}', github.repository, github.sha) }}',
+            'cpack_generator': '${{ inputs.cpack_generator }}',
+            'cpack_options': '${{ steps.config.outputs.cpack_options }}',
+            'os': '${{ inputs.os }}',
+            'compiler': '${{ inputs.compiler }}',
+            'compiler_cc': '${{ inputs.compiler_cc }}',
+            'compiler_cxx': '${{ inputs.compiler_cxx }}',
+            'compiler_fc': '${{ inputs.compiler_fc }}',
+            'force_build': True,
+            'recreate_cache': True,
+            'save_cache': False,
+            'self_test': False,
+            'cmake': '${{ inputs.cmake }}',
+            'ecbundle': '${{ inputs.ecbundle }}',
+            'self_build': '${{ inputs.self_build }}',
+            'self_coverage': '${{ inputs.self_coverage }}',
+            'parallelism_factor': '${{ inputs.parallelism_factor }}',
+        }
+
+        # Add optional string fields only if non-empty.
+        optional = {
+            'dependencies': '''${{ inputs.dependencies }}'''.strip(),
+            'dependency_branch': '''${{ inputs.dependency_branch }}'''.strip(),
+            'cmake_options': '''${{ inputs.cmake_options }}'''.strip(),
+            'ctest_options': '''${{ inputs.ctest_options }}'''.strip(),
+            'dependency_cmake_options': '''${{ inputs.dependency_cmake_options }}'''.strip(),
+            'cache_suffix': '''${{ inputs.cache_suffix }}'''.strip(),
+            'toolchain_file': '''${{ inputs.toolchain_file }}'''.strip(),
+            'install_dir': '''${{ inputs.install_dir }}'''.strip(),
+            'download_dir': '''${{ inputs.download_dir }}'''.strip(),
+        }
+        for key, value in optional.items():
+            if value:
+                merged[key] = value
+
+        merged_yaml = yaml.dump(merged, default_flow_style=False)
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write("build_package_inputs<<EOF\n")
+            f.write(merged_yaml)
+            f.write("EOF\n")
+
+        print("Merged build_package_inputs:")
+        print(merged_yaml)
+
     - name: Check version number
       if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
       shell: python3 {0}
@@ -150,20 +254,7 @@ runs:
       uses: ecmwf/reusable-workflows/build-package-with-config@v2
       with:
         repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
-        build_package_inputs: |
-          repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
-          cpack_generator: ${{ inputs.cpack_generator }}
-          cpack_options: ${{ steps.config.outputs.cpack_options }}
-          os: ${{ inputs.os }}
-          compiler: ${{ inputs.compiler }}
-          compiler_cc: ${{ inputs.compiler_cc }}
-          compiler_cxx: ${{ inputs.compiler_cxx }}
-          compiler_fc: ${{ inputs.compiler_fc }}
-          force_build: true
-          recreate_cache: true
-          save_cache: false
-          self_test: false
-        build_config: ${{ inputs.build_config }}
+        build_package_inputs: ${{ steps.merge-inputs.outputs.build_package_inputs }}
         github_token: ${{ inputs.gh_pat || github.token }}
 
     - name: Verify package
