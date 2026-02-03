@@ -190,7 +190,7 @@ jobs:
                       matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
 
                   elif build_type == 'hpc':
-                      matrix_item['runner'] = ['self-hosted', 'linux', 'hpc-dev']
+                      matrix_item['runner'] = ['self-hosted', 'linux', 'hpc']
                       matrix_item['platform'] = build_config.get('platform', 'gnu-12.2.0')
                       matrix_item['install_type'] = build_config.get('install_type', 'module')
                       matrix_item['install_prefix'] = build_config.get('install_prefix', '')
