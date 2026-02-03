@@ -27,6 +27,25 @@ inputs:
     description: 'Pre-merged CPack options string'
     required: false
     default: ''
+  os:
+    description: 'Platform OS identifier (e.g. debian-12, rocky-9.5)'
+    required: true
+  compiler:
+    description: 'Compiler family (e.g. gnu)'
+    required: false
+    default: 'gnu'
+  compiler_cc:
+    description: 'C compiler command'
+    required: false
+    default: 'gcc'
+  compiler_cxx:
+    description: 'C++ compiler command'
+    required: false
+    default: 'g++'
+  compiler_fc:
+    description: 'Fortran compiler command'
+    required: false
+    default: 'gfortran'
   gh_pat:
     description: 'GitHub PAT for repo access'
     required: false
@@ -122,6 +141,11 @@ runs:
           repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
           cpack_generator: ${{ inputs.cpack_generator }}
           cpack_options: ${{ inputs.cpack_options }}
+          os: ${{ inputs.os }}
+          compiler: ${{ inputs.compiler }}
+          compiler_cc: ${{ inputs.compiler_cc }}
+          compiler_cxx: ${{ inputs.compiler_cxx }}
+          compiler_fc: ${{ inputs.compiler_fc }}
           force_build: true
           recreate_cache: true
           save_cache: false
