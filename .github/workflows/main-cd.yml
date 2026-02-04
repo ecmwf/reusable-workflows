@@ -195,6 +195,7 @@ jobs:
                           package_deps = str(raw_deps)
 
                       description = build_config.get('description', '')
+                      license = build_config.get('license', '')
 
                       merged_cpack_options = ' '.join(filter(None, [defaults['cpack_options'], common_cpack_options]))
 
@@ -208,6 +209,7 @@ jobs:
                           'skip_version_check': skip_version_check,
                           'package_deps': package_deps,
                           'description': description,
+                          'license': license,
                           'dependencies': build_config.get('dependencies', ''),
                           'dependency_branch': build_config.get('dependency_branch', ''),
                           'cmake_options': build_config.get('cmake_options', ''),
@@ -295,6 +297,7 @@ jobs:
           cpack_options: ${{ matrix.cpack_options }}
           package_deps: ${{ matrix.package_deps }}
           description: ${{ matrix.description }}
+          license: ${{ matrix.license }}
           os: ${{ matrix.os }}
           dependencies: ${{ matrix.dependencies }}
           dependency_branch: ${{ matrix.dependency_branch }}

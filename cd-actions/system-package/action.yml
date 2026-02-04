@@ -87,6 +87,10 @@ inputs:
     description: 'Package description. Falls back to GitHub repository description if empty.'
     required: false
     default: ''
+  license:
+    description: 'Package license (SPDX identifier). Falls back to GitHub repository license if empty.'
+    required: false
+    default: ''
   os:
     description: 'Platform OS identifier (e.g. debian-12, rocky-9.5)'
     required: true
@@ -142,6 +146,12 @@ runs:
         if not description:
             description = '''${{ github.event.repository.description }}'''.strip()
 
+        license = '''${{ inputs.license }}'''.strip()
+        if not license:
+            license = '''${{ github.event.repository.license.spdx_id }}'''.strip()
+        if license == 'NOASSERTION':
+            license = ''
+
         if cpack_generator == 'DEB':
             upload_method = 'multipart'
             deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
@@ -165,6 +175,13 @@ runs:
             print(f"Description: {description}")
         else:
             print("Description: (none)")
+
+        if license:
+            escaped_license = cmake_escape(license)
+            lines.append(f'set(CPACK_RPM_PACKAGE_LICENSE "{escaped_license}" CACHE STRING "" FORCE)')
+            print(f"License: {license}")
+        else:
+            print("License: (none)")
 
         with open(overrides_cmake_file, 'w') as f:
             for line in lines:
