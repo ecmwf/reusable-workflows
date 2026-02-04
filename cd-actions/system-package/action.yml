@@ -132,24 +132,31 @@ runs:
 
         if cpack_generator == 'DEB':
             upload_method = 'multipart'
-            if package_deps:
-                cpack_options = f'{cpack_options} -DCPACK_DEBIAN_PACKAGE_DEPENDS="{package_deps}"'
+            deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
         elif cpack_generator == 'RPM':
             upload_method = 'put'
-            if package_deps:
-                cpack_options = f'{cpack_options} -DCPACK_RPM_PACKAGE_REQUIRES="{package_deps}"'
+            deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
         else:
             print(f"::error::Unsupported cpack_generator: {cpack_generator}")
             raise SystemExit(1)
 
+        # TODO: build-package does not parse the deps option nicely, we should update build-package code in the future instead of this
+        deps_cmake_file = ''
+        if package_deps:
+            deps_cmake_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-package-deps.cmake')
+            with open(deps_cmake_file, 'w') as f:
+                f.write(f'set({deps_var} "{package_deps}" CACHE STRING "" FORCE)\n')
+            print(f"Wrote {deps_var} to {deps_cmake_file}")
+
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"upload_method={upload_method}\n")
             f.write(f"cpack_options={cpack_options}\n")
+            f.write(f"deps_cmake_file={deps_cmake_file}\n")
 
         print(f"CPack generator: {cpack_generator}")
         print(f"Upload method: {upload_method}")
         print(f"Package deps: {package_deps or '(none)'}")
-        print(f"Final CPack options: {cpack_options}")
+        print(f"CPack options: {cpack_options}")
 
     - name: Merge build package inputs
       id: merge-inputs
@@ -192,6 +199,13 @@ runs:
         for key, value in optional.items():
             if value:
                 merged[key] = value
+
+        # Prepend -C <file> to cmake_options so package deps reach cpack
+        # via the cmake cache rather than the cpack_options string.
+        deps_cmake_file = '${{ steps.config.outputs.deps_cmake_file }}'
+        if deps_cmake_file:
+            existing = merged.get('cmake_options', '')
+            merged['cmake_options'] = f'-C {deps_cmake_file} {existing}'.strip()
 
         merged_yaml = yaml.dump(merged, default_flow_style=False)
 
