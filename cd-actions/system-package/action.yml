@@ -83,6 +83,10 @@ inputs:
     description: 'Runtime package dependencies (comma-separated). Translated to CPACK_DEBIAN_PACKAGE_DEPENDS or CPACK_RPM_PACKAGE_REQUIRES.'
     required: false
     default: ''
+  description:
+    description: 'Package description. Falls back to GitHub repository description if empty.'
+    required: false
+    default: ''
   os:
     description: 'Platform OS identifier (e.g. debian-12, rocky-9.5)'
     required: true
@@ -126,36 +130,61 @@ runs:
       run: |
         import os
 
+        def cmake_escape(s):
+            """Escape backslashes, double-quotes, and semicolons for CMake strings."""
+            return s.replace('\\', '\\\\').replace('"', '\\"').replace(';', '\\;')
+
         cpack_generator = '${{ inputs.cpack_generator }}'
         cpack_options = '${{ inputs.cpack_options }}'
         package_deps = '''${{ inputs.package_deps }}'''.strip()
+        description = '''${{ inputs.description }}'''.strip()
+
+        if not description:
+            description = '''${{ github.event.repository.description }}'''.strip()
 
         if cpack_generator == 'DEB':
             upload_method = 'multipart'
             deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
+            desc_var = 'CPACK_DEBIAN_PACKAGE_DESCRIPTION'
         elif cpack_generator == 'RPM':
             upload_method = 'put'
             deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
+            desc_var = 'CPACK_RPM_PACKAGE_SUMMARY'
         else:
             print(f"::error::Unsupported cpack_generator: {cpack_generator}")
             raise SystemExit(1)
 
-        # TODO: build-package does not parse the deps option nicely, we should update build-package code in the future instead of this
-        deps_cmake_file = ''
+        overrides_cmake_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-overrides.cmake')
+        lines = []
+
         if package_deps:
-            deps_cmake_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-package-deps.cmake')
-            with open(deps_cmake_file, 'w') as f:
-                f.write(f'set({deps_var} "{package_deps}" CACHE STRING "" FORCE)\n')
-            print(f"Wrote {deps_var} to {deps_cmake_file}")
+            lines.append(f'set({deps_var} "{cmake_escape(package_deps)}" CACHE STRING "" FORCE)')
+            print(f"Package deps ({deps_var}): {package_deps}")
+
+        if description:
+            escaped = cmake_escape(description)
+            lines.append(f'set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "{escaped}" CACHE STRING "" FORCE)')
+            lines.append(f'set({desc_var} "{escaped}" CACHE STRING "" FORCE)')
+            print(f"Description ({desc_var}): {description}")
+        else:
+            print("Description: (none)")
+
+        with open(overrides_cmake_file, 'w') as f:
+            for line in lines:
+                f.write(line + '\n')
+
+        if lines:
+            print(f"Wrote overrides to {overrides_cmake_file}")
+        else:
+            print(f"Created empty overrides file: {overrides_cmake_file}")
 
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"upload_method={upload_method}\n")
             f.write(f"cpack_options={cpack_options}\n")
-            f.write(f"deps_cmake_file={deps_cmake_file}\n")
+            f.write(f"overrides_cmake_file={overrides_cmake_file}\n")
 
         print(f"CPack generator: {cpack_generator}")
         print(f"Upload method: {upload_method}")
-        print(f"Package deps: {package_deps or '(none)'}")
         print(f"CPack options: {cpack_options}")
 
     - name: Merge build package inputs
@@ -200,12 +229,12 @@ runs:
             if value:
                 merged[key] = value
 
-        # Prepend -C <file> to cmake_options so package deps reach cpack
-        # via the cmake cache rather than the cpack_options string.
-        deps_cmake_file = '${{ steps.config.outputs.deps_cmake_file }}'
-        if deps_cmake_file:
+        # Prepend -C <file> to cmake_options so overrides (package deps,
+        # description) reach cpack via the cmake cache.
+        overrides_cmake_file = '${{ steps.config.outputs.overrides_cmake_file }}'
+        if overrides_cmake_file:
             existing = merged.get('cmake_options', '')
-            merged['cmake_options'] = f'-C {deps_cmake_file} {existing}'.strip()
+            merged['cmake_options'] = f'-C {overrides_cmake_file} {existing}'.strip()
 
         merged_yaml = yaml.dump(merged, default_flow_style=False)
 

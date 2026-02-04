@@ -194,6 +194,8 @@ jobs:
                       else:
                           package_deps = str(raw_deps)
 
+                      description = build_config.get('description', '')
+
                       merged_cpack_options = ' '.join(filter(None, [defaults['cpack_options'], common_cpack_options]))
 
                       platform_item = {
@@ -205,6 +207,7 @@ jobs:
                           'cpack_options': merged_cpack_options,
                           'skip_version_check': skip_version_check,
                           'package_deps': package_deps,
+                          'description': description,
                           'dependencies': build_config.get('dependencies', ''),
                           'dependency_branch': build_config.get('dependency_branch', ''),
                           'cmake_options': build_config.get('cmake_options', ''),
@@ -291,6 +294,7 @@ jobs:
           cpack_generator: ${{ matrix.cpack_generator }}
           cpack_options: ${{ matrix.cpack_options }}
           package_deps: ${{ matrix.package_deps }}
+          description: ${{ matrix.description }}
           os: ${{ matrix.os }}
           dependencies: ${{ matrix.dependencies }}
           dependency_branch: ${{ matrix.dependency_branch }}
