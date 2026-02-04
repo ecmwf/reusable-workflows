@@ -145,11 +145,9 @@ runs:
         if cpack_generator == 'DEB':
             upload_method = 'multipart'
             deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
-            desc_var = 'CPACK_DEBIAN_PACKAGE_DESCRIPTION'
         elif cpack_generator == 'RPM':
             upload_method = 'put'
             deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
-            desc_var = 'CPACK_RPM_PACKAGE_SUMMARY'
         else:
             print(f"::error::Unsupported cpack_generator: {cpack_generator}")
             raise SystemExit(1)
@@ -164,8 +162,7 @@ runs:
         if description:
             escaped = cmake_escape(description)
             lines.append(f'set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "{escaped}" CACHE STRING "" FORCE)')
-            lines.append(f'set({desc_var} "{escaped}" CACHE STRING "" FORCE)')
-            print(f"Description ({desc_var}): {description}")
+            print(f"Description: {description}")
         else:
             print("Description: (none)")
 
