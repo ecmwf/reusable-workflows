@@ -119,6 +119,10 @@ inputs:
    description: 'Docker image to use for install tests'
    required: false
    default: ''
+  install_test_command:
+    description: 'Command to run after package installation in Docker (e.g., "myapp --version")'
+    required: false
+    default: ''
   build_type:
     description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
     required: false
@@ -467,10 +471,14 @@ runs:
         package_name="$(basename "$package_path")"
         docker_image="${{ steps.docker-image.outputs.docker_image }}"
         cpack_generator="${{ inputs.cpack_generator }}"
+        install_test_command="${{ inputs.install_test_command }}"
 
         echo "Testing package installation in Docker container"
         echo "  Image: $docker_image"
         echo "  Package: $package_name"
+        if [ -n "$install_test_command" ]; then
+          echo "  Post-install command: $install_test_command"
+        fi
 
         if [ "$cpack_generator" == "DEB" ]; then
           install_cmd="apt-get update && apt-get install -y /pkg/$package_name"
@@ -479,6 +487,11 @@ runs:
         else
           echo "::error::Unsupported cpack_generator for install test: $cpack_generator"
           exit 1
+        fi
+
+        # Append post-install command if provided
+        if [ -n "$install_test_command" ]; then
+          install_cmd="$install_cmd && $install_test_command"
         fi
 
         docker run --rm -v "$package_dir:/pkg:ro" "$docker_image" sh -xc "$install_cmd"
