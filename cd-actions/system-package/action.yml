@@ -481,7 +481,7 @@ runs:
           exit 1
         fi
 
-        docker run --rm -v "$package_dir:/pkg:ro" "$docker_image" sh -c "$install_cmd"
+        docker run --rm -v "$package_dir:/pkg:ro" "$docker_image" sh -xc "$install_cmd"
 
         echo "Package installation test passed"
 
