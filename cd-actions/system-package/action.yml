@@ -91,6 +91,50 @@ inputs:
     description: 'Package license (SPDX identifier). Falls back to GitHub repository license if empty.'
     required: false
     default: ''
+  maintainer:
+    description: 'Package maintainer email (e.g. name@example.com).'
+    required: false
+    default: 'software@ecmwf.int'
+  vendor:
+    description: 'Package vendor name'
+    required: false
+    default: 'ECMWF'
+  homepage_url:
+    description: 'Project homepage URL. Falls back to GitHub repository URL.'
+    required: false
+    default: ''
+  install_prefix:
+    description: 'Package installation prefix (e.g. /opt/ecmwf)'
+    required: false
+    default: '/opt/ecmwf'
+  self_test:
+    description: 'Run tests after build before packaging'
+    required: false
+    default: 'true'
+  build_type:
+    description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
+    required: false
+    default: 'RelWithDebInfo'
+  python_version:
+    description: 'Python version for build environment'
+    required: false
+    default: ''
+  env:
+    description: 'Environment variables (VAR=value, one per line)'
+    required: false
+    default: ''
+  deb_section:
+    description: 'Debian package section (e.g. libs, science, devel)'
+    required: false
+    default: ''
+  deb_priority:
+    description: 'Debian package priority (optional, required, important, standard)'
+    required: false
+    default: 'optional'
+  rpm_group:
+    description: 'RPM package group (e.g. Development/Libraries)'
+    required: false
+    default: ''
   os:
     description: 'Platform OS identifier (e.g. debian-12, rocky-9.5)'
     required: true
@@ -152,6 +196,20 @@ runs:
         if license == 'NOASSERTION':
             license = ''
 
+        maintainer = '''${{ inputs.maintainer }}'''.strip()
+
+        vendor = '''${{ inputs.vendor }}'''.strip()
+
+        homepage_url = '''${{ inputs.homepage_url }}'''.strip()
+        if not homepage_url:
+            homepage_url = 'https://github.com/${{ github.repository }}'
+
+        install_prefix = '''${{ inputs.install_prefix }}'''.strip()
+
+        deb_section = '''${{ inputs.deb_section }}'''.strip()
+        deb_priority = '''${{ inputs.deb_priority }}'''.strip()
+        rpm_group = '''${{ inputs.rpm_group }}'''.strip()
+
         if cpack_generator == 'DEB':
             upload_method = 'multipart'
             deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
@@ -182,6 +240,39 @@ runs:
             print(f"License: {license}")
         else:
             print("License: (none)")
+
+        # DEB-specific options
+        if cpack_generator == 'DEB':
+            lines.append(f'set(CPACK_DEBIAN_PACKAGE_MAINTAINER "{cmake_escape(maintainer)}" CACHE STRING "" FORCE)')
+            print(f"Maintainer: {maintainer}")
+            if deb_section:
+                lines.append(f'set(CPACK_DEBIAN_PACKAGE_SECTION "{cmake_escape(deb_section)}" CACHE STRING "" FORCE)')
+                print(f"DEB Section: {deb_section}")
+            if deb_priority:
+                lines.append(f'set(CPACK_DEBIAN_PACKAGE_PRIORITY "{cmake_escape(deb_priority)}" CACHE STRING "" FORCE)')
+                print(f"DEB Priority: {deb_priority}")
+            lines.append('set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON CACHE BOOL "" FORCE)')
+
+        # RPM-specific options
+        if cpack_generator == 'RPM':
+            if rpm_group:
+                lines.append(f'set(CPACK_RPM_PACKAGE_GROUP "{cmake_escape(rpm_group)}" CACHE STRING "" FORCE)')
+                print(f"RPM Group: {rpm_group}")
+
+        # Common metadata
+        if vendor:
+            lines.append(f'set(CPACK_PACKAGE_VENDOR "{cmake_escape(vendor)}" CACHE STRING "" FORCE)')
+            lines.append(f'set(CPACK_RPM_PACKAGE_VENDOR "{cmake_escape(vendor)}" CACHE STRING "" FORCE)')
+            print(f"Vendor: {vendor}")
+
+        if homepage_url:
+            lines.append(f'set(CPACK_PACKAGE_HOMEPAGE_URL "{cmake_escape(homepage_url)}" CACHE STRING "" FORCE)')
+            lines.append(f'set(CPACK_RPM_PACKAGE_URL "{cmake_escape(homepage_url)}" CACHE STRING "" FORCE)')
+            print(f"Homepage URL: {homepage_url}")
+
+        if install_prefix:
+            lines.append(f'set(CPACK_PACKAGING_INSTALL_PREFIX "{cmake_escape(install_prefix)}" CACHE STRING "" FORCE)')
+            print(f"Install Prefix: {install_prefix}")
 
         with open(overrides_cmake_file, 'w') as f:
             for line in lines:
@@ -219,7 +310,7 @@ runs:
             'force_build': True,
             'recreate_cache': True,
             'save_cache': False,
-            'self_test': False,
+            'self_test': '${{ inputs.self_test }}' == 'true',
             'cmake': '${{ inputs.cmake }}',
             'ecbundle': '${{ inputs.ecbundle }}',
             'self_build': '${{ inputs.self_build }}',
@@ -238,10 +329,18 @@ runs:
             'toolchain_file': '''${{ inputs.toolchain_file }}'''.strip(),
             'install_dir': '''${{ inputs.install_dir }}'''.strip(),
             'download_dir': '''${{ inputs.download_dir }}'''.strip(),
+            'python_version': '''${{ inputs.python_version }}'''.strip(),
+            'env': '''${{ inputs.env }}'''.strip(),
         }
         for key, value in optional.items():
             if value:
                 merged[key] = value
+
+        # Add build_type to cmake_options if specified
+        build_type = '''${{ inputs.build_type }}'''.strip()
+        if build_type:
+            existing = merged.get('cmake_options', '')
+            merged['cmake_options'] = f'-DCMAKE_BUILD_TYPE={build_type} {existing}'.strip()
 
         # Prepend -C <file> to cmake_options so overrides (package deps,
         # description) reach cpack via the cmake cache.

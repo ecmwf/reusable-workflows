@@ -150,7 +150,7 @@ jobs:
                               'runner': ['self-hosted', 'platform-builder-debian-11'],
                               'os': 'debian-11',
                               'cpack_generator': 'DEB',
-                              'cpack_options': '-D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON',
+                              'cpack_options': '',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_11',
                           },
@@ -158,7 +158,7 @@ jobs:
                               'runner': ['self-hosted', 'platform-builder-debian-12'],
                               'os': 'debian-12',
                               'cpack_generator': 'DEB',
-                              'cpack_options': '-D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON',
+                              'cpack_options': '',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_12',
                           },
@@ -166,7 +166,7 @@ jobs:
                               'runner': ['self-hosted', 'platform-builder-rocky-8.6'],
                               'os': 'rocky-8.6',
                               'cpack_generator': 'RPM',
-                              'cpack_options': '-D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf',
+                              'cpack_options': '',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
                           },
@@ -174,7 +174,7 @@ jobs:
                               'runner': ['self-hosted', 'platform-builder-rocky-9.5'],
                               'os': 'rocky-9.5',
                               'cpack_generator': 'RPM',
-                              'cpack_options': '-D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf',
+                              'cpack_options': '',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_9',
                           },
@@ -210,6 +210,17 @@ jobs:
                           'package_deps': package_deps,
                           'description': description,
                           'license': license,
+                          'maintainer': build_config.get('maintainer', ''),
+                          'vendor': build_config.get('vendor', 'ECMWF'),
+                          'homepage_url': build_config.get('homepage_url', ''),
+                          'install_prefix': build_config.get('install_prefix', '/opt/ecmwf'),
+                          'self_test': str(build_config.get('self_test', False)).lower(),
+                          'build_type': build_config.get('build_type', 'RelWithDebInfo'),
+                          'python_version': build_config.get('python_version', ''),
+                          'env': build_config.get('env', ''),
+                          'deb_section': build_config.get('deb_section', ''),
+                          'deb_priority': build_config.get('deb_priority', 'optional'),
+                          'rpm_group': build_config.get('rpm_group', ''),
                           'dependencies': build_config.get('dependencies', ''),
                           'dependency_branch': build_config.get('dependency_branch', ''),
                           'cmake_options': build_config.get('cmake_options', ''),
@@ -298,6 +309,17 @@ jobs:
           package_deps: ${{ matrix.package_deps }}
           description: ${{ matrix.description }}
           license: ${{ matrix.license }}
+          maintainer: ${{ matrix.maintainer }}
+          vendor: ${{ matrix.vendor }}
+          homepage_url: ${{ matrix.homepage_url }}
+          install_prefix: ${{ matrix.install_prefix }}
+          self_test: ${{ matrix.self_test }}
+          build_type: ${{ matrix.build_type }}
+          python_version: ${{ matrix.python_version }}
+          env: ${{ matrix.env }}
+          deb_section: ${{ matrix.deb_section }}
+          deb_priority: ${{ matrix.deb_priority }}
+          rpm_group: ${{ matrix.rpm_group }}
           os: ${{ matrix.os }}
           dependencies: ${{ matrix.dependencies }}
           dependency_branch: ${{ matrix.dependency_branch }}
