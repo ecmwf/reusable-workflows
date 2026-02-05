@@ -115,6 +115,10 @@ inputs:
     description: 'Run package installation test in Docker container'
     required: false
     default: 'false'
+  install_test_os_image:
+   description: 'Docker image to use for install tests'
+   required: false
+   default: ''
   build_type:
     description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
     required: false
@@ -438,11 +442,11 @@ runs:
         os_to_docker = {
             'debian-11': 'debian:11',
             'debian-12': 'debian:12',
-            'rocky-8.6': 'rockylinux:8.6',
-            'rocky-9.5': 'rockylinux:9.5',
+            'rocky-8.6': 'rockylinux/rockylinux:8.6',
+            'rocky-9.5': 'rockylinux/rockylinux:9.5',
         }
 
-        docker_image = os_to_docker.get(os_id, '')
+        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else os_to_docker.get(os_id, '')
 
         if docker_image:
             print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
