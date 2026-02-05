@@ -9,6 +9,10 @@ inputs:
   ref_name:
     description: 'Git ref name for deployment'
     required: true
+  sha:
+    description: 'Git commit SHA to checkout. Used instead of ref_name if provided'
+    required: false
+    default: ''
   dry_run:
     description: 'Dry run mode - build on HPC but skip module sync'
     required: false
@@ -297,14 +301,15 @@ runs:
         install_type = '${{ inputs.install_type }}'
         module_name = '''${{ inputs.module_name }}'''.strip() or '${{ github.repository }}'.split('/')[-1]
         ref_name = '${{ inputs.ref_name }}'
+        safe_ref_name = ref_name.replace('/', '-')  # Sanitize for use in paths
         prefix_compiler_specific = '${{ inputs.prefix_compiler_specific }}' == 'true'
 
         if install_prefix_input:
             install_prefix = install_prefix_input
         elif install_type == 'module':
-            install_prefix = f'/usr/local/apps/{module_name}/{ref_name}'
+            install_prefix = f'/usr/local/apps/{module_name}/{safe_ref_name}'
         else:
-            install_prefix = '$' + '{TMPDIR}' + f'/install/{module_name}/{ref_name}'
+            install_prefix = '$' + '{TMPDIR}' + f'/install/{module_name}/{safe_ref_name}'
 
         if prefix_compiler_specific:
             base_install_prefix = install_prefix
@@ -387,6 +392,7 @@ runs:
         repository = '${{ github.repository }}'
         repo_owner, repo_name = repository.split('/')
         ref_name = '${{ inputs.ref_name }}'
+        sha = '${{ inputs.sha }}'
         compiler = '${{ steps.config.outputs.compiler }}'
         compiler_modules = '${{ steps.config.outputs.compiler_modules }}'
         install_prefix = '${{ steps.config.outputs.install_prefix }}'
@@ -515,7 +521,7 @@ runs:
                 'name': repo_name,
                 'owner': repo_owner,
                 'repo': repo_name,
-                'ref': ref_name,
+                'ref': sha if sha else ref_name,
                 'type': 'ecbundle',
                 'prefix': install_prefix,
                 'cmake_options': cmake_options,
@@ -567,7 +573,7 @@ runs:
                     'name': repo_name,
                     'owner': repo_owner,
                     'repo': repo_name,
-                    'ref': ref_name,
+                    'ref': sha if sha else ref_name,
                     'type': 'main',
                     'prefix': install_prefix,
                     'cmake_options': cmake_options,
@@ -613,7 +619,7 @@ runs:
                     'name': repo_name,
                     'owner': repo_owner,
                     'repo': repo_name,
-                    'ref': ref_name,
+                    'ref': sha if sha else ref_name,
                     'type': 'main-python',
                     'prefix': install_prefix,
                     'cmake_options': [],
