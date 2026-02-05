@@ -475,7 +475,7 @@ runs:
         if [ "$cpack_generator" == "DEB" ]; then
           install_cmd="apt-get update && apt-get install -y /pkg/$package_name"
         elif [ "$cpack_generator" == "RPM" ]; then
-          install_cmd="dnf install -y /pkg/$package_name"
+          install_cmd="dnf -y install epel-release && dnf install -y /pkg/$package_name"
         else
           echo "::error::Unsupported cpack_generator for install test: $cpack_generator"
           exit 1
