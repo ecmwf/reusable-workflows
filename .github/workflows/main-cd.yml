@@ -302,7 +302,8 @@ jobs:
         uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
         with:
           name: ${{ matrix.name }}
-          ref_name: ${{ inputs.ref_name }}
+          ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
+          sha: ${{ github.event.pull_request.head.sha || github.sha }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           github_user: ${{ secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
