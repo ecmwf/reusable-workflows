@@ -210,7 +210,7 @@ jobs:
                           'package_deps': package_deps,
                           'description': description,
                           'license': license,
-                          'maintainer': build_config.get('maintainer', ''),
+                          'maintainer': build_config.get('maintainer', 'software@ecmwf.int'),
                           'vendor': build_config.get('vendor', 'ECMWF'),
                           'homepage_url': build_config.get('homepage_url', ''),
                           'install_prefix': build_config.get('install_prefix', '/opt/ecmwf'),
