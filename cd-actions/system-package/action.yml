@@ -111,6 +111,10 @@ inputs:
     description: 'Run tests after build before packaging'
     required: false
     default: 'true'
+  install_test:
+    description: 'Run package installation test in Docker container'
+    required: false
+    default: 'false'
   build_type:
     description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
     required: false
@@ -421,6 +425,61 @@ runs:
           exit 1
         fi
         echo "Package built successfully: ${{ steps.build.outputs.package_path }}"
+
+    - name: Determine Docker image for install test
+      id: docker-image
+      if: ${{ inputs.install_test == 'true' }}
+      shell: python3 {0}
+      run: |
+        import os
+
+        os_id = '${{ inputs.os }}'
+
+        os_to_docker = {
+            'debian-11': 'debian:11',
+            'debian-12': 'debian:12',
+            'rocky-8.6': 'rockylinux:8.6',
+            'rocky-9.5': 'rockylinux:9.5',
+        }
+
+        docker_image = os_to_docker.get(os_id, '')
+
+        if docker_image:
+            print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
+        else:
+            print(f"::warning::No Docker image mapping for OS '{os_id}', skipping install test")
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"docker_image={docker_image}\n")
+
+    - name: Test package installation in Docker
+      if: ${{ inputs.install_test == 'true' && steps.docker-image.outputs.docker_image != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        package_path="${{ steps.build.outputs.package_path }}"
+        package_dir="$(dirname "$package_path")"
+        package_name="$(basename "$package_path")"
+        docker_image="${{ steps.docker-image.outputs.docker_image }}"
+        cpack_generator="${{ inputs.cpack_generator }}"
+
+        echo "Testing package installation in Docker container"
+        echo "  Image: $docker_image"
+        echo "  Package: $package_name"
+
+        if [ "$cpack_generator" == "DEB" ]; then
+          install_cmd="apt-get update && apt-get install -y /pkg/$package_name"
+        elif [ "$cpack_generator" == "RPM" ]; then
+          install_cmd="dnf install -y /pkg/$package_name"
+        else
+          echo "::error::Unsupported cpack_generator for install test: $cpack_generator"
+          exit 1
+        fi
+
+        docker run --rm -v "$package_dir:/pkg:ro" "$docker_image" sh -c "$install_cmd"
+
+        echo "Package installation test passed"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

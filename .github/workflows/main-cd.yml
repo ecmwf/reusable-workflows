@@ -215,6 +215,7 @@ jobs:
                           'homepage_url': build_config.get('homepage_url', ''),
                           'install_prefix': build_config.get('install_prefix', '/opt/ecmwf'),
                           'self_test': str(build_config.get('self_test', False)).lower(),
+                          'install_test': str(build_config.get('install_test', False)).lower(),
                           'build_type': build_config.get('build_type', 'RelWithDebInfo'),
                           'python_version': build_config.get('python_version', ''),
                           'env': build_config.get('env', ''),
@@ -314,6 +315,7 @@ jobs:
           homepage_url: ${{ matrix.homepage_url }}
           install_prefix: ${{ matrix.install_prefix }}
           self_test: ${{ matrix.self_test }}
+          install_test: ${{ matrix.install_test }}
           build_type: ${{ matrix.build_type }}
           python_version: ${{ matrix.python_version }}
           env: ${{ matrix.env }}
