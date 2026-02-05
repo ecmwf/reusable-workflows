@@ -1,0 +1,116 @@
+{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, ecbundle_workflow, print_cmake_options, export_package_env, clean_install_dir, setup_build_log, staged_install with context %}
+
+{# Build in work directory #}
+cd {{ ci_options.workdir }}
+
+{{ setup_build_log() }}
+
+{# Make requested directories #}
+{% if ci_options.mkdir %}
+{% for dir in ci_options.mkdir %}
+mkdir -p {{ ci_options.workdir }}/{{ dir }}
+{% endfor %}
+{% endif %}
+
+{# === Build with ecbundle === #}
+{% if ci_options.use_ecbundle %}
+{% set ecbundle_pkg = packages|selectattr('type', 'equalto', 'ecbundle')|first %}
+{{ load_modules(generic_modules, ecbundle_pkg.modules if ecbundle_pkg else []) }}
+{{ set_env(env) }}
+
+{% for package in packages if package.type == "ecbundle" %}
+{{ ecbundle_workflow(package=package) }}
+{% endfor %}
+
+{% else %}
+
+{# === Build dependencies === #}
+{% for package in packages if package.type == "dependency" %}
+{% if package.name == "ecbundle" and ci_options.ecbundle %}
+{{ setup_ecbundle(package=package) }}
+{% else %}
+{{ cmake_package(package=package) }}
+{% endif %}
+{% endfor %}
+
+{# === Build main package === #}
+{% for package in packages if package.type == "main" %}
+{% if stages %}
+{# --- Staged build: multiple configure/build/install cycles --- #}
+{{ load_modules(generic_modules, package.modules) }}
+{{ set_env(env) }}
+
+{{ git_fetch(package) }}
+{{ set_package_version(package=package) }}
+
+cd {{ ci_options.workdir }}/{{ package.name }}
+mkdir -p build && cd build
+
+INSTALL_PREFIX="{{ ci_options.install_prefix }}"
+export INSTALL_PREFIX
+
+{{ clean_install_dir(package) }}
+
+{% for stage in stages %}
+{{ start_group("Stage: " + stage.name) }}
+
+{# Load stage-specific modules #}
+{% for mod in stage.modules %}
+module load {{ mod }}
+{% endfor %}
+
+echo "::STAGE_MARKER::{{ stage.name }}"
+
+{# Configure if first stage or stage has custom cmake_options #}
+{% if loop.index0 == 0 or stage.cmake_options %}
+{% if loop.index0 > 0 %}
+cd {{ ci_options.workdir }}/{{ package.name }}
+rm -rf build && mkdir build && cd build
+{% endif %}
+ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules %}-GNinja{% endif %} {{ print_cmake_options(package.cmake_options) }} {{ print_cmake_options(stage.cmake_options) }}
+{% endif %}
+
+{# Build #}
+{% if stage.build_command %}
+{{ stage.build_command }}
+{% else %}
+cd {{ ci_options.workdir }}/{{ package.name }}/build
+time cmake --build . -j{{ ci_options.parallel }}
+{% endif %}
+
+{# Test #}
+{% if stage.test_command %}
+echo "Running tests for stage: {{ stage.name }}"
+{{ stage.test_command }}
+{% endif %}
+
+{# Install #}
+{{ staged_install(stage, package) }}
+
+{# Unload stage-specific modules #}
+{% for mod in stage.modules|reverse %}
+module unload {{ mod }}
+{% endfor %}
+
+{{ end_group() }}
+{% endfor %}
+
+{# Export paths for main package #}
+{{ export_package_env(package) }}
+
+{% else %}
+{# --- Standard build: single cmake_package call --- #}
+{{ cmake_package(package=package) }}
+{% endif %}
+{% endfor %}
+
+{# === Build Python packages === #}
+{% for package in packages if package.type == "main-python" %}
+{{ python_package(package=package) }}
+{% endfor %}
+
+{% endif %}
+
+{{ post_script() }}
+
+{{ job_footer() }}
