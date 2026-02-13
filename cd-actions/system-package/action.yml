@@ -291,7 +291,7 @@ runs:
       shell: bash
       run: |
         cmake_options="-C ${{ steps.overrides.outputs.overrides_file }}"
-        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_INSTALL_RPATH_USE_LINK_RPATH=OFF"
+        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}"
 
         user_opts="${{ inputs.cmake_options }}"
         if [ -n "$user_opts" ]; then
@@ -300,6 +300,11 @@ runs:
 
         echo "cmake_options=$cmake_options" >> "$GITHUB_OUTPUT"
         echo "Final cmake_options: $cmake_options"
+
+    - name: Allow non-standard RPATHs for Fedora
+      if: ${{ startsWith(inputs.os, 'fedora-') }}
+      shell: bash
+      run: echo "QA_RPATHS=0x0002" >> "$GITHUB_ENV"
 
     - name: Set environment variables
       if: ${{ inputs.env != '' }}
