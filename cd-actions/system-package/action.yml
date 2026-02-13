@@ -427,7 +427,6 @@ runs:
         set -euo pipefail
 
         package_path="${{ steps.build.outputs.package_path }}"
-        package_dir="$(dirname "$package_path")"
         package_name="$(basename "$package_path")"
         docker_image="${{ steps.docker-image.outputs.docker_image }}"
         cpack_generator="${{ steps.config.outputs.cpack_generator }}"
@@ -442,14 +441,14 @@ runs:
         fi
 
         if [ "$cpack_generator" == "DEB" ]; then
-          install_cmd="apt-get update && apt-get install -y /pkg/$package_name"
+          install_cmd="apt-get update && apt-get install -y /tmp/$package_name"
         elif [ "$cpack_generator" == "RPM" ]; then
           case "$os_id" in
             rocky-*)
-              install_cmd="dnf -y install epel-release && dnf install -y /pkg/$package_name"
+              install_cmd="dnf -y install epel-release && dnf install -y /tmp/$package_name"
               ;;
             *)
-              install_cmd="dnf install -y /pkg/$package_name"
+              install_cmd="dnf install -y /tmp/$package_name"
               ;;
           esac
         else
@@ -457,12 +456,11 @@ runs:
           exit 1
         fi
 
-        # Append post-install command if provided
         if [ -n "$install_test_command" ]; then
           install_cmd="$install_cmd && $install_test_command"
         fi
 
-        docker run --rm -v "$package_dir:/pkg:ro" "$docker_image" sh -xc "$install_cmd"
+        docker run --rm -i "$docker_image" sh -xc "cat > /tmp/$package_name && $install_cmd" < "$package_path"
 
         echo "Package installation test passed"
 
