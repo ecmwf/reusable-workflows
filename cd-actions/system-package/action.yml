@@ -291,7 +291,7 @@ runs:
       shell: bash
       run: |
         cmake_options="-C ${{ steps.overrides.outputs.overrides_file }}"
-        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}"
+        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_INSTALL_RPATH_USE_LINK_RPATH=OFF"
 
         user_opts="${{ inputs.cmake_options }}"
         if [ -n "$user_opts" ]; then
