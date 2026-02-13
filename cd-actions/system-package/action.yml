@@ -48,37 +48,18 @@ inputs:
     description: 'Whether to build from currently checked out repository'
     required: false
     default: 'true'
-  self_coverage:
-    description: 'Whether to collect code coverage'
+  self_test:
+    description: 'Run tests after build before packaging'
     required: false
-    default: 'false'
-  cache_suffix:
-    description: 'String appended to cache key to invalidate build cache'
-    required: false
-    default: ''
+    default: 'true'
   toolchain_file:
     description: 'Path to CMake toolchain file'
-    required: false
-    default: ''
-  install_dir:
-    description: 'Directory for installing dependencies and current package'
-    required: false
-    default: ''
-  download_dir:
-    description: 'Directory for downloading dependency repositories and artifacts'
     required: false
     default: ''
   parallelism_factor:
     description: 'Number of threads for build job'
     required: false
     default: '2'
-  cpack_generator:
-    description: 'CPack generator (DEB or RPM)'
-    required: true
-  cpack_options:
-    description: 'Pre-merged CPack options string'
-    required: false
-    default: ''
   package_deps:
     description: 'Runtime package dependencies (comma-separated). Translated to CPACK_DEBIAN_PACKAGE_DEPENDS or CPACK_RPM_PACKAGE_REQUIRES.'
     required: false
@@ -107,18 +88,14 @@ inputs:
     description: 'Package installation prefix (e.g. /opt/ecmwf)'
     required: false
     default: '/opt/ecmwf'
-  self_test:
-    description: 'Run tests after build before packaging'
-    required: false
-    default: 'true'
   install_test:
     description: 'Run package installation test in Docker container'
     required: false
     default: 'false'
   install_test_os_image:
-   description: 'Docker image to use for install tests'
-   required: false
-   default: ''
+    description: 'Docker image to use for install tests'
+    required: false
+    default: ''
   install_test_command:
     description: 'Command to run after package installation in Docker (e.g., "myapp --version")'
     required: false
@@ -127,10 +104,6 @@ inputs:
     description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
     required: false
     default: 'RelWithDebInfo'
-  python_version:
-    description: 'Python version for build environment'
-    required: false
-    default: ''
   env:
     description: 'Environment variables (VAR=value, one per line)'
     required: false
@@ -148,12 +121,8 @@ inputs:
     required: false
     default: ''
   os:
-    description: 'Platform OS identifier (e.g. debian-12, rocky-9.5)'
+    description: 'Platform OS identifier (e.g. debian-12, rocky-9)'
     required: true
-  compiler:
-    description: 'Compiler family (e.g. gnu)'
-    required: false
-    default: 'gnu'
   compiler_cc:
     description: 'C compiler command'
     required: false
@@ -184,8 +153,28 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Parse build configuration
+    - name: Derive build configuration
       id: config
+      shell: bash
+      run: |
+        os="${{ inputs.os }}"
+        case "$os" in
+          debian-*|ubuntu-*)
+            echo "cpack_generator=DEB" >> "$GITHUB_OUTPUT"
+            echo "upload_method=multipart" >> "$GITHUB_OUTPUT"
+            ;;
+          rocky-*|fedora-*)
+            echo "cpack_generator=RPM" >> "$GITHUB_OUTPUT"
+            echo "upload_method=put" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "::error::Unsupported OS: $os"
+            exit 1
+            ;;
+        esac
+
+    - name: Generate CPack overrides
+      id: overrides
       shell: python3 {0}
       run: |
         import os
@@ -194,8 +183,7 @@ runs:
             """Escape backslashes, double-quotes, and semicolons for CMake strings."""
             return s.replace('\\', '\\\\').replace('"', '\\"').replace(';', '\\;')
 
-        cpack_generator = '${{ inputs.cpack_generator }}'
-        cpack_options = '${{ inputs.cpack_options }}'
+        cpack_generator = '${{ steps.config.outputs.cpack_generator }}'
         package_deps = '''${{ inputs.package_deps }}'''.strip()
         description = '''${{ inputs.description }}'''.strip()
 
@@ -209,7 +197,6 @@ runs:
             license = ''
 
         maintainer = '''${{ inputs.maintainer }}'''.strip()
-
         vendor = '''${{ inputs.vendor }}'''.strip()
 
         homepage_url = '''${{ inputs.homepage_url }}'''.strip()
@@ -217,22 +204,16 @@ runs:
             homepage_url = 'https://github.com/${{ github.repository }}'
 
         install_prefix = '''${{ inputs.install_prefix }}'''.strip()
-
         deb_section = '''${{ inputs.deb_section }}'''.strip()
         deb_priority = '''${{ inputs.deb_priority }}'''.strip()
         rpm_group = '''${{ inputs.rpm_group }}'''.strip()
 
         if cpack_generator == 'DEB':
-            upload_method = 'multipart'
             deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
-        elif cpack_generator == 'RPM':
-            upload_method = 'put'
-            deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
         else:
-            print(f"::error::Unsupported cpack_generator: {cpack_generator}")
-            raise SystemExit(1)
+            deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
 
-        overrides_cmake_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-overrides.cmake')
+        overrides_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-overrides.cmake')
         lines = []
 
         if package_deps:
@@ -240,15 +221,13 @@ runs:
             print(f"Package deps ({deps_var}): {package_deps}")
 
         if description:
-            escaped = cmake_escape(description)
-            lines.append(f'set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "{escaped}" CACHE STRING "" FORCE)')
+            lines.append(f'set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "{cmake_escape(description)}" CACHE STRING "" FORCE)')
             print(f"Description: {description}")
         else:
             print("Description: (none)")
 
         if license:
-            escaped_license = cmake_escape(license)
-            lines.append(f'set(CPACK_RPM_PACKAGE_LICENSE "{escaped_license}" CACHE STRING "" FORCE)')
+            lines.append(f'set(CPACK_RPM_PACKAGE_LICENSE "{cmake_escape(license)}" CACHE STRING "" FORCE)')
             print(f"License: {license}")
         else:
             print("License: (none)")
@@ -286,90 +265,34 @@ runs:
             lines.append(f'set(CPACK_PACKAGING_INSTALL_PREFIX "{cmake_escape(install_prefix)}" CACHE STRING "" FORCE)')
             print(f"Install Prefix: {install_prefix}")
 
-        with open(overrides_cmake_file, 'w') as f:
+        with open(overrides_file, 'w') as f:
             for line in lines:
                 f.write(line + '\n')
 
-        if lines:
-            print(f"Wrote overrides to {overrides_cmake_file}")
-        else:
-            print(f"Created empty overrides file: {overrides_cmake_file}")
+        print(f"Wrote {len(lines)} overrides to {overrides_file}")
 
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write(f"upload_method={upload_method}\n")
-            f.write(f"cpack_options={cpack_options}\n")
-            f.write(f"overrides_cmake_file={overrides_cmake_file}\n")
+            f.write(f"overrides_file={overrides_file}\n")
 
-        print(f"CPack generator: {cpack_generator}")
-        print(f"Upload method: {upload_method}")
-        print(f"CPack options: {cpack_options}")
-
-    - name: Merge build package inputs
-      id: merge-inputs
-      shell: python3 {0}
+    - name: Prepare cmake_options
+      id: cmake-opts
+      shell: bash
       run: |
-        import os, yaml
+        cmake_options="-C ${{ steps.overrides.outputs.overrides_file }}"
+        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}"
 
-        merged = {
-            'repository': '${{ format('{0}@{1}', github.repository, github.sha) }}',
-            'cpack_generator': '${{ inputs.cpack_generator }}',
-            'cpack_options': '${{ steps.config.outputs.cpack_options }}',
-            'os': '${{ inputs.os }}',
-            'compiler': '${{ inputs.compiler }}',
-            'compiler_cc': '${{ inputs.compiler_cc }}',
-            'compiler_cxx': '${{ inputs.compiler_cxx }}',
-            'compiler_fc': '${{ inputs.compiler_fc }}',
-            'force_build': True,
-            'recreate_cache': True,
-            'save_cache': False,
-            'self_test': '${{ inputs.self_test }}' == 'true',
-            'cmake': '${{ inputs.cmake }}',
-            'ecbundle': '${{ inputs.ecbundle }}',
-            'self_build': '${{ inputs.self_build }}',
-            'self_coverage': '${{ inputs.self_coverage }}',
-            'parallelism_factor': '${{ inputs.parallelism_factor }}',
-        }
+        user_opts="${{ inputs.cmake_options }}"
+        if [ -n "$user_opts" ]; then
+          cmake_options="$cmake_options $user_opts"
+        fi
 
-        # Add optional string fields only if non-empty.
-        optional = {
-            'dependencies': '''${{ inputs.dependencies }}'''.strip(),
-            'dependency_branch': '''${{ inputs.dependency_branch }}'''.strip(),
-            'cmake_options': '''${{ inputs.cmake_options }}'''.strip(),
-            'ctest_options': '''${{ inputs.ctest_options }}'''.strip(),
-            'dependency_cmake_options': '''${{ inputs.dependency_cmake_options }}'''.strip(),
-            'cache_suffix': '''${{ inputs.cache_suffix }}'''.strip(),
-            'toolchain_file': '''${{ inputs.toolchain_file }}'''.strip(),
-            'install_dir': '''${{ inputs.install_dir }}'''.strip(),
-            'download_dir': '''${{ inputs.download_dir }}'''.strip(),
-            'python_version': '''${{ inputs.python_version }}'''.strip(),
-            'env': '''${{ inputs.env }}'''.strip(),
-        }
-        for key, value in optional.items():
-            if value:
-                merged[key] = value
+        echo "cmake_options=$cmake_options" >> "$GITHUB_OUTPUT"
+        echo "Final cmake_options: $cmake_options"
 
-        # Add build_type to cmake_options if specified
-        build_type = '''${{ inputs.build_type }}'''.strip()
-        if build_type:
-            existing = merged.get('cmake_options', '')
-            merged['cmake_options'] = f'-DCMAKE_BUILD_TYPE={build_type} {existing}'.strip()
-
-        # Prepend -C <file> to cmake_options so overrides (package deps,
-        # description) reach cpack via the cmake cache.
-        overrides_cmake_file = '${{ steps.config.outputs.overrides_cmake_file }}'
-        if overrides_cmake_file:
-            existing = merged.get('cmake_options', '')
-            merged['cmake_options'] = f'-C {overrides_cmake_file} {existing}'.strip()
-
-        merged_yaml = yaml.dump(merged, default_flow_style=False)
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write("build_package_inputs<<EOF\n")
-            f.write(merged_yaml)
-            f.write("EOF\n")
-
-        print("Merged build_package_inputs:")
-        print(merged_yaml)
+    - name: Set environment variables
+      if: ${{ inputs.env != '' }}
+      shell: bash
+      run: echo "${{ inputs.env }}" >> "$GITHUB_ENV"
 
     - name: Check version number
       if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
@@ -417,12 +340,31 @@ runs:
 
         print("OK: Git tag and project versions match.")
 
-    - name: Create package
+    - name: Build package
       id: build
-      uses: ecmwf/reusable-workflows/build-package-with-config@v2
+      uses: ecmwf/build-package@v2
       with:
-        repository: ${{ format('{0}@{1}', github.repository, github.sha) }}
-        build_package_inputs: ${{ steps.merge-inputs.outputs.build_package_inputs }}
+        cmake_options: ${{ steps.cmake-opts.outputs.cmake_options }}
+        cpack_generator: ${{ steps.config.outputs.cpack_generator }}
+        force_build: true
+        recreate_cache: true
+        save_cache: false
+        self_coverage: false
+        compiler: gnu
+        compiler_cc: ${{ inputs.compiler_cc }}
+        compiler_cxx: ${{ inputs.compiler_cxx }}
+        compiler_fc: ${{ inputs.compiler_fc }}
+        os: ${{ inputs.os }}
+        self_test: ${{ inputs.self_test }}
+        self_build: ${{ inputs.self_build }}
+        cmake: ${{ inputs.cmake }}
+        ecbundle: ${{ inputs.ecbundle }}
+        dependencies: ${{ inputs.dependencies }}
+        dependency_branch: ${{ inputs.dependency_branch || github.ref }}
+        dependency_cmake_options: ${{ inputs.dependency_cmake_options }}
+        ctest_options: ${{ inputs.ctest_options }}
+        toolchain_file: ${{ inputs.toolchain_file }}
+        parallelism_factor: ${{ inputs.parallelism_factor }}
         github_token: ${{ inputs.gh_pat || github.token }}
 
     - name: Verify package
@@ -444,10 +386,15 @@ runs:
         os_id = '${{ inputs.os }}'
 
         os_to_docker = {
+            'ubuntu-2204': 'ubuntu:22.04',
+            'ubuntu-2404': 'ubuntu:24.04',
             'debian-11': 'debian:11',
             'debian-12': 'debian:12',
-            'rocky-8.6': 'rockylinux/rockylinux:8.6',
-            'rocky-9.5': 'rockylinux/rockylinux:9.5',
+            'debian-13': 'debian:13',
+            'rocky-8': 'rockylinux/rockylinux:8',
+            'rocky-9': 'rockylinux/rockylinux:9',
+            'rocky-10': 'rockylinux/rockylinux:10',
+            'fedora-43': 'fedora:43',
         }
 
         docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else os_to_docker.get(os_id, '')
@@ -470,7 +417,8 @@ runs:
         package_dir="$(dirname "$package_path")"
         package_name="$(basename "$package_path")"
         docker_image="${{ steps.docker-image.outputs.docker_image }}"
-        cpack_generator="${{ inputs.cpack_generator }}"
+        cpack_generator="${{ steps.config.outputs.cpack_generator }}"
+        os_id="${{ inputs.os }}"
         install_test_command="${{ inputs.install_test_command }}"
 
         echo "Testing package installation in Docker container"
@@ -483,7 +431,14 @@ runs:
         if [ "$cpack_generator" == "DEB" ]; then
           install_cmd="apt-get update && apt-get install -y /pkg/$package_name"
         elif [ "$cpack_generator" == "RPM" ]; then
-          install_cmd="dnf -y install epel-release && dnf install -y /pkg/$package_name"
+          case "$os_id" in
+            rocky-*)
+              install_cmd="dnf -y install epel-release && dnf install -y /pkg/$package_name"
+              ;;
+            *)
+              install_cmd="dnf install -y /pkg/$package_name"
+              ;;
+          esac
         else
           echo "::error::Unsupported cpack_generator for install test: $cpack_generator"
           exit 1

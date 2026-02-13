@@ -74,11 +74,12 @@ jobs:
     outputs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
+      system_package_matrix: ${{ steps.generate-matrix.outputs.sp_matrix }}
       release_enabled: ${{ steps.parse-release.outputs.enabled }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        
+
       - name: Check configuration file exists
         id: check-config
         run: |
@@ -94,7 +95,7 @@ jobs:
           else
             echo "config_file=${{ inputs.config_file }}" >> $GITHUB_OUTPUT
           fi
-        
+
       - name: Load configuration
         id: load
         run: |
@@ -105,7 +106,7 @@ jobs:
           echo "config<<EOF" >> $GITHUB_OUTPUT
           echo "$config" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
+
       - name: Generate build matrix
         id: generate-matrix
         shell: python3 {0}
@@ -115,21 +116,21 @@ jobs:
           config_yaml = '''${{ steps.load.outputs.config }}'''
           config = yaml.safe_load(config_yaml)
 
-          matrix = {'include': []}
+          build_matrix = {'include': []}
+          sp_matrix = {'include': []}
+
           for build in config.get('builds', []):
               if build.get('enabled', True):
                   build_config = build.get('config', {})
                   build_type = build['type']
 
-                  matrix_item = {
-                      'name': build['name'],
-                      'runner': ['self-hosted', 'platform-builder'],
-                      'type': build_type,
-                  }
-
-                  # Add type-specific config fields as individual matrix values
                   if build_type == 'conda':
-                      matrix_item['conda_dir'] = build_config.get('conda_dir', './.cd/.conda')
+                      matrix_item = {
+                          'name': build['name'],
+                          'runner': ['self-hosted', 'platform-builder'],
+                          'type': build_type,
+                          'conda_dir': build_config.get('conda_dir', './.cd/.conda'),
+                      }
                       # Convert channels list to comma-separated string
                       channels = build_config.get('channels', ['conda-forge'])
                       if isinstance(channels, list):
@@ -137,46 +138,75 @@ jobs:
                       else:
                           matrix_item['channels'] = str(channels)
                       matrix_item['conda_build_args'] = build_config.get('conda_build_args', '--no-anaconda-upload')
+                      build_matrix['include'].append(matrix_item)
 
                   elif build_type == 'python-pypi':
-                      matrix_item['working_directory'] = build_config.get('working_directory', './')
-                      matrix_item['buildargs'] = build_config.get('buildargs', '')
-                      # Keep env_vars as JSON string
-                      matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
+                      matrix_item = {
+                          'name': build['name'],
+                          'runner': ['self-hosted', 'platform-builder'],
+                          'type': build_type,
+                          'working_directory': build_config.get('working_directory', './'),
+                          'buildargs': build_config.get('buildargs', ''),
+                          # Keep env_vars as JSON string
+                          'env_vars': json.dumps(build_config.get('env_vars', {})),
+                      }
+                      build_matrix['include'].append(matrix_item)
 
                   elif build_type == 'system-package':
                       default_platforms = {
+                          'ubuntu-2204': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'ubuntu-2204',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_UBUNTU_2204',
+                          },
+                          'ubuntu-2404': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'ubuntu-2404',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_UBUNTU_2404',
+                          },
                           'debian-11': {
-                              'runner': ['self-hosted', 'platform-builder-debian-11'],
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
                               'os': 'debian-11',
-                              'cpack_generator': 'DEB',
-                              'cpack_options': '',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_11',
                           },
                           'debian-12': {
-                              'runner': ['self-hosted', 'platform-builder-debian-12'],
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
                               'os': 'debian-12',
-                              'cpack_generator': 'DEB',
-                              'cpack_options': '',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_12',
                           },
-                          'rocky-8.6': {
-                              'runner': ['self-hosted', 'platform-builder-rocky-8.6'],
-                              'os': 'rocky-8.6',
-                              'cpack_generator': 'RPM',
-                              'cpack_options': '',
+                          'debian-13': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'debian-13',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_13',
+                          },
+                          'rocky-8': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'rocky-8',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
                           },
-                          'rocky-9.5': {
-                              'runner': ['self-hosted', 'platform-builder-rocky-9.5'],
-                              'os': 'rocky-9.5',
-                              'cpack_generator': 'RPM',
-                              'cpack_options': '',
+                          'rocky-9': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'rocky-9',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_9',
+                          },
+                          'rocky-10': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'rocky-10',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_10',
+                          },
+                          'fedora-43': {
+                              'runner': ['self-hosted', 'platform-build', 'docker'],
+                              'os': 'fedora-43',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_FEDORA_43',
                           },
                       }
 
@@ -186,7 +216,6 @@ jobs:
                           raise SystemExit(1)
 
                       defaults = default_platforms[platform_name]
-                      common_cpack_options = build_config.get('cpack_options', '')
                       skip_version_check = str(build_config.get('skip_version_check', False)).lower()
                       raw_deps = build_config.get('package_deps', [])
                       if isinstance(raw_deps, list):
@@ -194,31 +223,24 @@ jobs:
                       else:
                           package_deps = str(raw_deps)
 
-                      description = build_config.get('description', '')
-                      license = build_config.get('license', '')
-
-                      merged_cpack_options = ' '.join(filter(None, [defaults['cpack_options'], common_cpack_options]))
-
                       platform_item = {
                           'name': build['name'],
                           'runner': defaults['runner'],
                           'type': 'system-package',
                           'os': defaults['os'],
-                          'cpack_generator': defaults['cpack_generator'],
-                          'cpack_options': merged_cpack_options,
                           'skip_version_check': skip_version_check,
                           'package_deps': package_deps,
-                          'description': description,
-                          'license': license,
+                          'description': build_config.get('description', ''),
+                          'license': build_config.get('license', ''),
                           'maintainer': build_config.get('maintainer', 'software@ecmwf.int'),
                           'vendor': build_config.get('vendor', 'ECMWF'),
                           'homepage_url': build_config.get('homepage_url', ''),
                           'install_prefix': build_config.get('install_prefix', '/opt/ecmwf'),
                           'self_test': str(build_config.get('self_test', False)).lower(),
                           'install_test': str(build_config.get('install_test', False)).lower(),
+                          'install_test_os_image': build_config.get('install_test_os_image', ''),
                           'install_test_command': build_config.get('install_test_command', ''),
                           'build_type': build_config.get('build_type', 'RelWithDebInfo'),
-                          'python_version': build_config.get('python_version', ''),
                           'env': build_config.get('env', ''),
                           'deb_section': build_config.get('deb_section', ''),
                           'deb_priority': build_config.get('deb_priority', 'optional'),
@@ -231,23 +253,20 @@ jobs:
                           'cmake': str(build_config.get('cmake', False)).lower(),
                           'ecbundle': str(build_config.get('ecbundle', False)).lower(),
                           'self_build': str(build_config.get('self_build', True)).lower(),
-                          'self_coverage': str(build_config.get('self_coverage', False)).lower(),
-                          'cache_suffix': build_config.get('cache_suffix', ''),
                           'toolchain_file': build_config.get('toolchain_file', ''),
-                          'install_dir': build_config.get('install_dir', ''),
-                          'download_dir': build_config.get('download_dir', ''),
                           'parallelism_factor': str(build_config.get('parallelism_factor', '2')),
+                          'compiler_cc': build_config.get('compiler_cc', 'gcc'),
+                          'compiler_cxx': build_config.get('compiler_cxx', 'g++'),
+                          'compiler_fc': build_config.get('compiler_fc', 'gfortran'),
                           'nexus_token_secret': defaults['nexus_token_secret'],
                           'nexus_url_secret': defaults['nexus_url_secret'],
                       }
-                      matrix['include'].append(platform_item)
-                      continue
-
-                  matrix['include'].append(matrix_item)
+                      sp_matrix['include'].append(platform_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"matrix={json.dumps(matrix)}\n")
-          
+              f.write(f"matrix={json.dumps(build_matrix)}\n")
+              f.write(f"sp_matrix={json.dumps(sp_matrix)}\n")
+
       - name: Parse release configuration
         id: parse-release
         run: |
@@ -268,7 +287,7 @@ jobs:
         with:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          
+
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
         uses: ecmwf/reusable-workflows/cd-actions/conda@v2
@@ -298,16 +317,32 @@ jobs:
           env_vars: ${{ matrix.env_vars }}
           testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
 
+  build-system-package:
+    name: ${{ matrix.name }}
+    if: ${{ fromJson(needs.load-config.outputs.system_package_matrix).include[0] != null }}
+    needs: [detect-release-type, load-config]
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: diazard/platform-builder:${{ matrix.os }}
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.load-config.outputs.system_package_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
       - name: Build System Package
-        if: ${{ matrix.type == 'system-package' }}
         uses: ecmwf/reusable-workflows/cd-actions/system-package@cd-sp
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           skip_version_check: ${{ matrix.skip_version_check }}
-          cpack_generator: ${{ matrix.cpack_generator }}
-          cpack_options: ${{ matrix.cpack_options }}
           package_deps: ${{ matrix.package_deps }}
           description: ${{ matrix.description }}
           license: ${{ matrix.license }}
@@ -317,9 +352,9 @@ jobs:
           install_prefix: ${{ matrix.install_prefix }}
           self_test: ${{ matrix.self_test }}
           install_test: ${{ matrix.install_test }}
+          install_test_os_image: ${{ matrix.install_test_os_image }}
           install_test_command: ${{ matrix.install_test_command }}
           build_type: ${{ matrix.build_type }}
-          python_version: ${{ matrix.python_version }}
           env: ${{ matrix.env }}
           deb_section: ${{ matrix.deb_section }}
           deb_priority: ${{ matrix.deb_priority }}
@@ -333,20 +368,23 @@ jobs:
           cmake: ${{ matrix.cmake }}
           ecbundle: ${{ matrix.ecbundle }}
           self_build: ${{ matrix.self_build }}
-          self_coverage: ${{ matrix.self_coverage }}
-          cache_suffix: ${{ matrix.cache_suffix }}
           toolchain_file: ${{ matrix.toolchain_file }}
-          install_dir: ${{ matrix.install_dir }}
-          download_dir: ${{ matrix.download_dir }}
           parallelism_factor: ${{ matrix.parallelism_factor }}
+          compiler_cc: ${{ matrix.compiler_cc }}
+          compiler_cxx: ${{ matrix.compiler_cxx }}
+          compiler_fc: ${{ matrix.compiler_fc }}
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ secrets[matrix.nexus_token_secret] }}
           nexus_url: ${{ secrets[matrix.nexus_url_secret] }}
 
   release:
     name: Create Release
-    if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
-    needs: [detect-release-type, load-config, build]
+    if: >-
+      needs.load-config.outputs.release_enabled == 'true'
+      && needs.detect-release-type.outputs.is_dry_run == 'false'
+      && (needs.build.result == 'success' || needs.build.result == 'skipped')
+      && (needs.build-system-package.result == 'success' || needs.build-system-package.result == 'skipped')
+    needs: [detect-release-type, load-config, build, build-system-package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
