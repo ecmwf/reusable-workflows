@@ -74,7 +74,6 @@ jobs:
     outputs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
-      system_package_matrix: ${{ steps.generate-matrix.outputs.sp_matrix }}
       release_enabled: ${{ steps.parse-release.outputs.enabled }}
     steps:
       - name: Checkout repository
@@ -116,8 +115,7 @@ jobs:
           config_yaml = '''${{ steps.load.outputs.config }}'''
           config = yaml.safe_load(config_yaml)
 
-          build_matrix = {'include': []}
-          sp_matrix = {'include': []}
+          matrix = {'include': []}
 
           for build in config.get('builds', []):
               if build.get('enabled', True):
@@ -129,6 +127,7 @@ jobs:
                           'name': build['name'],
                           'runner': ['self-hosted', 'platform-builder'],
                           'type': build_type,
+                          'container': '',
                           'conda_dir': build_config.get('conda_dir', './.cd/.conda'),
                       }
                       # Convert channels list to comma-separated string
@@ -138,19 +137,20 @@ jobs:
                       else:
                           matrix_item['channels'] = str(channels)
                       matrix_item['conda_build_args'] = build_config.get('conda_build_args', '--no-anaconda-upload')
-                      build_matrix['include'].append(matrix_item)
+                      matrix['include'].append(matrix_item)
 
                   elif build_type == 'python-pypi':
                       matrix_item = {
                           'name': build['name'],
                           'runner': ['self-hosted', 'platform-builder'],
                           'type': build_type,
+                          'container': '',
                           'working_directory': build_config.get('working_directory', './'),
                           'buildargs': build_config.get('buildargs', ''),
                           # Keep env_vars as JSON string
                           'env_vars': json.dumps(build_config.get('env_vars', {})),
                       }
-                      build_matrix['include'].append(matrix_item)
+                      matrix['include'].append(matrix_item)
 
                   elif build_type == 'system-package':
                       default_platforms = {
@@ -223,10 +223,17 @@ jobs:
                       else:
                           package_deps = str(raw_deps)
 
+                      container = {
+                          'image': f'diazard/platform-builder:{defaults["os"]}',
+                          'options': '--user root',
+                          'volumes': ['/var/run/docker.sock:/var/run/docker.sock'],
+                      }
+
                       platform_item = {
                           'name': build['name'],
                           'runner': defaults['runner'],
                           'type': 'system-package',
+                          'container': json.dumps(container),
                           'os': defaults['os'],
                           'skip_version_check': skip_version_check,
                           'package_deps': package_deps,
@@ -261,11 +268,10 @@ jobs:
                           'nexus_token_secret': defaults['nexus_token_secret'],
                           'nexus_url_secret': defaults['nexus_url_secret'],
                       }
-                      sp_matrix['include'].append(platform_item)
+                      matrix['include'].append(platform_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"matrix={json.dumps(build_matrix)}\n")
-              f.write(f"sp_matrix={json.dumps(sp_matrix)}\n")
+              f.write(f"matrix={json.dumps(matrix)}\n")
 
       - name: Parse release configuration
         id: parse-release
@@ -278,6 +284,7 @@ jobs:
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container && fromJson(matrix.container) || '' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
@@ -317,27 +324,8 @@ jobs:
           env_vars: ${{ matrix.env_vars }}
           testpypi: ${{ needs.detect-release-type.outputs.is_prerelease }}
 
-  build-system-package:
-    name: ${{ matrix.name }}
-    if: ${{ fromJson(needs.load-config.outputs.system_package_matrix).include[0] != null }}
-    needs: [detect-release-type, load-config]
-    runs-on: ${{ matrix.runner }}
-    container:
-      image: diazard/platform-builder:${{ matrix.os }}
-      options: --user root
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.load-config.outputs.system_package_matrix) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
-          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
-
       - name: Build System Package
+        if: ${{ matrix.type == 'system-package' }}
         uses: ecmwf/reusable-workflows/cd-actions/system-package@cd-sp-docker
         with:
           name: ${{ matrix.name }}
@@ -380,12 +368,8 @@ jobs:
 
   release:
     name: Create Release
-    if: >-
-      needs.load-config.outputs.release_enabled == 'true'
-      && needs.detect-release-type.outputs.is_dry_run == 'false'
-      && (needs.build.result == 'success' || needs.build.result == 'skipped')
-      && (needs.build-system-package.result == 'success' || needs.build-system-package.result == 'skipped')
-    needs: [detect-release-type, load-config, build, build-system-package]
+    if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
+    needs: [detect-release-type, load-config, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
