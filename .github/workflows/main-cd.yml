@@ -324,6 +324,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: diazard/platform-builder:${{ matrix.os }}
+      options: --user root
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
     strategy:
