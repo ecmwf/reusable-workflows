@@ -258,6 +258,7 @@ runs:
 
         # RPM-specific options
         if cpack_generator == 'RPM':
+            lines.append('set(CPACK_RPM_SPEC_MORE_DEFINE "%global __brp_check_rpaths %{nil}" CACHE STRING "" FORCE)')
             if rpm_group:
                 lines.append(f'set(CPACK_RPM_PACKAGE_GROUP "{cmake_escape(rpm_group)}" CACHE STRING "" FORCE)')
                 print(f"RPM Group: {rpm_group}")
@@ -300,11 +301,6 @@ runs:
 
         echo "cmake_options=$cmake_options" >> "$GITHUB_OUTPUT"
         echo "Final cmake_options: $cmake_options"
-
-    - name: Allow non-standard RPATHs for Fedora
-      if: ${{ startsWith(inputs.os, 'fedora-') }}
-      shell: bash
-      run: echo "QA_RPATHS=0x0002" >> "$GITHUB_ENV"
 
     - name: Set environment variables
       if: ${{ inputs.env != '' }}
