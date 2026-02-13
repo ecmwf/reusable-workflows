@@ -229,12 +229,6 @@ jobs:
                           'volumes': ['/var/run/docker.sock:/var/run/docker.sock'],
                       }
 
-                      if '${{ secrets.DOCKERHUB_USERNAME }}' and '${{ secrets.DOCKERHUB_TOKEN }}':
-                          container['credentials'] = {
-                              'username': '${{ secrets.DOCKERHUB_USERNAME }}',
-                              'password': '${{ secrets.DOCKERHUB_TOKEN }}'
-                          }
-
                       platform_item = {
                           'name': build['name'],
                           'runner': defaults['runner'],
