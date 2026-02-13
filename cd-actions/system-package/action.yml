@@ -120,6 +120,18 @@ inputs:
     description: 'RPM package group (e.g. Development/Libraries)'
     required: false
     default: ''
+  cache_suffix:
+    description: 'String appended to build cache key. Change to invalidate the cache.'
+    required: false
+    default: ''
+  save_cache:
+    description: 'Save builds to cache'
+    required: false
+    default: 'true'
+  recreate_cache:
+    description: 'Skip restoring from cache and rebuild from scratch'
+    required: false
+    default: 'false'
   os:
     description: 'Platform OS identifier (e.g. debian-12, rocky-9)'
     required: true
@@ -347,8 +359,9 @@ runs:
         cmake_options: ${{ steps.cmake-opts.outputs.cmake_options }}
         cpack_generator: ${{ steps.config.outputs.cpack_generator }}
         force_build: true
-        recreate_cache: true
-        save_cache: false
+        recreate_cache: ${{ inputs.recreate_cache }}
+        save_cache: ${{ inputs.save_cache }}
+        cache_suffix: ${{ inputs.cache_suffix }}
         self_coverage: false
         compiler: gnu
         compiler_cc: ${{ inputs.compiler_cc }}
