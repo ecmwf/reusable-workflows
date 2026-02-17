@@ -147,7 +147,11 @@ runs:
 
         # Construct tarball URL if not provided
         if not source_tarball_url:
-            source_tarball_url = f"${{ github.server_url }}/${{ github.repository }}/archive/refs/tags/{ref_name}.tar.gz"
+            github_ref = "${{ github.ref }}"
+            if github_ref.startswith("refs/tags/"):
+                source_tarball_url = f"${{ github.server_url }}/${{ github.repository }}/archive/refs/tags/{ref_name}.tar.gz"
+            else:
+                source_tarball_url = f"${{ github.server_url }}/${{ github.repository }}/archive/${{ github.sha }}.tar.gz"
         print(f"Tarball URL: {source_tarball_url}")
 
         # Resolve bottle_root_url placeholders
