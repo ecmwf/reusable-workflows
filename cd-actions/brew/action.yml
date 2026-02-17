@@ -260,20 +260,31 @@ runs:
         echo "Installed formula:"
         cat "$formula_path"
 
+    - name: Use local tarball for private repos
+      if: ${{ inputs.gh_pat != '' }}
+      shell: bash
+      run: |
+        formula_path="${{ steps.tap.outputs.formula_path }}"
+        tarball_path="${{ runner.temp }}/source.tar.gz"
+
+        python3 -c "
+        import re, sys
+        with open('${formula_path}', 'r') as f:
+            content = f.read()
+        content = re.sub(r'url \"https://[^\"]+\"', 'url \"file://${tarball_path}\"', content, count=1)
+        with open('${formula_path}', 'w') as f:
+            f.write(content)
+        "
+
+        echo "Formula URL replaced with local tarball for build:"
+        grep 'url "' "$formula_path"
+
     - name: Install from source
       shell: bash
       run: |
         tap_org="${{ steps.config.outputs.tap_org }}"
         tap_name="${{ steps.config.outputs.tap_name }}"
         formula="${{ inputs.formula }}"
-        gh_pat="${{ inputs.gh_pat }}"
-
-        # Set up curl auth for private repo tarball downloads
-        if [ -n "$gh_pat" ]; then
-          echo "machine github.com login x-access-token password ${gh_pat}" >> ~/.netrc
-          echo "machine codeload.github.com login x-access-token password ${gh_pat}" >> ~/.netrc
-          chmod 600 ~/.netrc
-        fi
 
         echo "Installing ${tap_org}/${tap_name}/${formula} from source..."
         brew install --build-from-source "${tap_org}/${tap_name}/${formula}"
@@ -340,6 +351,15 @@ runs:
 
         echo "bottle_dir=$bottle_dir" >> $GITHUB_OUTPUT
 
+    - name: Restore formula URL
+      if: ${{ inputs.gh_pat != '' }}
+      shell: bash
+      run: |
+        # Restore the real remote URL for the published formula
+        cp "${{ runner.temp }}/desired-formula.rb" "${{ steps.tap.outputs.formula_path }}"
+        echo "Formula URL restored for publishing:"
+        grep 'url "' "${{ steps.tap.outputs.formula_path }}"
+
     - name: Upload artifacts
       if: ${{ inputs.build_bottle == 'true' }}
       uses: actions/upload-artifact@v4
@@ -364,5 +384,4 @@ runs:
         brew uninstall "$formula" 2>/dev/null || true
         brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
         rm -rf "${{ runner.temp }}/bottles"
-        rm -f ~/.netrc
         echo "Cleanup complete"
