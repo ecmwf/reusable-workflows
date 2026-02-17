@@ -95,6 +95,7 @@ def generate_formula(args: argparse.Namespace) -> str:
     sections.append(f'  homepage "{ruby_escape(args.homepage)}"')
     sections.append(f'  url "{ruby_escape(args.url)}"')
     sections.append(f'  sha256 "{args.sha256}"')
+    sections.append(f'  version "{ruby_escape(args.version)}"')
     if args.license:
         sections.append(f'  license "{ruby_escape(args.license)}"')
 
