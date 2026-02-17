@@ -90,7 +90,7 @@ inputs:
 outputs:
   formula_path:
     description: 'Path to the updated formula file'
-    value: ${{ steps.config.outputs.formula_path }}
+    value: ${{ steps.tap.outputs.formula_path }}
   version:
     description: 'Parsed version string'
     value: ${{ steps.config.outputs.version }}
@@ -177,18 +177,12 @@ runs:
         sha256 = hashlib.sha256(data).hexdigest()
         print(f"SHA256: {sha256}")
 
-        # Formula path in the tap clone
-        formula_path = os.path.join(
-            "${{ runner.temp }}", "homebrew-tap", "Formula", f"{formula}.rb"
-        )
-
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"version={version}\n")
             f.write(f"sha256={sha256}\n")
             f.write(f"tarball_url={source_tarball_url}\n")
             f.write(f"tap_org={tap_org}\n")
             f.write(f"tap_name={tap_name}\n")
-            f.write(f"formula_path={formula_path}\n")
             f.write(f"bottle_root_url={bottle_root_url}\n")
             f.write(f"description={description}\n")
             f.write(f"homepage={homepage}\n")
@@ -199,29 +193,6 @@ runs:
       shell: bash
       run: |
         echo "::notice::Dry run mode: build and test only, publishing will be skipped by the workflow."
-
-    - name: Clone tap repository
-      shell: bash
-      run: |
-        tap="${{ inputs.tap }}"
-        gh_pat="${{ inputs.gh_pat }}"
-        tap_dir="${{ runner.temp }}/homebrew-tap"
-
-        tap_branch="${{ inputs.tap_branch }}"
-        branch_arg=""
-        if [ -n "$tap_branch" ]; then
-          branch_arg="--branch $tap_branch"
-        fi
-
-        echo "Cloning tap repository: $tap${tap_branch:+ (branch: $tap_branch)}"
-        if [ -n "$gh_pat" ]; then
-          git clone $branch_arg "https://x-access-token:${gh_pat}@github.com/${tap}.git" "$tap_dir"
-        else
-          git clone $branch_arg "https://github.com/${tap}.git" "$tap_dir"
-        fi
-
-        echo "Tap cloned to: $tap_dir"
-        ls -la "$tap_dir/Formula/" 2>/dev/null || echo "No Formula/ directory yet"
 
     - name: Generate desired formula
       shell: bash
@@ -250,100 +221,44 @@ runs:
         echo "Generated desired formula:"
         cat "$desired_path"
 
-    - name: Sync formula with configuration
-      id: formula-sync
-      shell: python3 {0}
-      run: |
-        import os
-        import re
-
-        formula_path = "${{ steps.config.outputs.formula_path }}"
-        desired_path = "${{ runner.temp }}/desired-formula.rb"
-
-        with open(desired_path) as f:
-            desired = f.read()
-
-        if not os.path.exists(formula_path):
-            print("New formula: using generated formula")
-            os.makedirs(os.path.dirname(formula_path), exist_ok=True)
-            with open(formula_path, 'w') as f:
-                f.write(desired)
-            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                f.write("formula_exists=false\n")
-            raise SystemExit(0)
-
-        with open(formula_path) as f:
-            existing = f.read()
-
-        # Strip sections that differ between releases to compare formula content:
-        # - url/sha256 lines (change every release)
-        # - bottle block (managed by brew-publish, not part of cd-config)
-        def normalize(text):
-            """Remove version-specific and bottle content for comparison."""
-            text = re.sub(r'^\s*url\s+".*"$', '', text, flags=re.MULTILINE)
-            text = re.sub(r'^\s*sha256\s+"[a-f0-9]+"$', '', text, flags=re.MULTILINE)
-            text = re.sub(
-                r'^\s*bottle do\s*\n(?:.*\n)*?\s*end\s*$', '', text,
-                flags=re.MULTILINE,
-            )
-            # Collapse whitespace for comparison
-            return re.sub(r'\n{3,}', '\n\n', text).strip()
-
-        existing_norm = normalize(existing)
-        desired_norm = normalize(desired)
-
-        if existing_norm == desired_norm:
-            print("Formula content matches cd-config, only version bump needed")
-            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                f.write("formula_exists=true\n")
-        else:
-            print("Formula content has drifted from cd-config, updating formula")
-            print()
-            print("=== Existing (normalized) ===")
-            print(existing_norm)
-            print()
-            print("=== Desired (normalized) ===")
-            print(desired_norm)
-            # Replace existing formula with generated version
-            with open(formula_path, 'w') as f:
-                f.write(desired)
-            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                f.write("formula_exists=false\n")
-            print()
-            print("::notice::Formula updated to match cd-config.yml")
-
-    - name: Tap the local clone
-      shell: bash
-      run: |
-        tap_org="${{ steps.config.outputs.tap_org }}"
-        tap_name="${{ steps.config.outputs.tap_name }}"
-        tap_dir="${{ runner.temp }}/homebrew-tap"
-
-        echo "Tapping local clone: ${tap_org}/${tap_name}"
-
-        # Remove existing tap if present
-        brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
-
-        # Tap the local clone
-        brew tap "${tap_org}/${tap_name}" "$tap_dir"
-
-        echo "Tap registered successfully"
-
-    - name: Update formula version
-      if: ${{ steps.formula-sync.outputs.formula_exists == 'true' }}
+    - name: Tap and install formula
+      id: tap
       shell: bash
       run: |
         tap_org="${{ steps.config.outputs.tap_org }}"
         tap_name="${{ steps.config.outputs.tap_name }}"
         formula="${{ inputs.formula }}"
+        gh_pat="${{ inputs.gh_pat }}"
+        tap_branch="${{ inputs.tap_branch }}"
 
-        echo "Updating formula ${tap_org}/${tap_name}/${formula}..."
-        brew bump-formula-pr \
-          --write-only \
-          --no-audit \
-          --url="${{ steps.config.outputs.tarball_url }}" \
-          --sha256="${{ steps.config.outputs.sha256 }}" \
-          "${tap_org}/${tap_name}/${formula}"
+        # Set up auth for private taps
+        if [ -n "$gh_pat" ]; then
+          git config --global url."https://x-access-token:${gh_pat}@github.com/".insteadOf "https://github.com/"
+        fi
+
+        # Tap from remote (gets dependency formulae like ecbuild)
+        brew tap "${tap_org}/${tap_name}"
+
+        if [ -n "$tap_branch" ]; then
+          tap_dir="$(brew --repository)/Library/Taps/${tap_org}/${tap_name}"
+          git -C "$tap_dir" fetch origin "$tap_branch"
+          git -C "$tap_dir" checkout "$tap_branch"
+        fi
+
+        # Clean up git auth
+        if [ -n "$gh_pat" ]; then
+          git config --global --unset url."https://x-access-token:${gh_pat}@github.com/".insteadOf || true
+        fi
+
+        # Drop in the generated formula
+        tap_dir="$(brew --repository)/Library/Taps/${tap_org}/${tap_name}"
+        formula_path="${tap_dir}/Formula/${formula}.rb"
+        mkdir -p "$(dirname "$formula_path")"
+        cp "${{ runner.temp }}/desired-formula.rb" "$formula_path"
+
+        echo "formula_path=${formula_path}" >> "$GITHUB_OUTPUT"
+        echo "Installed formula:"
+        cat "$formula_path"
 
     - name: Install from source
       shell: bash
@@ -425,7 +340,7 @@ runs:
         path: |
           ${{ steps.bottle.outputs.bottle_dir }}/*.tar.gz
           ${{ steps.bottle.outputs.bottle_dir }}/*.json
-          ${{ steps.config.outputs.formula_path }}
+          ${{ steps.tap.outputs.formula_path }}
         if-no-files-found: error
         retention-days: 90
 
@@ -440,5 +355,5 @@ runs:
         echo "Cleaning up..."
         brew uninstall "$formula" 2>/dev/null || true
         brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
-        rm -rf "${{ runner.temp }}/homebrew-tap" "${{ runner.temp }}/bottles"
+        rm -rf "${{ runner.temp }}/bottles"
         echo "Cleanup complete"
