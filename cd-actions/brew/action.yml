@@ -266,6 +266,14 @@ runs:
         tap_org="${{ steps.config.outputs.tap_org }}"
         tap_name="${{ steps.config.outputs.tap_name }}"
         formula="${{ inputs.formula }}"
+        gh_pat="${{ inputs.gh_pat }}"
+
+        # Set up curl auth for private repo tarball downloads
+        if [ -n "$gh_pat" ]; then
+          echo "machine github.com login x-access-token password ${gh_pat}" >> ~/.netrc
+          echo "machine codeload.github.com login x-access-token password ${gh_pat}" >> ~/.netrc
+          chmod 600 ~/.netrc
+        fi
 
         echo "Installing ${tap_org}/${tap_name}/${formula} from source..."
         brew install --build-from-source "${tap_org}/${tap_name}/${formula}"
@@ -356,4 +364,5 @@ runs:
         brew uninstall "$formula" 2>/dev/null || true
         brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
         rm -rf "${{ runner.temp }}/bottles"
+        rm -f ~/.netrc
         echo "Cleanup complete"
