@@ -45,7 +45,7 @@ jobs:
       - name: Test branch name pattern
         if: ${{ ! inputs.skip_checks && vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' }}
         run: |
-          git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          git branch --all --list --format "%(refname:lstrip=2)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
       - name: Setup Matrix
         id: matrix
