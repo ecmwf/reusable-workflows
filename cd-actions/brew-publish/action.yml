@@ -1,0 +1,266 @@
+name: Homebrew Formula Publisher
+description: Aggregate bottles, update formula with bottle block, and create PR to tap
+
+inputs:
+  tap:
+    description: 'Tap repo (e.g., ecmwf/homebrew-ecmwf)'
+    required: true
+  formula:
+    description: 'Formula name'
+    required: true
+  ref_name:
+    description: 'Git ref name (tag)'
+    required: true
+  tap_branch:
+    description: 'Target branch in tap repo'
+    required: false
+    default: 'main'
+  bottle_root_url:
+    description: 'Root URL for bottle storage'
+    required: false
+    default: ''
+  gh_pat:
+    description: 'GitHub PAT with repo scope for tap'
+    required: true
+  artifact_pattern:
+    description: 'Pattern to match brew artifacts'
+    required: false
+    default: '*-brew-*'
+
+runs:
+  using: composite
+  steps:
+    - name: Parse configuration
+      id: config
+      shell: python3 {0}
+      run: |
+        import os
+        import re
+
+        ref_name = "${{ inputs.ref_name }}"
+        formula = "${{ inputs.formula }}"
+        tap = "${{ inputs.tap }}"
+        bottle_root_url = "${{ inputs.bottle_root_url }}"
+
+        version = re.sub(r'^v', '', ref_name)
+
+        tap_parts = tap.split('/')
+        tap_org = tap_parts[0]
+        tap_name = tap_parts[1] if len(tap_parts) > 1 else tap_parts[0]
+
+        if bottle_root_url:
+            bottle_root_url = bottle_root_url.replace('{version}', version)
+
+        release_tag = f"{formula}-{version}"
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"version={version}\n")
+            f.write(f"tap_org={tap_org}\n")
+            f.write(f"tap_name={tap_name}\n")
+            f.write(f"bottle_root_url={bottle_root_url}\n")
+            f.write(f"release_tag={release_tag}\n")
+
+        print(f"Version: {version}")
+        print(f"Tap: {tap_org}/{tap_name}")
+        print(f"Bottle root URL: {bottle_root_url}")
+        print(f"Release tag: {release_tag}")
+
+    - name: Clone tap repository
+      shell: bash
+      run: |
+        tap="${{ inputs.tap }}"
+        gh_pat="${{ inputs.gh_pat }}"
+        tap_branch="${{ inputs.tap_branch }}"
+        tap_dir="${{ runner.temp }}/homebrew-tap"
+
+        echo "Cloning tap repository: $tap (branch: $tap_branch)"
+        git clone --branch "$tap_branch" \
+          "https://x-access-token:${gh_pat}@github.com/${tap}.git" "$tap_dir"
+
+        echo "Tap cloned to: $tap_dir"
+
+    - name: Download all brew artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ github.run_id }}-*
+        path: ${{ runner.temp }}/brew-artifacts
+        merge-multiple: false
+
+    - name: List downloaded artifacts
+      shell: bash
+      run: |
+        echo "Downloaded artifacts:"
+        find "${{ runner.temp }}/brew-artifacts" -type f | sort
+
+    - name: Collect bottles and formula
+      id: collect
+      shell: bash
+      run: |
+        artifacts_dir="${{ runner.temp }}/brew-artifacts"
+        bottle_dir="${{ runner.temp }}/bottles"
+        tap_dir="${{ runner.temp }}/homebrew-tap"
+        formula="${{ inputs.formula }}"
+
+        mkdir -p "$bottle_dir"
+
+        echo "Collecting bottle files and formula..."
+
+        # Copy all bottle tar.gz and json files to bottle_dir
+        find "$artifacts_dir" -name "*.bottle*.tar.gz" -exec cp {} "$bottle_dir/" \;
+        find "$artifacts_dir" -name "*.bottle.json" -exec cp {} "$bottle_dir/" \;
+
+        # Copy the first formula .rb file found to the tap
+        formula_file=$(find "$artifacts_dir" -name "${formula}.rb" -type f | head -1)
+        if [ -n "$formula_file" ]; then
+          mkdir -p "$tap_dir/Formula"
+          cp "$formula_file" "$tap_dir/Formula/${formula}.rb"
+          echo "Copied formula: $formula_file -> $tap_dir/Formula/${formula}.rb"
+        else
+          echo "No formula .rb file found in artifacts"
+          echo "Checking if formula exists in tap..."
+          if [ ! -f "$tap_dir/Formula/${formula}.rb" ]; then
+            echo "ERROR: Formula not found in artifacts or tap"
+            exit 1
+          fi
+        fi
+
+        echo "Bottle directory contents:"
+        ls -la "$bottle_dir"
+
+        echo "bottle_dir=$bottle_dir" >> $GITHUB_OUTPUT
+        echo "formula_file=$tap_dir/Formula/${formula}.rb" >> $GITHUB_OUTPUT
+
+    - name: Tap local clone for bottle merge
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        tap_dir="${{ runner.temp }}/homebrew-tap"
+
+        # Remove existing tap if present
+        brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
+        brew tap "${tap_org}/${tap_name}" "$tap_dir"
+
+    - name: Merge bottle info into formula
+      shell: bash
+      run: |
+        bottle_dir="${{ steps.collect.outputs.bottle_dir }}"
+        bottle_root_url="${{ steps.config.outputs.bottle_root_url }}"
+
+        echo "Merging bottle information into formula..."
+        cd "$bottle_dir"
+
+        json_files=$(ls *.bottle.json 2>/dev/null || true)
+        if [ -z "$json_files" ]; then
+          echo "No bottle JSON files found, skipping merge"
+          exit 0
+        fi
+
+        root_url_arg=""
+        if [ -n "$bottle_root_url" ]; then
+          root_url_arg="--root-url=${bottle_root_url}"
+        fi
+
+        brew bottle --merge --write ${root_url_arg} *.bottle.json
+
+        echo "Bottle merge complete"
+
+    - name: Rename bottles
+      shell: bash
+      run: |
+        bottle_dir="${{ steps.collect.outputs.bottle_dir }}"
+
+        python3 "${{ github.action_path }}/scripts/rename_bottles.py" \
+          --dir "$bottle_dir"
+
+    - name: Upload bottles to tap release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_pat }}
+      run: |
+        tap="${{ inputs.tap }}"
+        formula="${{ inputs.formula }}"
+        version="${{ steps.config.outputs.version }}"
+        release_tag="${{ steps.config.outputs.release_tag }}"
+        bottle_dir="${{ steps.collect.outputs.bottle_dir }}"
+
+        echo "Uploading bottles to ${tap} release: ${release_tag}"
+
+        # Collect bottle tar.gz files
+        bottle_files=$(find "$bottle_dir" -name "*.bottle*.tar.gz" -type f)
+
+        if [ -z "$bottle_files" ]; then
+          echo "No bottle files to upload"
+          exit 0
+        fi
+
+        echo "Bottle files to upload:"
+        echo "$bottle_files"
+
+        # Create or update the release
+        if gh release view "$release_tag" --repo "$tap" > /dev/null 2>&1; then
+          echo "Release ${release_tag} exists, uploading bottles..."
+          echo "$bottle_files" | xargs gh release upload "$release_tag" --repo "$tap" --clobber
+        else
+          echo "Creating release ${release_tag}..."
+          echo "$bottle_files" | xargs gh release create "$release_tag" \
+            --repo "$tap" \
+            --title "${formula} ${version}" \
+            --notes "Bottles for ${formula} ${version}"
+        fi
+
+        echo "Bottles uploaded successfully"
+
+    - name: Create PR to tap
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_pat }}
+      run: |
+        tap="${{ inputs.tap }}"
+        tap_branch="${{ inputs.tap_branch }}"
+        formula="${{ inputs.formula }}"
+        version="${{ steps.config.outputs.version }}"
+        tap_dir="${{ runner.temp }}/homebrew-tap"
+
+        pr_branch="update-${formula}-${version}"
+
+        echo "Creating PR branch: ${pr_branch}"
+        cd "$tap_dir"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git checkout -b "$pr_branch"
+        git add "Formula/${formula}.rb"
+        git commit -m "Update ${formula} to ${version}"
+        git push origin "$pr_branch"
+
+        echo "Creating pull request..."
+        gh pr create \
+          --repo "$tap" \
+          --base "$tap_branch" \
+          --head "$pr_branch" \
+          --title "Update ${formula} to ${version}" \
+          --body "$(cat <<EOF
+        ## Summary
+        - Update ${formula} formula to version ${version}
+        - Built and tested bottles for supported platforms
+        - Bottles uploaded to release \`${formula}-${version}\`
+
+        ---
+        *Automated by [reusable-workflows CD pipeline](https://github.com/${{ github.repository }})*
+        EOF
+        )"
+
+        echo "Pull request created successfully"
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+
+        brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
+        rm -rf "${{ runner.temp }}/homebrew-tap" "${{ runner.temp }}/bottles" "${{ runner.temp }}/brew-artifacts"
+        echo "Cleanup complete"

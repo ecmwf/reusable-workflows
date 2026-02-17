@@ -75,6 +75,11 @@ jobs:
       config: ${{ steps.load.outputs.config }}
       build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
       release_enabled: ${{ steps.parse-release.outputs.enabled }}
+      brew_enabled: ${{ steps.parse-brew.outputs.brew_enabled }}
+      brew_tap: ${{ steps.parse-brew.outputs.brew_tap }}
+      brew_formula: ${{ steps.parse-brew.outputs.brew_formula }}
+      brew_bottle_root_url: ${{ steps.parse-brew.outputs.brew_bottle_root_url }}
+      brew_tap_branch: ${{ steps.parse-brew.outputs.brew_tap_branch }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -151,6 +156,41 @@ jobs:
                       matrix_item['confluence_space'] = build_config.get('confluence_space', '')
                       matrix_item['confluence_page_title'] = build_config.get('confluence_page_title', 'Releases')
 
+                  elif build_type == 'brew':
+                      platforms = build_config.get('platforms', [{}])
+                      for i, platform in enumerate(platforms):
+                          item = dict(matrix_item)
+                          item['tap'] = build_config.get('tap', '')
+                          item['tap_branch'] = build_config.get('tap_branch', '')
+                          item['formula'] = build_config.get('formula', '')
+                          item['source_tarball_url'] = build_config.get('source_tarball_url', '')
+                          item['build_bottle'] = str(build_config.get('build_bottle', True)).lower()
+                          item['bottle_root_url'] = build_config.get('bottle_root_url', '')
+                          item['runner'] = platform.get('runner', 'macos-latest')
+
+                          # Metadata (auto-injected from GitHub context if empty)
+                          item['description'] = build_config.get('description', '')
+                          item['homepage'] = build_config.get('homepage', '')
+                          item['license'] = build_config.get('license', '')
+                          item['livecheck'] = build_config.get('livecheck', 'auto')
+
+                          # JSON-encode complex/multiline values for matrix transport
+                          item['dependencies'] = json.dumps(build_config.get('dependencies', {}))
+                          item['uses_from_macos'] = json.dumps(build_config.get('uses_from_macos', []))
+                          item['install'] = json.dumps(build_config.get('install', ''))
+                          item['test'] = json.dumps(build_config.get('test', ''))
+
+                          # Optional formula blocks
+                          item['head'] = json.dumps(build_config.get('head', ''))
+                          item['post_install'] = json.dumps(build_config.get('post_install', ''))
+                          item['caveats'] = build_config.get('caveats', '')
+                          item['conflicts_with'] = json.dumps(build_config.get('conflicts_with', []))
+
+                          if len(platforms) > 1:
+                              item['name'] = f"{build['name']} ({platform.get('os_name', i)})"
+                          matrix['include'].append(item)
+                      continue
+
                   matrix['include'].append(matrix_item)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -161,6 +201,43 @@ jobs:
         run: |
           enabled=$(echo '${{ steps.load.outputs.config }}' | yq '.release.enabled // false')
           echo "enabled=$enabled" >> $GITHUB_OUTPUT
+
+      - name: Parse brew configuration
+        id: parse-brew
+        shell: python3 {0}
+        run: |
+          import yaml, os
+
+          config_yaml = '''${{ steps.load.outputs.config }}'''
+          config = yaml.safe_load(config_yaml)
+
+          brew_enabled = "false"
+          brew_tap = ""
+          brew_formula = ""
+          brew_bottle_root_url = ""
+          brew_tap_branch = "main"
+
+          # NOTE: Only the first enabled brew build is used for brew-publish outputs.
+          for build in config.get('builds', []):
+              if build.get('enabled', True) and build.get('type') == 'brew':
+                  brew_enabled = "true"
+                  build_config = build.get('config', {})
+                  brew_tap = build_config.get('tap', '')
+                  brew_formula = build_config.get('formula', '')
+                  brew_bottle_root_url = build_config.get('bottle_root_url', '')
+                  brew_tap_branch = build_config.get('tap_branch', 'main')
+                  break
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"brew_enabled={brew_enabled}\n")
+              f.write(f"brew_tap={brew_tap}\n")
+              f.write(f"brew_formula={brew_formula}\n")
+              f.write(f"brew_bottle_root_url={brew_bottle_root_url}\n")
+              f.write(f"brew_tap_branch={brew_tap_branch}\n")
+
+          print(f"Brew enabled: {brew_enabled}")
+          if brew_enabled == "true":
+              print(f"Tap: {brew_tap}, Formula: {brew_formula}")
 
   build:
     name: ${{ matrix.name }}
@@ -218,6 +295,34 @@ jobs:
           confluence_space: ${{ matrix.confluence_space }}
           confluence_page_title: ${{ matrix.confluence_page_title }}
 
+      # TODO: Update to @v2 before merging to main
+      - name: Build Homebrew Formula
+        if: ${{ matrix.type == 'brew' }}
+        uses: ecmwf/reusable-workflows/cd-actions/brew@cd-brew
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          tap: ${{ matrix.tap }}
+          tap_branch: ${{ matrix.tap_branch }}
+          formula: ${{ matrix.formula }}
+          source_tarball_url: ${{ matrix.source_tarball_url }}
+          build_bottle: ${{ matrix.build_bottle }}
+          bottle_root_url: ${{ matrix.bottle_root_url }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
+          description: ${{ matrix.description }}
+          homepage: ${{ matrix.homepage }}
+          license: ${{ matrix.license }}
+          dependencies: ${{ matrix.dependencies }}
+          uses_from_macos: ${{ matrix.uses_from_macos }}
+          install: ${{ matrix.install }}
+          test: ${{ matrix.test }}
+          livecheck: ${{ matrix.livecheck }}
+          head: ${{ matrix.head }}
+          post_install: ${{ matrix.post_install }}
+          caveats: ${{ matrix.caveats }}
+          conflicts_with: ${{ matrix.conflicts_with }}
+
   release:
     name: Create Release
     if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
@@ -247,3 +352,24 @@ jobs:
         with:
           config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}
+
+  brew-publish:
+    name: Publish Homebrew Formula
+    if: ${{ needs.load-config.outputs.brew_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
+    needs: [detect-release-type, load-config, build]
+    # brew-publish needs Homebrew (macOS); self-hosted platform-builders don't have it.
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # TODO: Update to @v2 before merging to main
+      - name: Publish Homebrew formula and bottles
+        uses: ecmwf/reusable-workflows/cd-actions/brew-publish@cd-brew
+        with:
+          tap: ${{ needs.load-config.outputs.brew_tap }}
+          formula: ${{ needs.load-config.outputs.brew_formula }}
+          ref_name: ${{ inputs.ref_name }}
+          tap_branch: ${{ needs.load-config.outputs.brew_tap_branch }}
+          bottle_root_url: ${{ needs.load-config.outputs.brew_bottle_root_url }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}

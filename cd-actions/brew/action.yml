@@ -1,0 +1,440 @@
+name: Homebrew Formula Builder
+description: Build, test, audit, and bottle a Homebrew formula
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  ref_name:
+    description: 'Git ref name (tag)'
+    required: true
+  dry_run:
+    description: 'Build only, no publish'
+    required: false
+    default: 'false'
+  tap:
+    description: 'Tap repo (e.g., ecmwf/homebrew-ecmwf)'
+    required: true
+  formula:
+    description: 'Formula name (e.g., eckit)'
+    required: true
+  description:
+    description: 'Formula description (auto-detected from GitHub repo if empty)'
+    required: false
+    default: ''
+  homepage:
+    description: 'Formula homepage URL (auto-detected from GitHub repo if empty)'
+    required: false
+    default: ''
+  license:
+    description: 'SPDX license identifier (auto-detected from GitHub repo if empty)'
+    required: false
+    default: ''
+  dependencies:
+    description: 'JSON-encoded dependency dict (e.g., {"cmake": ["build", "test"], "eckit": null})'
+    required: false
+    default: '{}'
+  uses_from_macos:
+    description: 'JSON-encoded list of macOS system dependencies (e.g., ["bzip2", "openssl"])'
+    required: false
+    default: '[]'
+  install:
+    description: 'Ruby code for the install block (JSON-encoded string)'
+    required: false
+    default: ''
+  test:
+    description: 'Ruby code for the test block (JSON-encoded string)'
+    required: false
+    default: ''
+  livecheck:
+    description: 'Livecheck mode: "auto" (default), "false" to disable, or JSON-encoded custom Ruby block'
+    required: false
+    default: 'auto'
+  head:
+    description: 'Ruby code for the head block (JSON-encoded string, optional)'
+    required: false
+    default: ''
+  post_install:
+    description: 'Ruby code for the post_install block (JSON-encoded string, optional)'
+    required: false
+    default: ''
+  caveats:
+    description: 'Caveats text displayed after installation (optional)'
+    required: false
+    default: ''
+  conflicts_with:
+    description: 'JSON-encoded list of conflicting formula names (optional)'
+    required: false
+    default: '[]'
+  source_tarball_url:
+    description: 'Override tarball URL (auto-generated from ref_name if empty)'
+    required: false
+    default: ''
+  gh_pat:
+    description: 'GitHub PAT for tap repo access'
+    required: false
+    default: ''
+  build_bottle:
+    description: 'Build a bottle for the current platform'
+    required: false
+    default: 'true'
+  tap_branch:
+    description: 'Target branch in tap repo (default: repo default branch)'
+    required: false
+    default: ''
+  bottle_root_url:
+    description: 'Root URL for bottle downloads'
+    required: false
+    default: ''
+
+outputs:
+  formula_path:
+    description: 'Path to the updated formula file'
+    value: ${{ steps.config.outputs.formula_path }}
+  version:
+    description: 'Parsed version string'
+    value: ${{ steps.config.outputs.version }}
+  sha256:
+    description: 'SHA256 of the source tarball'
+    value: ${{ steps.config.outputs.sha256 }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse configuration
+      id: config
+      shell: python3 {0}
+      run: |
+        import hashlib
+        import os
+        import re
+        import urllib.request
+
+        ref_name = "${{ inputs.ref_name }}"
+        tap = "${{ inputs.tap }}"
+        formula = "${{ inputs.formula }}"
+        source_tarball_url = "${{ inputs.source_tarball_url }}"
+        bottle_root_url = "${{ inputs.bottle_root_url }}"
+
+        # Auto-inject metadata with fallback to GitHub context
+        description = '''${{ inputs.description }}'''.strip()
+        if not description:
+            description = '''${{ github.event.repository.description }}'''.strip()
+
+        license_id = '''${{ inputs.license }}'''.strip()
+        if not license_id:
+            license_id = '''${{ github.event.repository.license.spdx_id }}'''.strip()
+        if license_id == 'NOASSERTION':
+            license_id = ''
+
+        homepage = '''${{ inputs.homepage }}'''.strip()
+        if not homepage:
+            homepage = 'https://github.com/${{ github.repository }}'
+
+        print(f"Description: {description or '(none)'}")
+        print(f"License: {license_id or '(none)'}")
+        print(f"Homepage: {homepage}")
+
+        # Parse version: strip leading 'v' prefix
+        version = re.sub(r'^v', '', ref_name)
+        print(f"Version: {version}")
+
+        # Parse tap org and name
+        tap_parts = tap.split('/')
+        tap_org = tap_parts[0]
+        tap_name = tap_parts[1] if len(tap_parts) > 1 else tap_parts[0]
+        print(f"Tap org: {tap_org}, Tap name: {tap_name}")
+
+        # Construct tarball URL if not provided
+        if not source_tarball_url:
+            source_tarball_url = f"${{ github.server_url }}/${{ github.repository }}/archive/refs/tags/{ref_name}.tar.gz"
+        print(f"Tarball URL: {source_tarball_url}")
+
+        # Resolve bottle_root_url placeholders
+        if bottle_root_url:
+            bottle_root_url = bottle_root_url.replace('{version}', version)
+        print(f"Bottle root URL: {bottle_root_url}")
+
+        # Download tarball and compute SHA256
+        print(f"Downloading tarball to compute SHA256...")
+        tarball_path = os.path.join("${{ runner.temp }}", "source.tar.gz")
+
+        req = urllib.request.Request(source_tarball_url)
+        # Add PAT for private repos
+        gh_pat = "${{ inputs.gh_pat }}"
+        if gh_pat:
+            req.add_header("Authorization", f"token {gh_pat}")
+
+        with urllib.request.urlopen(req) as response:
+            data = response.read()
+            with open(tarball_path, 'wb') as f:
+                f.write(data)
+
+        sha256 = hashlib.sha256(data).hexdigest()
+        print(f"SHA256: {sha256}")
+
+        # Formula path in the tap clone
+        formula_path = os.path.join(
+            "${{ runner.temp }}", "homebrew-tap", "Formula", f"{formula}.rb"
+        )
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"version={version}\n")
+            f.write(f"sha256={sha256}\n")
+            f.write(f"tarball_url={source_tarball_url}\n")
+            f.write(f"tap_org={tap_org}\n")
+            f.write(f"tap_name={tap_name}\n")
+            f.write(f"formula_path={formula_path}\n")
+            f.write(f"bottle_root_url={bottle_root_url}\n")
+            f.write(f"description={description}\n")
+            f.write(f"homepage={homepage}\n")
+            f.write(f"license={license_id}\n")
+
+    - name: Check dry run mode
+      if: ${{ inputs.dry_run == 'true' }}
+      shell: bash
+      run: |
+        echo "::notice::Dry run mode: build and test only, publishing will be skipped by the workflow."
+
+    - name: Clone tap repository
+      shell: bash
+      run: |
+        tap="${{ inputs.tap }}"
+        gh_pat="${{ inputs.gh_pat }}"
+        tap_dir="${{ runner.temp }}/homebrew-tap"
+
+        tap_branch="${{ inputs.tap_branch }}"
+        branch_arg=""
+        if [ -n "$tap_branch" ]; then
+          branch_arg="--branch $tap_branch"
+        fi
+
+        echo "Cloning tap repository: $tap${tap_branch:+ (branch: $tap_branch)}"
+        if [ -n "$gh_pat" ]; then
+          git clone $branch_arg "https://x-access-token:${gh_pat}@github.com/${tap}.git" "$tap_dir"
+        else
+          git clone $branch_arg "https://github.com/${tap}.git" "$tap_dir"
+        fi
+
+        echo "Tap cloned to: $tap_dir"
+        ls -la "$tap_dir/Formula/" 2>/dev/null || echo "No Formula/ directory yet"
+
+    - name: Generate desired formula
+      shell: bash
+      run: |
+        desired_path="${{ runner.temp }}/desired-formula.rb"
+
+        python3 "${{ github.action_path }}/scripts/generate_formula.py" \
+          --formula-name "${{ inputs.formula }}" \
+          --url "${{ steps.config.outputs.tarball_url }}" \
+          --sha256 "${{ steps.config.outputs.sha256 }}" \
+          --version "${{ steps.config.outputs.version }}" \
+          --desc "${{ steps.config.outputs.description }}" \
+          --homepage "${{ steps.config.outputs.homepage }}" \
+          --license "${{ steps.config.outputs.license }}" \
+          --dependencies-json '${{ inputs.dependencies }}' \
+          --uses-from-macos-json '${{ inputs.uses_from_macos }}' \
+          --install-json '${{ inputs.install }}' \
+          --test-json '${{ inputs.test }}' \
+          --livecheck '${{ inputs.livecheck }}' \
+          --head-json '${{ inputs.head }}' \
+          --post-install-json '${{ inputs.post_install }}' \
+          --caveats '${{ inputs.caveats }}' \
+          --conflicts-json '${{ inputs.conflicts_with }}' \
+          --output "$desired_path"
+
+        echo "Generated desired formula:"
+        cat "$desired_path"
+
+    - name: Sync formula with configuration
+      id: formula-sync
+      shell: python3 {0}
+      run: |
+        import os
+        import re
+
+        formula_path = "${{ steps.config.outputs.formula_path }}"
+        desired_path = "${{ runner.temp }}/desired-formula.rb"
+
+        with open(desired_path) as f:
+            desired = f.read()
+
+        if not os.path.exists(formula_path):
+            print("New formula: using generated formula")
+            os.makedirs(os.path.dirname(formula_path), exist_ok=True)
+            with open(formula_path, 'w') as f:
+                f.write(desired)
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                f.write("formula_exists=false\n")
+            raise SystemExit(0)
+
+        with open(formula_path) as f:
+            existing = f.read()
+
+        # Strip sections that differ between releases to compare formula content:
+        # - url/sha256 lines (change every release)
+        # - bottle block (managed by brew-publish, not part of cd-config)
+        def normalize(text):
+            """Remove version-specific and bottle content for comparison."""
+            text = re.sub(r'^\s*url\s+".*"$', '', text, flags=re.MULTILINE)
+            text = re.sub(r'^\s*sha256\s+"[a-f0-9]+"$', '', text, flags=re.MULTILINE)
+            text = re.sub(
+                r'^\s*bottle do\s*\n(?:.*\n)*?\s*end\s*$', '', text,
+                flags=re.MULTILINE,
+            )
+            # Collapse whitespace for comparison
+            return re.sub(r'\n{3,}', '\n\n', text).strip()
+
+        existing_norm = normalize(existing)
+        desired_norm = normalize(desired)
+
+        if existing_norm == desired_norm:
+            print("Formula content matches cd-config, only version bump needed")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                f.write("formula_exists=true\n")
+        else:
+            print("Formula content has drifted from cd-config, updating formula")
+            print()
+            print("=== Existing (normalized) ===")
+            print(existing_norm)
+            print()
+            print("=== Desired (normalized) ===")
+            print(desired_norm)
+            # Replace existing formula with generated version
+            with open(formula_path, 'w') as f:
+                f.write(desired)
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                f.write("formula_exists=false\n")
+            print()
+            print("::notice::Formula updated to match cd-config.yml")
+
+    - name: Tap the local clone
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        tap_dir="${{ runner.temp }}/homebrew-tap"
+
+        echo "Tapping local clone: ${tap_org}/${tap_name}"
+
+        # Remove existing tap if present
+        brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
+
+        # Tap the local clone
+        brew tap "${tap_org}/${tap_name}" "$tap_dir"
+
+        echo "Tap registered successfully"
+
+    - name: Update formula version
+      if: ${{ steps.formula-sync.outputs.formula_exists == 'true' }}
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        formula="${{ inputs.formula }}"
+
+        echo "Updating formula ${tap_org}/${tap_name}/${formula}..."
+        brew bump-formula-pr \
+          --write-only \
+          --no-audit \
+          --url="${{ steps.config.outputs.tarball_url }}" \
+          --sha256="${{ steps.config.outputs.sha256 }}" \
+          "${tap_org}/${tap_name}/${formula}"
+
+    - name: Install from source
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        formula="${{ inputs.formula }}"
+
+        echo "Installing ${tap_org}/${tap_name}/${formula} from source..."
+        brew install --build-from-source "${tap_org}/${tap_name}/${formula}"
+
+        echo "Installation complete"
+
+    - name: Run tests
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        formula="${{ inputs.formula }}"
+
+        echo "Running brew test for ${formula}..."
+        brew test "${tap_org}/${tap_name}/${formula}"
+
+        echo "Tests passed"
+
+    - name: Run audit
+      id: audit
+      shell: bash
+      continue-on-error: true
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        formula="${{ inputs.formula }}"
+
+        echo "Running brew audit for ${formula}..."
+        brew audit --strict "${tap_org}/${tap_name}/${formula}"
+
+    - name: Report audit result
+      if: ${{ steps.audit.outcome == 'failure' }}
+      shell: bash
+      run: |
+        echo "::warning::brew audit --strict failed. Review audit output above for issues."
+
+    - name: Build bottle
+      if: ${{ inputs.build_bottle == 'true' }}
+      id: bottle
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        formula="${{ inputs.formula }}"
+        bottle_root_url="${{ steps.config.outputs.bottle_root_url }}"
+        bottle_dir="${{ runner.temp }}/bottles"
+
+        mkdir -p "$bottle_dir"
+        cd "$bottle_dir"
+
+        echo "Reinstalling ${formula} in bottle mode..."
+        brew reinstall --build-bottle "${tap_org}/${tap_name}/${formula}"
+
+        echo "Building bottle..."
+        root_url_arg=""
+        if [ -n "$bottle_root_url" ]; then
+          root_url_arg="--root-url=${bottle_root_url}"
+        fi
+
+        brew bottle --json ${root_url_arg} "${tap_org}/${tap_name}/${formula}"
+
+        echo "Bottle files:"
+        ls -la "$bottle_dir"
+
+        echo "bottle_dir=$bottle_dir" >> $GITHUB_OUTPUT
+
+    - name: Upload artifacts
+      if: ${{ inputs.build_bottle == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: |
+          ${{ steps.bottle.outputs.bottle_dir }}/*.tar.gz
+          ${{ steps.bottle.outputs.bottle_dir }}/*.json
+          ${{ steps.config.outputs.formula_path }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        tap_org="${{ steps.config.outputs.tap_org }}"
+        tap_name="${{ steps.config.outputs.tap_name }}"
+        formula="${{ inputs.formula }}"
+
+        echo "Cleaning up..."
+        brew uninstall "$formula" 2>/dev/null || true
+        brew untap "${tap_org}/${tap_name}" 2>/dev/null || true
+        rm -rf "${{ runner.temp }}/homebrew-tap" "${{ runner.temp }}/bottles"
+        echo "Cleanup complete"
