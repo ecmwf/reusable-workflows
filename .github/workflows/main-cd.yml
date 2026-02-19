@@ -223,17 +223,13 @@ jobs:
                       else:
                           package_deps = str(raw_deps)
 
-                      container = {
-                          'image': f'diazard/platform-builder:{defaults["os"]}',
-                          'options': '--user root',
-                          'volumes': ['/var/run/docker.sock:/var/run/docker.sock'],
-                      }
+                      container = f'eccr.ecmwf.int/platform-builder/platform-builder:{defaults["os"]}'
 
                       platform_item = {
                           'name': build['name'],
                           'runner': defaults['runner'],
                           'type': 'system-package',
-                          'container': json.dumps(container),
+                          'container': container,
                           'os': defaults['os'],
                           'skip_version_check': skip_version_check,
                           'package_deps': package_deps,
@@ -284,7 +280,14 @@ jobs:
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
     runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container && fromJson(matrix.container) || '' }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
+        password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+      options: '--user root'
+      volumes:
+        - '/var/run/docker.sock:/var/run/docker.sock'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
