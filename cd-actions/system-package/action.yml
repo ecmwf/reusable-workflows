@@ -411,7 +411,7 @@ runs:
             'fedora-43': 'fedora:43',
         }
 
-        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else os_to_docker.get(os_id, '')
+        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if '/' not in os_to_docker.get(os_id, '') else ''}{os_to_docker.get(os_id, '')}"
 
         if docker_image:
             print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
