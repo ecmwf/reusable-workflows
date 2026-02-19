@@ -22,10 +22,12 @@ echo "::endgroup::"
 #SBATCH --partition=small
 {% else %}
 # TROIKA queue={{ queue }}
-#SBATCH --gres=ssdtmp:30G
 #SBATCH --mem=64GB
 #SBATCH --cpus-per-task={{ parallel }}
 #SBATCH --ntasks={{ ntasks }}
+{% if site != 'ag-batch' %}
+#SBATCH --gres=ssdtmp:30G
+{% endif %}
 {% if gpus %}
 #SBATCH --gres=gpu:{{ gpus }}
 {% endif %}
