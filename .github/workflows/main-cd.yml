@@ -208,6 +208,12 @@ jobs:
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_FEDORA_43',
                           },
+                          'centos-7': {
+                              'runner': ['self-hosted', 'platform-builder-docker-xl'],
+                              'os': 'centos-7',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_CENTOS_7',
+                          },
                       }
 
                       platform_name = build_config.get('os', '')

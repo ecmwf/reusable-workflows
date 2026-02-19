@@ -409,6 +409,7 @@ runs:
             'rocky-9': 'rockylinux/rockylinux:9',
             'rocky-10': 'rockylinux/rockylinux:10',
             'fedora-43': 'fedora:43',
+            'centos7-': 'centos:7',
         }
 
         docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if '/' not in os_to_docker.get(os_id, '') else ''}{os_to_docker.get(os_id, '')}"
