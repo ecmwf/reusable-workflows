@@ -300,7 +300,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-dry-run-install
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
