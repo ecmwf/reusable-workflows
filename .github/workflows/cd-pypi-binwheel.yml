@@ -84,7 +84,7 @@ jobs:
         if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' && !inputs.testpypi }}
         run: |
           echo "Checking that this release is being made from a main/master branch ( ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }} ) - will fail if not"
-          git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          git branch --all --list --format "%(refname:lstrip=3)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
       - name: Install dependencies
         run: |

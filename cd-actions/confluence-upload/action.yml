@@ -1,0 +1,63 @@
+name: Confluence Upload
+description: Upload files as attachments to Confluence pages
+
+inputs:
+  token:
+    description: 'Confluence API token'
+    required: true
+  file_path:
+    description: 'Path to the file to upload'
+    required: true
+  space:
+    description: 'Confluence space key (e.g., MAGP)'
+    required: true
+  page_title:
+    description: 'Page title to attach file to'
+    required: false
+    default: 'Releases'
+  comment:
+    description: 'Comment for the attachment'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: '3.13'
+
+    - name: Upload to Confluence
+      shell: bash
+      env:
+        CONFLUENCE_TOKEN: ${{ inputs.token }}
+        FILE_PATH: ${{ inputs.file_path }}
+        PAGE_TITLE: ${{ inputs.page_title }}
+        SPACE: ${{ inputs.space }}
+        COMMENT: ${{ inputs.comment }}
+      run: |
+        uv run --with atlassian-python-api python << 'EOF'
+        import os
+        from atlassian.confluence import Confluence
+
+        print(f"Uploading file '{os.environ['FILE_PATH']}' to Confluence page '{os.environ['PAGE_TITLE']}' in space '{os.environ['SPACE']}'")
+
+        confluence_server = Confluence(
+            url="https://confluence.ecmwf.int",
+            token=os.environ["CONFLUENCE_TOKEN"],
+        )
+
+        print("Connected to Confluence")
+
+        confluence_server.attach_file(
+            os.environ["FILE_PATH"],
+            name=None,
+            content_type="application/binary",
+            title=os.environ["PAGE_TITLE"],
+            space=os.environ["SPACE"],
+            comment=os.environ["COMMENT"],
+        )
+
+        print("File uploaded successfully")
+        EOF

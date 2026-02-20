@@ -87,7 +87,7 @@ jobs:
       - name: Test branch name pattern
         if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' && (! inputs.skip_checks) }}
         run: |
-          git branch --all --list --format "%(refname:lstrip=-1)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          git branch --all --list --format "%(refname:lstrip=3)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
 
   setup:
     name: setup
