@@ -35,7 +35,7 @@ jobs:
     runs-on: [self-hosted, platform-builder]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup conda env dir
         shell: bash -el {0}
