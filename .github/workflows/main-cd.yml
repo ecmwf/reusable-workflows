@@ -271,7 +271,7 @@ jobs:
           
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ./cd-actions/conda
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -286,7 +286,7 @@ jobs:
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
+        uses: ./cd-actions/python-pypi
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -300,7 +300,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ./cd-actions/hpc
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
@@ -340,7 +340,7 @@ jobs:
           
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
-        uses: ecmwf/reusable-workflows/cd-actions/tarball@v2
+        uses: ./cd-actions/tarball
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
@@ -375,7 +375,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub release
-        uses: ecmwf/reusable-workflows/cd-actions/release@v2
+        uses: ./cd-actions/release
         with:
           config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}
