@@ -152,7 +152,7 @@ export CMAKE_PREFIX_PATH="{{ path }}:$CMAKE_PREFIX_PATH"
 
 {# === Build Log Setup === #}
 {% macro setup_build_log() -%}
-{% if ci_options.dry_run %}
+{% if ci_options.skip_install %}
 BUILD_LOG="{{ ci_options.workdir }}/build.log"
 {% else %}
 BUILD_LOG="{{ ci_options.install_prefix }}/build.log"
@@ -176,10 +176,26 @@ echo "Repository: {{ ci_options.main_package_name }}"
 {# === Clean Install Directory === #}
 {% macro clean_install_dir(package) -%}
 {% set is_main = package.type in ["main", "main-python", "ecbundle"] %}
-{% if is_main and ci_options.dry_run %}
+{% if is_main and ci_options.skip_install %}
 {% elif ci_options.clean_before_install %}
 {{ start_group("Cleaning before install: " + package.name) }}
 if cd {{ package.prefix }} 2>/dev/null; then
+  # Resolve symlinks and '..' then validate the path is safe to clean.
+  # Allowed: /usr/local/apps/<app>/<version-or-deeper>, or any path under $TMPDIR / $SCRATCH.
+  CLEAN_PATH="$(realpath "{{ package.prefix }}")"
+  if [[ "$CLEAN_PATH" == /usr/local/apps/* ]]; then
+      if [[ ! "$CLEAN_PATH" =~ ^/usr/local/apps/[^/]+/.+ ]]; then
+          echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - path must be at least /usr/local/apps/<app>/<version>"
+          exit 1
+      fi
+  elif [[ -n "${TMPDIR:-}" && "$CLEAN_PATH" == "${TMPDIR}"/* ]]; then
+    :
+  elif [[ -n "${SCRATCH:-}" && "$CLEAN_PATH" == "${SCRATCH}"/* ]]; then
+    :
+  else
+      echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - not under /usr/local/apps/<app>/<version>, \$TMPDIR, or \$SCRATCH"
+      exit 1
+  fi
   echo "Removing the previous install: {{ package.prefix }}"
   find . -type f -or -type d -exec chmod u+w {} \;
   rm -rfv ./*
@@ -194,7 +210,7 @@ fi
 
 {# === Staged Build Install === #}
 {% macro staged_install(stage, package) -%}
-{% if ci_options.dry_run %}
+{% if ci_options.skip_install %}
 echo "Dry run: skipping install for stage {{ stage.name }}"
 {% elif stage.install_command %}
 {{ stage.install_command }}
@@ -249,11 +265,11 @@ ecbundle-build \
     --cmake="{{ package.cmake_options|join(' ') }}" \
     -j{{ ci_options.parallel }} \
     --no-colour \
-    {% if not ci_options.dry_run %}--install{% endif %} \
+    {% if not ci_options.skip_install %}--install{% endif %} \
     --src-dir={{ ci_options.workdir }}/{{ package.name }}/source \
     --build-dir={{ ci_options.workdir }}/builds \
     --install-dir={{ package.prefix }}
-{% if ci_options.dry_run %}
+{% if ci_options.skip_install %}
 echo "Dry run: skipping ecbundle install"
 {% endif %}
 {{ end_group() }}
@@ -423,7 +439,7 @@ else
     {% endif %}
 
     {% if not ci_options.ecbundle %}
-    {% if package.type == "main" and ci_options.dry_run %}
+    {% if package.type == "main" and ci_options.skip_install %}
     echo "Dry run: skipping installation of {{ package.name }}"
     {% else %}
     {{ start_group("Installing: " + package.name) }}
@@ -456,7 +472,7 @@ else
     {% endif %}
 fi
 
-{% if package.type == "main" and ci_options.dry_run %}
+{% if package.type == "main" and ci_options.skip_install %}
 {{ export_package_env(package, base_path=ci_options.workdir + "/" + package.name + "/build") }}
 {% else %}
 {{ export_package_env(package) }}
@@ -515,7 +531,7 @@ fi
     {{ end_group() }}
 
     {{ start_group("Installing: " + package.name) }}
-    {% if ci_options.dry_run %}
+    {% if ci_options.skip_install %}
     echo "Dry run: skipping pip install of {{ package.name }}"
     {% else %}
     {{ pip_cmd }} install dist/*
@@ -563,7 +579,7 @@ if [ -n "${__BUILD_LOG_TEE:-}" ]; then
     sleep 0.1  # Brief pause to let tee flush
 fi
 
-{% if ci_options.dry_run %}
+{% if ci_options.skip_install %}
 {{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
 echo "Dry run: skipping README generation and permission lock"
 {% else %}
