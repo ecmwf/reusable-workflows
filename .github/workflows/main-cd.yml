@@ -154,15 +154,15 @@ jobs:
 
                   elif build_type == 'system-package':
                       default_platforms = {
-                          'ubuntu-2204': {
+                          'ubuntu-22.04': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'ubuntu-2204',
+                              'os': 'ubuntu-22.04',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_UBUNTU_2204',
                           },
-                          'ubuntu-2404': {
+                          'ubuntu-24.04': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'ubuntu-2404',
+                              'os': 'ubuntu-24.04',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_UBUNTU_2404',
                           },
@@ -186,19 +186,43 @@ jobs:
                           },
                           'rocky-8': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'rocky-8',
+                              'os': 'rocky-8.10',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
+                          },
+                          'rocky-8.7': {
+                              'runner': ['self-hosted', 'platform-builder-docker-xl'],
+                              'os': 'rocky-8.7',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
+                          },
+                          'rocky-8.10': {
+                              'runner': ['self-hosted', 'platform-builder-docker-xl'],
+                              'os': 'rocky-8.10',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
                           },
                           'rocky-9': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'rocky-9',
+                              'os': 'rocky-9.7',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_9',
+                          },
+                          'rocky-9.7': {
+                              'runner': ['self-hosted', 'platform-builder-docker-xl'],
+                              'os': 'rocky-9.7',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_9',
                           },
                           'rocky-10': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'rocky-10',
+                              'os': 'rocky-10.1',
+                              'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
+                              'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_10',
+                          },
+                          'rocky-10.1': {
+                              'runner': ['self-hosted', 'platform-builder-docker-xl'],
+                              'os': 'rocky-10.1',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_10',
                           },
