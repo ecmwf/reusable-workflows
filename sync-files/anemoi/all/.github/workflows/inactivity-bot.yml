@@ -1,4 +1,4 @@
-name: Mark no active issues and PRs
+name: Mark inactive issues and PRs
 
 on:
   schedule:
@@ -16,18 +16,18 @@ jobs:
           # Issue settings
           days-before-issue-stale: 90 # (~3 months)
           days-before-issue-close: 10
-          stale-issue-label: no-activity
+          stale-issue-label: inactive
           stale-issue-message: >
-            This issue has been marked as no-activity due to inactivity.
+            This issue has been marked as inactive due to inactivity.
             It will be closed if no further activity occurs in the next 10 days.
           exempt-issue-labels: good first issue
 
           # PR settings
           days-before-pr-stale: 90 # (~3 months)
           days-before-pr-close: 10
-          stale-pr-label: no-activity
+          stale-pr-label: inactive
           stale-pr-message: >
-            This PR has been marked as no-activity due to inactivity.
+            This PR has been marked as inactive due to inactivity.
             It will be closed if no further activity occurs in the next 10 days.
           exempt-pr-labels: autorelease: pending
 

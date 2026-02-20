@@ -146,8 +146,8 @@ group:
     dest: .github/workflows/release-please.yml
     template:
       repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/no-activity-bot.yml
-    dest: .github/workflows/no-activity-bot.yml
+  - source: sync-files/anemoi/all/.github/workflows/inactivity-bot.yml
+    dest: .github/workflows/inactivity-bot.yml
     template:
       repo_name: anemoi-registry
   - source: sync-files/anemoi/all/README.md
@@ -240,8 +240,8 @@ group:
     dest: .github/workflows/pr-label-ats.yml
     template:
       repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/no-activity-bot.yml
-    dest: .github/workflows/no-activity-bot.yml
+  - source: sync-files/anemoi/all/.github/workflows/inactivity-bot.yml
+    dest: .github/workflows/inactivity-bot.yml
     template:
       repo_name: anemoi
   - source: sync-files/anemoi/all/.pre-commit-config.yaml
@@ -316,8 +316,8 @@ group:
     dest: .github/workflows/pr-label-ats.yml
     template:
       repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/no-activity-bot.yml
-    dest: .github/workflows/no-activity-bot.yml
+  - source: sync-files/anemoi/all/.github/workflows/inactivity-bot.yml
+    dest: .github/workflows/inactivity-bot.yml
     template:
       repo_name: anemoi-core
   - source: sync-files/anemoi/all/.pre-commit-config.yaml
