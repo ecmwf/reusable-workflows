@@ -235,6 +235,7 @@ jobs:
                       matrix_item['clean_before_install'] = str(build_config.get('clean_before_install', False)).lower()
                       matrix_item['dry_run_install'] = str(build_config.get('dry_run_install', False)).lower()
                       matrix_item['site'] = build_config.get('site', 'hpc-batch')
+                      matrix_item['sync_module'] = build_config.get('sync_module', 'true')
                       
                   elif build_type == 'tarball':
                       matrix_item['ecbuild_version'] = build_config.get('ecbuild_version', '')
@@ -329,6 +330,7 @@ jobs:
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
           lock_permissions: ${{ matrix.lock_permissions }}
+          sync_module: ${{ matrix.sync_module }}
           module_name: ${{ matrix.module_name }}
           ntasks: ${{ matrix.ntasks }}
           gpus: ${{ matrix.gpus }}
