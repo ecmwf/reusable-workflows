@@ -136,7 +136,7 @@ jobs:
           
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@cd-hpc-simpl
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-hpc-simpl
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
