@@ -1,0 +1,65 @@
+{# ecbundle support macros for HPC build templates #}
+{% from 'base.jinja' import start_group, end_group with context %}
+{% from 'git.jinja' import git_fetch, set_package_version with context %}
+{% from 'environment.jinja' import clean_install_dir, export_package_env with context %}
+
+{# === ecbundle Support === #}
+{% macro setup_ecbundle(package) -%}
+{{ git_fetch(package) }}
+export PATH="{{ ci_options.workdir }}/{{ package.name }}/bin:$PATH"
+{%- endmacro %}
+
+
+{# === ecbundle Workflow === #}
+{% macro ecbundle_workflow(package) -%}
+{# Clone main repo containing bundle.yml #}
+{{ git_fetch(package) }}
+{{ set_package_version(package=package) }}
+
+{# Setup ecbundle #}
+{{ start_group("Setup ecbundle") }}
+cd {{ ci_options.workdir }}
+git clone --depth 1 https://github.com/ecmwf/ecbundle.git ecbundle
+export PATH="{{ ci_options.workdir }}/ecbundle/bin:$PATH"
+{{ end_group() }}
+
+{# Configure git credentials for private repos #}
+{{ start_group("Configure git credentials") }}
+git config --global credential.helper store
+cat > ~/.git-credentials << 'CREDS'
+https://{{ github.user }}:{{ github.token }}@github.com
+https://{{ github.user }}:{{ github.token }}@git.ecmwf.int
+CREDS
+{{ end_group() }}
+
+{# ecbundle-create: Clone all projects from bundle.yml #}
+{{ start_group("ecbundle-create") }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+ecbundle-create --no-colour --verbose --shallow --update
+{{ end_group() }}
+
+{{ clean_install_dir(package) }}
+
+{# ecbundle-build: Configure, build, and install #}
+{{ start_group("ecbundle-build") }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+ecbundle-build \
+    --cmake="{{ package.cmake_options|join(' ') }}" \
+    -j{{ ci_options.parallel }} \
+    --no-colour \
+    {% if not ci_options.skip_install %}--install{% endif %} \
+    --src-dir={{ ci_options.workdir }}/{{ package.name }}/source \
+    --build-dir={{ ci_options.workdir }}/builds \
+    --install-dir={{ package.prefix }}
+{% if ci_options.skip_install %}
+echo "Dry run: skipping ecbundle install"
+{% endif %}
+{{ end_group() }}
+
+{# Cleanup credentials #}
+rm -f ~/.git-credentials
+git config --global --unset credential.helper || true
+
+{# Export environment for downstream #}
+{{ export_package_env(package, include_cmake_prefix=true) }}
+{%- endmacro %}

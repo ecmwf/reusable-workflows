@@ -40,43 +40,13 @@ runs:
   steps:
     - name: Parse build configuration
       id: config
-      shell: python3 {0}
-      run: |
-        import json
-        import os
-        import sys
-
-        working_directory = '${{ inputs.working_directory }}'
-        buildargs = '${{ inputs.buildargs }}'
-        env_vars_json = '''${{ inputs.env_vars }}'''.strip()
-
-        # Parse env_vars JSON
-        try:
-            env_vars = json.loads(env_vars_json) if env_vars_json else {}
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse env_vars JSON: {e}")
-            sys.exit(1)
-
-        testpypi_input = '${{ inputs.testpypi }}'
-        testpypi = testpypi_input == 'true'
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-            f.write(f"working_directory={working_directory}\n")
-            f.write(f"buildargs={buildargs}\n")
-            f.write(f"testpypi={str(testpypi).lower()}\n")
-
-            # Handle env_vars as multiline output
-            if env_vars:
-                f.write("env_vars<<EOF\n")
-                for key, value in env_vars.items():
-                    f.write(f"{key}={value}\n")
-                f.write("EOF\n")
-
-        print(f"Working directory: {working_directory}")
-        print(f"Build args: {buildargs}")
-        print(f"Test PyPI: {str(testpypi).lower()}")
-        if env_vars:
-            print(f"Env vars: {list(env_vars.keys())}")
+      shell: bash
+      env:
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        INPUT_BUILDARGS: ${{ inputs.buildargs }}
+        INPUT_ENV_VARS: ${{ inputs.env_vars }}
+        INPUT_TESTPYPI: ${{ inputs.testpypi }}
+      run: python3 "${{ github.action_path }}/scripts/parse_config.py"
 
     - name: Set environment variables from config
       if: steps.config.outputs.env_vars != ''

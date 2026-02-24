@@ -211,168 +211,25 @@ runs:
   steps:
     - name: Parse configuration
       id: config
-      shell: python3 {0}
+      shell: bash
       env:
+        INPUT_PLATFORM: ${{ inputs.platform }}
         INPUT_STAGES: ${{ inputs.stages }}
-      run: |
-        import json
-        import os
-        import re
-        import sys
-
-        # Platform to compiler mapping
-        platform_map = {
-            'gnu-14.2.0': {
-                'compiler': 'gnu-14.2.0',
-                'compiler_cc': 'gcc',
-                'compiler_cxx': 'g++',
-                'compiler_fc': 'gfortran',
-                'compiler_modules': 'gcc/14.2.0'
-            },
-            'gnu-12.2.0': {
-                'compiler': 'gnu-12.2.0',
-                'compiler_cc': 'gcc',
-                'compiler_cxx': 'g++',
-                'compiler_fc': 'gfortran',
-                'compiler_modules': 'gcc/12.2.0'
-            },
-            'gnu-11.5.0': {
-                'compiler': 'gnu-11.5.0',
-                'compiler_cc': 'gcc',
-                'compiler_cxx': 'g++',
-                'compiler_fc': 'gfortran',
-                'compiler_modules': 'gcc/11.5.0'
-            },
-            'gnu-8.5.0': {
-                'compiler': 'gnu-8.5.0',
-                'compiler_cc': 'gcc',
-                'compiler_cxx': 'g++',
-                'compiler_fc': 'gfortran',
-                'compiler_modules': 'gcc/8.5.0'
-            },
-            'nvidia-22.11': {
-                'compiler': 'nvidia-22.11',
-                'compiler_cc': 'nvc',
-                'compiler_cxx': 'nvc++',
-                'compiler_fc': 'nvfortran',
-                'compiler_modules': 'prgenv/nvidia,nvidia/22.11'
-            },
-            'nvidia-24.11': {
-                'compiler': 'nvidia-24.11',
-                'compiler_cc': 'nvc',
-                'compiler_cxx': 'nvc++',
-                'compiler_fc': 'nvfortran',
-                'compiler_modules': 'prgenv/nvidia,nvidia/24.11'
-            },
-            'intel-2021.4.0': {
-                'compiler': 'intel-2021.4.0',
-                'compiler_cc': 'icc',
-                'compiler_cxx': 'icpc',
-                'compiler_fc': 'ifort',
-                'compiler_modules': 'prgenv/intel,intel/2021.4.0'
-            },
-            'intel-2025.0.1': {
-                'compiler': 'intel-2025.0.1',
-                'compiler_cc': 'icx',
-                'compiler_cxx': 'icpx',
-                'compiler_fc': 'ifx',
-                'compiler_modules': 'prgenv/intel-llvm,intel/2025.0.1'
-            },
-            'amd-4.0.0': {
-                'compiler': 'aocc-4.0.0',
-                'compiler_cc': 'clang',
-                'compiler_cxx': 'clang++',
-                'compiler_fc': 'flang',
-                'compiler_modules': 'prgenv/amd,aocc/4.0.0'
-            }
-        }
-
-        platform = "${{ inputs.platform }}"
-        if platform not in platform_map:
-            print(f"::error::Unknown platform '{platform}'")
-            print(f"Available platforms: {', '.join(platform_map.keys())}")
-            sys.exit(1)
-
-        compiler_info = platform_map[platform]
-
-        # Check if staged build (parse JSON to check for actual stages)
-        stages_input = os.environ.get('INPUT_STAGES', '').strip()
-        stages_list = []
-        if stages_input:
-            try:
-                stages_list = json.loads(stages_input)
-            except json.JSONDecodeError:
-                pass
-        use_staged = bool(stages_list)
-
-        dry_run = '${{ inputs.dry_run }}' == 'true'
-        dry_run_install = '${{ inputs.dry_run_install }}' == 'true'
-        sync_module_input = '${{ inputs.sync_module }}' == 'true'
-        do_sync = (not dry_run or dry_run_install) and sync_module_input and site != 'ag-batch'
-
-        install_prefix_input = '''${{ inputs.install_prefix }}'''.strip()
-        install_type = '${{ inputs.install_type }}'
-        module_name = '''${{ inputs.module_name }}'''.strip() or '${{ github.repository }}'.split('/')[-1]
-        ref_name = '${{ inputs.ref_name }}'
-        safe_ref_name = ref_name.replace('/', '-')  # Sanitize for use in paths
-        prefix_compiler_specific = '${{ inputs.prefix_compiler_specific }}' == 'true'
-
-        if install_prefix_input:
-            install_prefix = install_prefix_input
-        elif install_type == 'module':
-            install_prefix = f'/usr/local/apps/{module_name}/{safe_ref_name}'
-        else:
-            install_prefix = '$' + '{TMPDIR}' + f'/install/{module_name}/{safe_ref_name}'
-
-        if dry_run and dry_run_install:
-            if not module_name:
-                print("::error::dry_run_install requires a non-empty module_name")
-                sys.exit(1)
-            if not safe_ref_name:
-                print("::error::dry_run_install requires a non-empty ref_name")
-                sys.exit(1)
-            install_prefix = f'/usr/local/apps/{module_name}/{safe_ref_name}'
-
-        if prefix_compiler_specific:
-            base_install_prefix = install_prefix
-            compiler = compiler_info['compiler']
-            parts = platform.split('-', 1)
-            family = parts[0].upper()
-            version_parts = parts[1].split('.')
-            version = '.'.join(version_parts[:2])
-            install_prefix = f"{install_prefix}/{family}/{version}"
-        else:
-            base_install_prefix = install_prefix
-
-        # Sanitize any install path under /usr/local/apps/ — resolve '..' and
-        # symlinks, then verify the resolved path is at least <app>/<version> deep.
-        for label, path in [('install_prefix', install_prefix), ('base_install_prefix', base_install_prefix)]:
-            if path.startswith('/usr/local/apps/'):
-                resolved = os.path.realpath(path)
-                if not re.match(r'^/usr/local/apps/[^/]+/.+$', resolved):
-                    print(f"::error::{label}: resolved path '{resolved}' (from '{path}') is not deep enough — must be at least /usr/local/apps/<app>/<version>")
-                    sys.exit(1)
-        install_prefix = os.path.realpath(install_prefix) if install_prefix.startswith('/usr/local/apps/') else install_prefix
-        base_install_prefix = os.path.realpath(base_install_prefix) if base_install_prefix.startswith('/usr/local/apps/') else base_install_prefix
-
-        # Write outputs
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-            f.write(f"use_staged={'true' if use_staged else 'false'}\n")
-            f.write(f"do_sync={'true' if do_sync else 'false'}\n")
-            f.write(f"install_prefix={install_prefix}\n")
-            f.write(f"base_install_prefix={base_install_prefix}\n")
-            for key, value in compiler_info.items():
-                f.write(f"{key}={value}\n")
-
-        print(f"Platform: {platform}")
-        print(f"Compiler: {compiler_info['compiler']}")
-        print(f"Build mode: {'staged' if use_staged else 'standard'}")
-        print(f"Install prefix: {install_prefix}")
-        print(f"Do sync: {do_sync}")
+        INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        INPUT_DRY_RUN_INSTALL: ${{ inputs.dry_run_install }}
+        INPUT_SYNC_MODULE: ${{ inputs.sync_module }}
+        INPUT_SITE: ${{ inputs.site }}
+        INPUT_INSTALL_PREFIX: ${{ inputs.install_prefix }}
+        INPUT_INSTALL_TYPE: ${{ inputs.install_type }}
+        INPUT_MODULE_NAME: ${{ inputs.module_name }}
+        INPUT_REF_NAME: ${{ inputs.ref_name }}
+        INPUT_PREFIX_COMPILER_SPECIFIC: ${{ inputs.prefix_compiler_specific }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "${{ github.action_path }}/scripts/parse_config.py"
 
     - name: Generate build template
       id: template
-      shell: python3 {0}
+      shell: bash
       env:
         INPUT_STAGES: ${{ inputs.stages }}
         INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
@@ -385,389 +242,39 @@ runs:
         INPUT_INSTALL_LIB_DIR: ${{ inputs.install_lib_dir }}
         INPUT_BUNDLE_YML: ${{ inputs.bundle_yml }}
         INPUT_INSTALL_COMMAND: ${{ inputs.install_command }}
-      run: |
-        import hashlib
-        import json
-        import os
-        import yaml
-        from pathlib import Path
-        from jinja2 import Environment, FileSystemLoader
-
-        # Load Jinja templates
-        action_dir = Path('${{ github.action_path }}')
-        template_dir = action_dir / 'templates'
-        env = Environment(
-            loader=FileSystemLoader(template_dir),
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
-
-        # Check if staged build (parse JSON to check for actual stages)
-        stages_input = os.environ.get('INPUT_STAGES', '').strip()
-        stages = []
-        if stages_input:
-            try:
-                stages = json.loads(stages_input)
-            except json.JSONDecodeError:
-                pass
-        use_staged = bool(stages)
-
-        # Parse inputs from environment variables
-        cmake_options_input = os.environ.get('INPUT_CMAKE_OPTIONS', '').strip()
-        ctest_options_input = os.environ.get('INPUT_CTEST_OPTIONS', '').strip()
-        dependencies_input = os.environ.get('INPUT_DEPENDENCIES', '').strip()
-        dep_cmake_options_input = os.environ.get('INPUT_DEPENDENCY_CMAKE_OPTIONS', '').strip()
-        python_deps_input = os.environ.get('INPUT_PYTHON_DEPENDENCIES', '').strip()
-        modules_input = os.environ.get('INPUT_MODULES', '').strip()
-        env_vars_input = os.environ.get('INPUT_ENV_VARS', '').strip()
-        install_lib_dir = os.environ.get('INPUT_INSTALL_LIB_DIR', '').strip()
-
-        repository = '${{ github.repository }}'
-        repo_owner, repo_name = repository.split('/')
-        ref_name = '${{ inputs.ref_name }}'
-        sha = '${{ inputs.sha }}'
-        compiler = '${{ steps.config.outputs.compiler }}'
-        compiler_modules = '${{ steps.config.outputs.compiler_modules }}'
-        install_prefix = '${{ steps.config.outputs.install_prefix }}'
-        base_install_prefix = '${{ steps.config.outputs.base_install_prefix }}'
-        module_name = '''${{ inputs.module_name }}'''.strip() or repo_name
-        parallel = '''${{ inputs.parallel }}'''.strip() or '64'
-        ntasks = '''${{ inputs.ntasks }}'''.strip() or '1'
-        gpus = '''${{ inputs.gpus }}'''.strip()
-        queue = '''${{ inputs.queue }}'''.strip() or 'nf'
-        site = '${{ inputs.site }}'
-        do_sync = '${{ steps.config.outputs.do_sync }}' == 'true'
-        lock_permissions = '${{ inputs.lock_permissions }}' == 'true'
-        use_ninja = '${{ inputs.use_ninja }}' == 'true'
-        self_test = '${{ inputs.self_test }}' == 'true'
-        force_build = '${{ inputs.force_build }}' == 'true'
-        ecbundle = '${{ inputs.ecbundle }}' == 'true'
-        clean_before_install = '${{ inputs.clean_before_install }}' == 'true'
-        python_version = '''${{ inputs.python_version }}'''.strip()
-        requirements_path = '''${{ inputs.python_requirements }}'''.strip() or 'requirements.txt'
-        toml_opt_dep_sections = '''${{ inputs.python_toml_opt_dep_sections }}'''.strip()
-        conda_deps = '''${{ inputs.conda_deps }}'''.strip()
-        post_script = '''${{ inputs.post_script }}'''.strip() or None
-        bundle_yml_input = os.environ.get('INPUT_BUNDLE_YML', '').strip()
-        install_command = os.environ.get('INPUT_INSTALL_COMMAND', '').strip()
-        mkdir_input = '''${{ inputs.mkdir }}'''.strip()
-        pytest_cmd_input = '''${{ inputs.pytest_cmd }}'''.strip()
-
-        # Parse mkdir (similar to modules parsing)
-        mkdir_list = []
-        if mkdir_input:
-            try:
-                mkdir_list = json.loads(mkdir_input)
-            except json.JSONDecodeError:
-                mkdir_list = [d.strip() for d in mkdir_input.replace('\n', ',').split(',') if d.strip()]
-
-        if use_ninja:
-            generator = '-GNinja'
-            build_cmd = 'ninja'
-        else:
-            generator = ''
-            build_cmd = 'make'
-
-        # Build generic modules list (compiler + ninja if enabled)
-        generic_modules = compiler_modules.split(',')
-        if use_ninja:
-            generic_modules.append('ninja')
-
-        # === BUILD COMMON CONTEXT ===
-        def cmake_value(v):
-            if isinstance(v, bool):
-                return 'ON' if v else 'OFF'
-            return v
-
-        # Parse cmake options (JSON dict to list)
-        cmake_options = []
-        if cmake_options_input:
-            cmake_opts_dict = json.loads(cmake_options_input)
-            if not isinstance(cmake_opts_dict, dict):
-                raise ValueError(f"cmake_options must be a dict, got {type(cmake_opts_dict).__name__}")
-            cmake_options = [f'{k}={cmake_value(v)}' for k, v in cmake_opts_dict.items()]
-
-        # Parse ctest options (JSON dict to list)
-        ctest_options = []
-        if ctest_options_input:
-            ctest_opts_dict = json.loads(ctest_options_input)
-            if not isinstance(ctest_opts_dict, dict):
-                raise ValueError(f"ctest_options must be a dict, got {type(ctest_opts_dict).__name__}")
-            ctest_options = [f'{k}={v}' if v else k for k, v in ctest_opts_dict.items()]
-
-        # Add install lib dir if specified
-        if install_lib_dir:
-            cmake_options.insert(0, f'-DINSTALL_LIB_DIR={install_lib_dir}')
-
-        # Parse dependency cmake options (YAML format)
-        dep_cmake_map = {}
-        if dep_cmake_options_input:
-            try:
-                dep_cmake_map = yaml.safe_load(dep_cmake_options_input) or {}
-            except yaml.YAMLError:
-                print(f"::warning::Could not parse dependency_cmake_options as YAML")
-
-        # Parse modules
-        package_modules = []
-        if modules_input:
-            try:
-                package_modules = json.loads(modules_input)
-            except json.JSONDecodeError:
-                # Try as newline/comma-separated
-                package_modules = [m.strip() for m in modules_input.replace('\n', ',').split(',') if m.strip()]
-
-        # Parse environment variables
-        env_list = []
-        if env_vars_input:
-            try:
-                env_dict = json.loads(env_vars_input)
-                env_list = [f'{k}={v}' for k, v in env_dict.items()]
-            except json.JSONDecodeError:
-                print(f"::warning::Could not parse env_vars as JSON")
-
-        # Helper to generate cache key
-        def cache_key(name, ref, cmake_opts):
-            key_data = f"{name}:{ref}:{compiler}:{':'.join(cmake_opts or [])}"
-            return f"{name}-{hashlib.sha256(key_data.encode()).hexdigest()[:12]}"
-
-        # Auto-detect bundle.yml
-        use_ecbundle = False
-        bundle_yml_path = None
-
-        if bundle_yml_input:
-            if os.path.exists(bundle_yml_input):
-                bundle_yml_path = bundle_yml_input
-                use_ecbundle = True
-        elif os.path.exists('bundle.yml'):
-            bundle_yml_path = 'bundle.yml'
-            use_ecbundle = True
-
-        if use_ecbundle:
-            print(f"Detected bundle.yml at: {bundle_yml_path} - using ecbundle")
-
-        # Build packages list
-        packages = []
-
-        # Use ecbundle workflow if bundle.yml detected
-        if use_ecbundle:
-            packages = [{
-                'name': repo_name,
-                'owner': repo_owner,
-                'repo': repo_name,
-                'ref': sha if sha else ref_name,
-                'type': 'ecbundle',
-                'prefix': install_prefix,
-                'cmake_options': cmake_options,
-                'ctest_options': ctest_options,
-                'modules': package_modules,
-                'cache_key': cache_key(repo_name, ref_name, cmake_options),
-                'subdir': '',
-            }]
-        else:
-            # Parse dependencies
-            for dep in dependencies_input.splitlines():
-                dep = dep.strip()
-                if not dep:
-                    continue
-                if '@' in dep:
-                    dep_repo, dep_ref = dep.rsplit('@', 1)
-                else:
-                    dep_repo, dep_ref = dep, 'main'
-
-                if '/' in dep_repo:
-                    dep_owner, dep_name = dep_repo.split('/', 1)
-                else:
-                    dep_owner, dep_name = 'ecmwf', dep_repo
-
-                # Get dependency-specific cmake options
-                dep_cmake = dep_cmake_map.get(dep_repo, '')
-                dep_cmake_list = [opt.strip() for opt in dep_cmake.split(',') if opt.strip()] if dep_cmake else []
-
-                # Dependency prefix is in workdir deps area
-                dep_prefix = '$' + '{TMPDIR}' + f'/deps/{dep_name}'
-
-                packages.append({
-                    'name': dep_name,
-                    'owner': dep_owner,
-                    'repo': dep_name,
-                    'ref': dep_ref,
-                    'type': 'dependency',
-                    'prefix': dep_prefix,
-                    'cmake_options': dep_cmake_list,
-                    'ctest_options': [],
-                    'modules': [],
-                    'cache_key': cache_key(dep_name, dep_ref, dep_cmake_list),
-                    'subdir': '',
-                })
-
-            # Add main package (CMake) - always add for staged builds, or when no python_version
-            if use_staged or not python_version:
-                packages.append({
-                    'name': repo_name,
-                    'owner': repo_owner,
-                    'repo': repo_name,
-                    'ref': sha if sha else ref_name,
-                    'type': 'main',
-                    'prefix': install_prefix,
-                    'cmake_options': cmake_options,
-                    'ctest_options': ctest_options,
-                    'modules': package_modules,
-                    'cache_key': cache_key(repo_name, ref_name, cmake_options),
-                    'subdir': '',
-                    'install_command': install_command,
-                })
-
-            # Parse Python dependencies
-            for dep in python_deps_input.splitlines():
-                dep = dep.strip()
-                if not dep:
-                    continue
-                if '@' in dep:
-                    dep_repo, dep_ref = dep.rsplit('@', 1)
-                else:
-                    dep_repo, dep_ref = dep, 'main'
-
-                if '/' in dep_repo:
-                    dep_owner, dep_name = dep_repo.split('/', 1)
-                else:
-                    dep_owner, dep_name = 'ecmwf', dep_repo
-
-                packages.append({
-                    'name': dep_name,
-                    'owner': dep_owner,
-                    'repo': dep_name,
-                    'ref': dep_ref,
-                    'type': 'dependency-python',
-                    'prefix': '',
-                    'cmake_options': [],
-                    'ctest_options': [],
-                    'modules': [],
-                    'cache_key': '',
-                    'subdir': '',
-                })
-
-            # Add main Python package
-            if python_version:
-                packages.append({
-                    'name': repo_name,
-                    'owner': repo_owner,
-                    'repo': repo_name,
-                    'ref': sha if sha else ref_name,
-                    'type': 'main-python',
-                    'prefix': install_prefix,
-                    'cmake_options': [],
-                    'ctest_options': [],
-                    'modules': package_modules,
-                    'cache_key': '',
-                    'subdir': '',
-                })
-
-        # Build name for logging
-        build_name = '''${{ inputs.name }}'''.strip()
-
-        dry_run = '${{ inputs.dry_run }}' == 'true'
-        dry_run_install = '${{ inputs.dry_run_install }}' == 'true'
-        if dry_run and dry_run_install:
-            clean_before_install = True
-
-        # Build ci_options dict
-        ci_options = {
-            'build_name': build_name,
-            'parallel': int(parallel),
-            'cpus_per_task': int(parallel),
-            'ntasks': int(ntasks),
-            'gpus': int(gpus) if gpus else 0,
-            'self_test': self_test,
-            'force_build': force_build,
-            'dry_run': dry_run,
-            'dry_run_install': dry_run_install,
-            'skip_install': dry_run and not dry_run_install,
-            'workdir': '$' + '{TMPDIR}',
-            'output_path': '',  # Set by generic.jinja wrapper
-            'python_version': python_version or '3.12',
-            'requirements_path': requirements_path,
-            'toml_opt_dep_sections': toml_opt_dep_sections,
-            'conda_deps': conda_deps,
-            'post_script': post_script,
-            'main_package_name': repo_name,
-            'compiler': compiler,
-            'mkdir': mkdir_list,
-            'ecbundle': ecbundle,
-            'use_ecbundle': use_ecbundle,
-            'pytest_cmd': pytest_cmd_input or None,
-            'install_type': '${{ inputs.install_type }}',
-            'prefix_compiler_specific': '${{ inputs.prefix_compiler_specific }}' == 'true',
-            'clean_before_install': clean_before_install,
-            'install_prefix': install_prefix,
-            'base_install_prefix': base_install_prefix,
-            'sync_clusters': ['aa', 'ab', 'ac', 'ad'],
-            'sync_module': do_sync,
-            'module_name': module_name,
-            'queue': queue,
-            'hpc': 'lumi' if site == 'lumi' else 'atos',
-            'hpc_config': {'enable_cache': True},
-            'lock_permissions': lock_permissions,
-        }
-
-        # Build github dict (with template placeholders for secrets)
-        github = {
-            'user': '{{ github_user }}',
-            'token': '{{ github_token }}',
-        }
-
-        # === RENDER TEMPLATE ===
-        template = env.get_template('build-job.jinja')
-
-        # Normalize stages to ensure required fields
-        for i, stage in enumerate(stages):
-            stage.setdefault('name', f'stage-{i}')
-            stage.setdefault('modules', [])
-            stage_cmake = stage.get('cmake_options', {})
-            if isinstance(stage_cmake, dict):
-                stage['cmake_options'] = [f'{k}={cmake_value(v)}' for k, v in stage_cmake.items()]
-            else:
-                stage['cmake_options'] = []
-            stage.setdefault('build_command', '')
-            stage.setdefault('test_command', '')
-            stage.setdefault('install_command', '')
-
-        # Render template (stages list is empty for standard builds)
-        rendered = template.render(
-            packages=packages,
-            ci_options=ci_options,
-            generic_modules=generic_modules,
-            env=env_list,
-            github=github,
-            stages=stages,
-        )
-
-        # Generate sbatch options using the macro from macros.jinja
-        sbatch_template = env.from_string(
-            "{% from 'macros.jinja' import sbatch_options with context %}{{ sbatch_options() }}"
-        )
-        sbatch = sbatch_template.render(
-            site=site,
-            queue=queue,
-            ntasks=ntasks,
-            parallel=parallel,
-            gpus=gpus,
-        ).strip()
-
-        # Write outputs
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-            f.write("template<<EOF\n")
-            f.write(rendered)
-            f.write("\nEOF\n")
-            f.write("sbatch_options<<SBATCH_EOF\n")
-            f.write(sbatch)
-            f.write("\nSBATCH_EOF\n")
-
-        print("Generated template:")
-        print(rendered[:2000])
-        if len(rendered) > 2000:
-            print(f"\n... ({len(rendered) - 2000} more characters)")
-        print("\nSBATCH options:")
-        print(sbatch)
+        INPUT_REF_NAME: ${{ inputs.ref_name }}
+        INPUT_SHA: ${{ inputs.sha }}
+        INPUT_MODULE_NAME: ${{ inputs.module_name }}
+        INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_NTASKS: ${{ inputs.ntasks }}
+        INPUT_GPUS: ${{ inputs.gpus }}
+        INPUT_QUEUE: ${{ inputs.queue }}
+        INPUT_SITE: ${{ inputs.site }}
+        INPUT_LOCK_PERMISSIONS: ${{ inputs.lock_permissions }}
+        INPUT_USE_NINJA: ${{ inputs.use_ninja }}
+        INPUT_SELF_TEST: ${{ inputs.self_test }}
+        INPUT_FORCE_BUILD: ${{ inputs.force_build }}
+        INPUT_ECBUNDLE: ${{ inputs.ecbundle }}
+        INPUT_CLEAN_BEFORE_INSTALL: ${{ inputs.clean_before_install }}
+        INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
+        INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
+        INPUT_PYTHON_TOML_OPT_DEP_SECTIONS: ${{ inputs.python_toml_opt_dep_sections }}
+        INPUT_CONDA_DEPS: ${{ inputs.conda_deps }}
+        INPUT_POST_SCRIPT: ${{ inputs.post_script }}
+        INPUT_MKDIR: ${{ inputs.mkdir }}
+        INPUT_PYTEST_CMD: ${{ inputs.pytest_cmd }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        INPUT_DRY_RUN_INSTALL: ${{ inputs.dry_run_install }}
+        INPUT_INSTALL_TYPE: ${{ inputs.install_type }}
+        INPUT_PREFIX_COMPILER_SPECIFIC: ${{ inputs.prefix_compiler_specific }}
+        STEP_CONFIG_COMPILER: ${{ steps.config.outputs.compiler }}
+        STEP_CONFIG_COMPILER_MODULES: ${{ steps.config.outputs.compiler_modules }}
+        STEP_CONFIG_INSTALL_PREFIX: ${{ steps.config.outputs.install_prefix }}
+        STEP_CONFIG_BASE_INSTALL_PREFIX: ${{ steps.config.outputs.base_install_prefix }}
+        STEP_CONFIG_DO_SYNC: ${{ steps.config.outputs.do_sync }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "${{ github.action_path }}/scripts/generate_template.py"
 
     - name: Build with ci-hpc-generic
       uses: ecmwf/reusable-workflows/ci-hpc-generic@v2

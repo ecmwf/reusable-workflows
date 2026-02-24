@@ -1,0 +1,42 @@
+{# Reusable base macros for HPC build templates #}
+
+{# === GitHub Actions Logging === #}
+{% macro start_group(msg) -%}
+echo "::group::{{ msg }}"
+{%- endmacro %}
+
+
+{% macro end_group() -%}
+echo "::endgroup::"
+{%- endmacro %}
+
+
+{# Print cmake options with -D prefix #}
+{% macro print_cmake_options(options) -%}
+{% if (options is defined) and options %}
+{% for opt in options %}-D{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{%- endif %}
+{%- endmacro %}
+
+{# Print ctest options with -- prefix #}
+{% macro print_ctest_options(options) -%}
+{% if (options is defined) and options %}
+{% for opt in options %}--{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{%- endif %}
+{%- endmacro %}
+
+{# Print ecbundle cmake options #}
+{% macro print_ecbundle_options(options) -%}
+{% if (options is defined) and options %}
+--cmake="{{ options|join(" ") }}"
+{%- endif %}
+{%- endmacro %}
+
+
+{# === Directory Navigation === #}
+{% macro cd_pkg_subdir(package) -%}
+cd {{ ci_options.workdir }}/{{ package.name }}
+{% if (package.subdir is defined) and package.subdir %}
+cd {{ package.subdir }}
+{% endif %}
+{%- endmacro %}

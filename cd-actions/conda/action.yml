@@ -47,53 +47,17 @@ runs:
   steps:
     - name: Parse build configuration
       id: config
-      shell: python3 {0}
-      run: |
-        import os
+      shell: bash
+      env:
+        INPUT_CONDA_DIR: ${{ inputs.conda_dir }}
+        INPUT_CHANNELS: ${{ inputs.channels }}
+        INPUT_CONDA_BUILD_ARGS: ${{ inputs.conda_build_args }}
+        INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        INPUT_NEXUS_TOKEN: ${{ inputs.nexus_token }}
+        INPUT_NEXUS_TEST_TOKEN: ${{ inputs.nexus_test_token }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "${{ github.action_path }}/scripts/parse_config.py"
 
-        conda_dir = '${{ inputs.conda_dir }}'
-        channels_input = '${{ inputs.channels }}'
-        conda_build_args = '${{ inputs.conda_build_args }}'
-
-        # Parse comma-separated channels
-        channels_list = [c.strip() for c in channels_input.split(',') if c.strip()]
-        if channels_list:
-            channels = f"-c {' -c '.join(channels_list)}"
-        else:
-            channels = ""
-
-        # Determine Nexus URL based on prerelease flag
-        test_nexus = '${{ inputs.test_nexus }}' == 'true'
-        if test_nexus:
-            nexus_url = 'https://nexus-test.ecmwf.int/repository/conda-ecmwf-public'
-            nexus_token = '${{ inputs.nexus_test_token }}'
-            print("Using test Nexus repository for pre-release")
-        else:
-            nexus_url = 'https://nexus.ecmwf.int/repository/conda-ecmwf-public'
-            nexus_token = '${{ inputs.nexus_token }}'
-            print("Using production Nexus repository for standard release")
-
-        meta_file = f"{conda_dir}/meta.yaml"
-        output_folder = f"{conda_dir}/build"
-        artifact_pattern = f"{output_folder}/**/*.tar.bz2"
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
-            f.write(f"meta_file={meta_file}\n")
-            f.write(f"channels={channels}\n")
-            f.write(f"output_folder={output_folder}\n")
-            f.write(f"artifact_pattern={artifact_pattern}\n")
-            f.write(f"conda_build_args={conda_build_args}\n")
-            f.write(f"nexus_url={nexus_url}\n")
-            f.write(f"nexus_token={nexus_token}\n")
-
-        print(f"Conda dir: {conda_dir}")
-        print(f"Meta file: {meta_file}")
-        print(f"Channels: {channels}")
-        print(f"Output folder: {output_folder}")
-        print(f"Artifact pattern: {artifact_pattern}")
-        print(f"Conda build args: {conda_build_args}")
-        print(f"Nexus URL: {nexus_url}")
-        
     - name: Validate configuration files
       id: validate
       shell: bash -el {0}

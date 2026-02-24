@@ -1,0 +1,13 @@
+sync_clusters:
+  aa-batch: [ab, ac, ad]
+  ab-batch: [aa, ac, ad]
+  ac-batch: [aa, ab, ad]
+  ad-batch: [aa, ab, ac]
+  ag-batch: []
+  lumi: []
+
+defaults:
+  parallel: 64
+  ntasks: 1
+  queue: nf
+  python_version: "3.12"
