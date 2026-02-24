@@ -4,12 +4,12 @@
 {# === README Generation === #}
 {% macro generate_readme(install_prefix, build_log) -%}
 {{ start_group("Generate README.txt") }}
-python3 << 'GENERATE_README'
+INSTALL_PREFIX="{{ install_prefix }}" BUILD_LOG="{{ build_log }}" python3 << 'GENERATE_README'
 import os
 import re
 
-install_prefix = "{{ install_prefix }}"
-build_log = "{{ build_log }}"
+install_prefix = os.environ["INSTALL_PREFIX"]
+build_log = os.environ["BUILD_LOG"]
 readme_file = os.path.join(install_prefix, "README.txt")
 
 if not os.path.isdir(install_prefix):
