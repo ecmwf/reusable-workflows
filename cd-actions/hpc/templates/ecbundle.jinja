@@ -26,6 +26,7 @@ export PATH="{{ ci_options.workdir }}/ecbundle/bin:$PATH"
 {# Configure git credentials for private repos #}
 {{ start_group("Configure git credentials") }}
 git config --global credential.helper store
+umask 077
 cat > ~/.git-credentials << 'CREDS'
 https://{{ github.user }}:{{ github.token }}@github.com
 https://{{ github.user }}:{{ github.token }}@git.ecmwf.int
