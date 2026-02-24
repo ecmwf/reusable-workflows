@@ -120,7 +120,10 @@ fi
 {{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
 echo "Dry run: skipping README generation and permission lock"
 {% else %}
-{{ redact_build_log(build_log=ci_options.install_prefix + "/build.log") }}
+{{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
+
+# Copy build log to install prefix
+cp "{{ ci_options.workdir }}/build.log" "{{ ci_options.install_prefix }}/build.log" 2>/dev/null || true
 
 {{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
 

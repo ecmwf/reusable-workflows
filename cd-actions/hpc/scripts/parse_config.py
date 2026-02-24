@@ -62,7 +62,8 @@ def main():
         if not safe_ref_name:
             print("::error::dry_run_install requires a non-empty ref_name")
             sys.exit(1)
-        install_prefix = f"/usr/local/apps/{module_name}/{safe_ref_name}"
+        if not install_prefix_input:
+            install_prefix = f"/usr/local/apps/{module_name}/{safe_ref_name}"
 
     if prefix_compiler_specific:
         base_install_prefix = install_prefix

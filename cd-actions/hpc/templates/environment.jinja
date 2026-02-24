@@ -49,10 +49,8 @@ export CMAKE_PREFIX_PATH="{{ path }}:$CMAKE_PREFIX_PATH"
 
 {# === Build Log Setup === #}
 {% macro setup_build_log() -%}
-{% if ci_options.skip_install %}
 BUILD_LOG="{{ ci_options.workdir }}/build.log"
-{% else %}
-BUILD_LOG="{{ ci_options.install_prefix }}/build.log"
+{% if not ci_options.skip_install %}
 chmod -R u+w "{{ ci_options.base_install_prefix }}" 2>/dev/null || chmod -R u+w "{{ ci_options.install_prefix }}" 2>/dev/null || true
 mkdir -p "{{ ci_options.install_prefix }}"
 {% endif %}
