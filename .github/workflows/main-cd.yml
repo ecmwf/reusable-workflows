@@ -218,6 +218,7 @@ jobs:
                       matrix_item["post_script"] = build_config.get("post_script", "")
                       matrix_item["clean_before_install"] = str(build_config.get("clean_before_install", False)).lower()
                       matrix_item["dry_run_install"] = str(build_config.get("dry_run_install", False)).lower()
+                      matrix_item["dry_run_install_prefix"] = build_config.get("dry_run_install_prefix", "")
                       matrix_item["site"] = build_config.get("site", "hpc-batch")
                       matrix_item["sync_module"] = str(build_config.get("sync_module", True)).lower()
 
@@ -322,6 +323,7 @@ jobs:
           post_script: ${{ matrix.post_script }}
           clean_before_install: ${{ matrix.clean_before_install }}
           dry_run_install: ${{ matrix.dry_run_install }}
+          dry_run_install_prefix: ${{ matrix.dry_run_install_prefix }}
           site: ${{ matrix.site }}
           
       - name: Build Tarball

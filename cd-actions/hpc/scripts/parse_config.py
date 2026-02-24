@@ -41,6 +41,7 @@ def main():
     do_sync = not dry_run and sync_module_input and site != "ag-batch"
 
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
+    dry_run_install_prefix_input = os.environ.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
     install_type = os.environ.get("INPUT_INSTALL_TYPE", "module")
     repository = os.environ["GITHUB_REPOSITORY"]
     module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
@@ -62,8 +63,10 @@ def main():
         if not safe_ref_name:
             print("::error::dry_run_install requires a non-empty ref_name")
             sys.exit(1)
-        if not install_prefix_input:
-            install_prefix = f"/usr/local/apps/{module_name}/{safe_ref_name}"
+        if dry_run_install_prefix_input:
+            install_prefix = dry_run_install_prefix_input
+        else:
+            install_prefix = "${SCRATCH}" + f"/dry-run-install/{module_name}/{safe_ref_name}"
 
     if prefix_compiler_specific:
         base_install_prefix = install_prefix

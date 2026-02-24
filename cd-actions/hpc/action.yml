@@ -18,9 +18,13 @@ inputs:
     required: false
     default: 'false'
   dry_run_install:
-    description: 'Install module to /usr/local/apps even during dry runs'
+    description: 'Install module during dry runs'
     required: false
     default: 'false'
+  dry_run_install_prefix:
+    description: 'Custom install prefix for dry_run_install (default: $SCRATCH/dry-run-install/<module>/<ref>)'
+    required: false
+    default: ''
 
   # HPC Authentication
   github_user:
@@ -217,6 +221,7 @@ runs:
         INPUT_STAGES: ${{ inputs.stages }}
         INPUT_DRY_RUN: ${{ inputs.dry_run }}
         INPUT_DRY_RUN_INSTALL: ${{ inputs.dry_run_install }}
+        INPUT_DRY_RUN_INSTALL_PREFIX: ${{ inputs.dry_run_install_prefix }}
         INPUT_SYNC_MODULE: ${{ inputs.sync_module }}
         INPUT_SITE: ${{ inputs.site }}
         INPUT_INSTALL_PREFIX: ${{ inputs.install_prefix }}
