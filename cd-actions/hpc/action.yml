@@ -308,7 +308,7 @@ runs:
         dry_run = '${{ inputs.dry_run }}' == 'true'
         dry_run_install = '${{ inputs.dry_run_install }}' == 'true'
         sync_module_input = '${{ inputs.sync_module }}' == 'true'
-        do_sync = (not dry_run or dry_run_install) and sync_module_input
+        do_sync = (not dry_run or dry_run_install) and sync_module_input and site != 'ag-batch'
 
         install_prefix_input = '''${{ inputs.install_prefix }}'''.strip()
         install_type = '${{ inputs.install_type }}'
