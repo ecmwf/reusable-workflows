@@ -299,9 +299,6 @@ def main():
 
     dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
     dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
-    if dry_run and dry_run_install:
-        clean_before_install = True
-
     # Build ci_options dict
     ci_options = {
         "build_name": build_name,
