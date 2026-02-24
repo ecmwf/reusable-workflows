@@ -38,7 +38,7 @@ def main():
     dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
     sync_module_input = os.environ.get("INPUT_SYNC_MODULE", "true") == "true"
     site = os.environ.get("INPUT_SITE", "hpc-batch")
-    do_sync = (not dry_run or dry_run_install) and sync_module_input and site != "ag-batch"
+    do_sync = not dry_run and sync_module_input and site != "ag-batch"
 
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
     install_type = os.environ.get("INPUT_INSTALL_TYPE", "module")
