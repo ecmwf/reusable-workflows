@@ -156,7 +156,7 @@ jobs:
                       default_platforms = {
                           'ubuntu-22.04': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'ubuntu-22.04',
+                              'os': 'ubuntu-22.04-bump-cmake3',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_UBUNTU_2204',
                           },
@@ -168,13 +168,13 @@ jobs:
                           },
                           'debian-11': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'debian-11',
+                              'os': 'debian-11-bump-cmake3',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_11',
                           },
                           'debian-12': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'debian-12',
+                              'os': 'debian-12-bump-cmake3',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_DEBIAN_12',
                           },
@@ -186,7 +186,7 @@ jobs:
                           },
                           'rocky-8': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'rocky-8.10',
+                              'os': 'rocky-8.10-bump-cmake3',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_8',
                           },
@@ -204,7 +204,7 @@ jobs:
                           },
                           'rocky-9': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'rocky-9.7',
+                              'os': 'rocky-9.7-bump-cmake3',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_ROCKY_9',
                           },
@@ -228,7 +228,7 @@ jobs:
                           },
                           'fedora-43': {
                               'runner': ['self-hosted', 'platform-builder-docker-xl'],
-                              'os': 'fedora-43',
+                              'os': 'fedora-43-bump-cmake3',
                               'nexus_token_secret': 'NEXUS_TEST_REPO_UPLOAD_TOKEN',
                               'nexus_url_secret': 'NEXUS_TEST_REPO_URL_FEDORA_43',
                           },

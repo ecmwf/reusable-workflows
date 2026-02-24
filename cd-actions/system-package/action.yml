@@ -400,15 +400,15 @@ runs:
         os_id = '${{ inputs.os }}'
 
         os_to_docker = {
-            'ubuntu-2204': 'ubuntu:22.04',
-            'ubuntu-2404': 'ubuntu:24.04',
-            'debian-11': 'debian:11',
-            'debian-12': 'debian:12',
+            'ubuntu-22.04-bump-cmake3': 'ubuntu:22.04',
+            'ubuntu-24.04': 'ubuntu:24.04',
+            'debian-11-bump-cmake3': 'debian:11',
+            'debian-12-bump-cmake3': 'debian:12',
             'debian-13': 'debian:13',
-            'rocky-8': 'rockylinux/rockylinux:8',
-            'rocky-9': 'rockylinux/rockylinux:9',
+            'rocky-8-bump-cmake3': 'rockylinux/rockylinux:8',
+            'rocky-9-bump-cmake3': 'rockylinux/rockylinux:9',
             'rocky-10': 'rockylinux/rockylinux:10',
-            'fedora-43': 'fedora:43',
+            'fedora-43-bump-cmake3': 'fedora:43',
             'centos7-': 'centos:7',
         }
 
