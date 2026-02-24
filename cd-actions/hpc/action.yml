@@ -17,6 +17,10 @@ inputs:
     description: 'Dry run mode - build on HPC but skip module sync'
     required: false
     default: 'false'
+  dry_run_install:
+    description: 'Install module to /usr/local/apps even during dry runs'
+    required: false
+    default: 'false'
 
   # HPC Authentication
   github_user:
@@ -213,6 +217,7 @@ runs:
       run: |
         import json
         import os
+        import re
         import sys
 
         # Platform to compiler mapping
@@ -301,8 +306,9 @@ runs:
         use_staged = bool(stages_list)
 
         dry_run = '${{ inputs.dry_run }}' == 'true'
+        dry_run_install = '${{ inputs.dry_run_install }}' == 'true'
         sync_module_input = '${{ inputs.sync_module }}' == 'true'
-        do_sync = not dry_run and sync_module_input
+        do_sync = (not dry_run or dry_run_install) and sync_module_input and site != 'ag-batch'
 
         install_prefix_input = '''${{ inputs.install_prefix }}'''.strip()
         install_type = '${{ inputs.install_type }}'
@@ -318,6 +324,15 @@ runs:
         else:
             install_prefix = '$' + '{TMPDIR}' + f'/install/{module_name}/{safe_ref_name}'
 
+        if dry_run and dry_run_install:
+            if not module_name:
+                print("::error::dry_run_install requires a non-empty module_name")
+                sys.exit(1)
+            if not safe_ref_name:
+                print("::error::dry_run_install requires a non-empty ref_name")
+                sys.exit(1)
+            install_prefix = f'/usr/local/apps/{module_name}/{safe_ref_name}'
+
         if prefix_compiler_specific:
             base_install_prefix = install_prefix
             compiler = compiler_info['compiler']
@@ -328,6 +343,17 @@ runs:
             install_prefix = f"{install_prefix}/{family}/{version}"
         else:
             base_install_prefix = install_prefix
+
+        # Sanitize any install path under /usr/local/apps/ — resolve '..' and
+        # symlinks, then verify the resolved path is at least <app>/<version> deep.
+        for label, path in [('install_prefix', install_prefix), ('base_install_prefix', base_install_prefix)]:
+            if path.startswith('/usr/local/apps/'):
+                resolved = os.path.realpath(path)
+                if not re.match(r'^/usr/local/apps/[^/]+/.+$', resolved):
+                    print(f"::error::{label}: resolved path '{resolved}' (from '{path}') is not deep enough — must be at least /usr/local/apps/<app>/<version>")
+                    sys.exit(1)
+        install_prefix = os.path.realpath(install_prefix) if install_prefix.startswith('/usr/local/apps/') else install_prefix
+        base_install_prefix = os.path.realpath(base_install_prefix) if base_install_prefix.startswith('/usr/local/apps/') else base_install_prefix
 
         # Write outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
@@ -640,6 +666,9 @@ runs:
         build_name = '''${{ inputs.name }}'''.strip()
 
         dry_run = '${{ inputs.dry_run }}' == 'true'
+        dry_run_install = '${{ inputs.dry_run_install }}' == 'true'
+        if dry_run and dry_run_install:
+            clean_before_install = True
 
         # Build ci_options dict
         ci_options = {
@@ -651,6 +680,8 @@ runs:
             'self_test': self_test,
             'force_build': force_build,
             'dry_run': dry_run,
+            'dry_run_install': dry_run_install,
+            'skip_install': dry_run and not dry_run_install,
             'workdir': '$' + '{TMPDIR}',
             'output_path': '',  # Set by generic.jinja wrapper
             'python_version': python_version or '3.12',
@@ -669,7 +700,7 @@ runs:
             'clean_before_install': clean_before_install,
             'install_prefix': install_prefix,
             'base_install_prefix': base_install_prefix,
-            'sync_clusters': ['aa', 'ab'],
+            'sync_clusters': ['aa', 'ab', 'ac', 'ad'],
             'sync_module': do_sync,
             'module_name': module_name,
             'queue': queue,

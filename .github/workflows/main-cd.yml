@@ -233,7 +233,9 @@ jobs:
                       matrix_item['queue'] = build_config.get('queue', '')
                       matrix_item['post_script'] = build_config.get('post_script', '')
                       matrix_item['clean_before_install'] = str(build_config.get('clean_before_install', False)).lower()
+                      matrix_item['dry_run_install'] = str(build_config.get('dry_run_install', False)).lower()
                       matrix_item['site'] = build_config.get('site', 'hpc-batch')
+                      matrix_item['sync_module'] = build_config.get('sync_module', 'true')
                       
                   elif build_type == 'tarball':
                       matrix_item['ecbuild_version'] = build_config.get('ecbuild_version', '')
@@ -299,7 +301,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-dry-run-install
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
@@ -328,12 +330,14 @@ jobs:
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
           lock_permissions: ${{ matrix.lock_permissions }}
+          sync_module: ${{ matrix.sync_module }}
           module_name: ${{ matrix.module_name }}
           ntasks: ${{ matrix.ntasks }}
           gpus: ${{ matrix.gpus }}
           queue: ${{ matrix.queue }}
           post_script: ${{ matrix.post_script }}
           clean_before_install: ${{ matrix.clean_before_install }}
+          dry_run_install: ${{ matrix.dry_run_install }}
           site: ${{ matrix.site }}
           
       - name: Build Tarball
