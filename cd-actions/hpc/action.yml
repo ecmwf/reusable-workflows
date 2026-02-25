@@ -43,12 +43,8 @@ inputs:
     required: true
 
   # Installation
-  install_type:
-    description: 'Install type: module (to /usr/local/apps), perm (persistent), temp (temporary)'
-    required: false
-    default: 'module'
   install_prefix:
-    description: 'Custom install prefix (overrides install_type default path)'
+    description: 'Custom install prefix, defaults to /usr/local/apps/<module>/<ref>'
     required: false
     default: ''
   prefix_compiler_specific:
@@ -58,11 +54,11 @@ inputs:
 
   # Build Configuration
   cmake_options:
-    description: 'CMake options as JSON object (e.g., {"CMAKE_BUILD_TYPE": "Release", "ENABLE_TESTS": "ON"}). Keys are option names without -D prefix.'
+    description: 'CMake options as line-separated key=value pairs (e.g., "CMAKE_BUILD_TYPE=Release\nENABLE_TESTS=ON")'
     required: false
     default: ''
   ctest_options:
-    description: 'CTest options as JSON object (e.g., {"output-on-failure": "", "j": "8"}). Keys are option names without leading dash.'
+    description: 'CTest options as line separated values (e.g., "--output-on-failure\n-j=8")'
     required: false
     default: ''
   self_test:
@@ -70,7 +66,7 @@ inputs:
     required: false
     default: 'true'
   env_vars:
-    description: 'Environment variables (JSON object, e.g., {"CTEST_PARALLEL_LEVEL": "4"})'
+    description: 'Environment variables as line separated key=value pairs (e.g., "CTEST_PARALLEL_LEVEL=4")'
     required: false
     default: ''
   parallel:
@@ -96,15 +92,15 @@ inputs:
 
   # Dependencies
   dependencies:
-    description: 'Build dependencies (owner/repo@ref format, one per line)'
+    description: 'Build dependencies as line separated values (e.g., "owner/repo@ref\nowner/repo@ref")'
     required: false
     default: ''
   dependency_cmake_options:
-    description: 'CMake options for dependencies (YAML format: "owner/repo: -DOPTION=VALUE")'
+    description: 'CMake options for dependencies as line separated key=value pairs (e.g., "owner/repo: -DOPTION=VALUE")'
     required: false
     default: ''
   python_dependencies:
-    description: 'Python dependencies to build from source (owner/repo@ref format, one per line)'
+    description: 'Python dependencies to build from source as line separated values (e.g., "owner/repo@ref\nowner/repo@ref")'
     required: false
     default: ''
   python_version:
@@ -116,11 +112,11 @@ inputs:
     required: false
     default: ''
   python_toml_opt_dep_sections:
-    description: 'List of optional dependency sections specified in pyproject.toml'
+    description: 'List of optional dependency sections specified in pyproject.toml as line separated values (e.g., "optional-dependency\noptional-dependency")'
     required: false
     default: ''
   conda_deps:
-    description: 'Conda packages to install'
+    description: 'Conda packages to install as line separated values (e.g., "package\npackage")'
     required: false
     default: ''
 
@@ -140,7 +136,7 @@ inputs:
     default: ''
 
   modules:
-    description: 'Modules to load (JSON array or newline-separated, e.g., ["python/3.12", "boost/1.87"])'
+    description: 'Modules to load as line separated values (e.g., "python/3.12\nboost/1.87")'
     required: false
     default: ''
   install_command:
@@ -202,7 +198,7 @@ inputs:
     required: false
     default: 'lib'
   mkdir:
-    description: 'Directories to create in workdir before build (JSON array or newline-separated)'
+    description: 'Directories to create in workdir before build as line separated values (e.g., "dir\ndir")'
     required: false
     default: ''
   pytest_cmd:
@@ -225,7 +221,6 @@ runs:
         INPUT_SYNC_MODULE: ${{ inputs.sync_module }}
         INPUT_SITE: ${{ inputs.site }}
         INPUT_INSTALL_PREFIX: ${{ inputs.install_prefix }}
-        INPUT_INSTALL_TYPE: ${{ inputs.install_type }}
         INPUT_MODULE_NAME: ${{ inputs.module_name }}
         INPUT_REF_NAME: ${{ inputs.ref_name }}
         INPUT_PREFIX_COMPILER_SPECIFIC: ${{ inputs.prefix_compiler_specific }}
@@ -271,7 +266,6 @@ runs:
         INPUT_NAME: ${{ inputs.name }}
         INPUT_DRY_RUN: ${{ inputs.dry_run }}
         INPUT_DRY_RUN_INSTALL: ${{ inputs.dry_run_install }}
-        INPUT_INSTALL_TYPE: ${{ inputs.install_type }}
         INPUT_PREFIX_COMPILER_SPECIFIC: ${{ inputs.prefix_compiler_specific }}
         STEP_CONFIG_COMPILER: ${{ steps.config.outputs.compiler }}
         STEP_CONFIG_COMPILER_MODULES: ${{ steps.config.outputs.compiler_modules }}

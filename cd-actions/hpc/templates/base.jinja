@@ -18,10 +18,10 @@ echo "::endgroup::"
 {%- endif %}
 {%- endmacro %}
 
-{# Print ctest options with -- prefix #}
+{# Print ctest options (passed through as-is) #}
 {% macro print_ctest_options(options) -%}
 {% if (options is defined) and options %}
-{% for opt in options %}--{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{% for opt in options %}{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
 {%- endif %}
 {%- endmacro %}
 

@@ -42,7 +42,6 @@ def main():
 
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
     dry_run_install_prefix_input = os.environ.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
-    install_type = os.environ.get("INPUT_INSTALL_TYPE", "module")
     repository = os.environ["GITHUB_REPOSITORY"]
     module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
     ref_name = os.environ["INPUT_REF_NAME"]
@@ -51,10 +50,8 @@ def main():
 
     if install_prefix_input:
         install_prefix = install_prefix_input
-    elif install_type == "module":
-        install_prefix = f"/usr/local/apps/{module_name}/{safe_ref_name}"
     else:
-        install_prefix = "${TMPDIR}" + f"/install/{module_name}/{safe_ref_name}"
+        install_prefix = f"/usr/local/apps/{module_name}/{safe_ref_name}"
 
     if dry_run and dry_run_install:
         if not module_name:

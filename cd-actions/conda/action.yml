@@ -40,7 +40,7 @@ inputs:
   conda_build_args:
     description: 'Additional arguments for conda mambabuild command'
     required: false
-    default: ''
+    default: '--no-anaconda-upload'
 
 runs:
   using: composite
@@ -104,6 +104,9 @@ runs:
         channels="${{ steps.config.outputs.channels }}"
         output_folder="${{ steps.config.outputs.output_folder }}"
         build_args="${{ steps.config.outputs.conda_build_args }}"
+        if [[ ! $build_args == *"--no-anaconda-upload"* ]]; then
+          build_args="${build_args} --no-anaconda-upload"
+        fi
 
         echo "Building conda package from: $meta_dir"
         echo "Output folder: $output_folder"

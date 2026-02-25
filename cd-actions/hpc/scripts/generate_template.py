@@ -83,21 +83,20 @@ def main():
     clean_before_install = os.environ.get("INPUT_CLEAN_BEFORE_INSTALL", "false") == "true"
     python_version = os.environ.get("INPUT_PYTHON_VERSION", "").strip()
     requirements_path = os.environ.get("INPUT_PYTHON_REQUIREMENTS", "").strip() or "requirements.txt"
-    toml_opt_dep_sections = os.environ.get("INPUT_PYTHON_TOML_OPT_DEP_SECTIONS", "").strip()
-    conda_deps = os.environ.get("INPUT_CONDA_DEPS", "").strip()
+    toml_opt_dep_sections_raw = os.environ.get("INPUT_PYTHON_TOML_OPT_DEP_SECTIONS", "").strip()
+    toml_opt_dep_sections_list = [s.strip() for s in toml_opt_dep_sections_raw.splitlines() if s.strip()]
+    toml_opt_dep_sections = ",".join(toml_opt_dep_sections_list)
+    conda_deps_raw = os.environ.get("INPUT_CONDA_DEPS", "").strip()
+    conda_deps_list = [d.strip() for d in conda_deps_raw.splitlines() if d.strip()]
+    conda_deps = " ".join(conda_deps_list)
     post_script = os.environ.get("INPUT_POST_SCRIPT", "").strip() or None
     bundle_yml_input = os.environ.get("INPUT_BUNDLE_YML", "").strip()
     install_command = os.environ.get("INPUT_INSTALL_COMMAND", "").strip()
     mkdir_input = os.environ.get("INPUT_MKDIR", "").strip()
     pytest_cmd_input = os.environ.get("INPUT_PYTEST_CMD", "").strip()
 
-    # Parse mkdir (similar to modules parsing)
-    mkdir_list = []
-    if mkdir_input:
-        try:
-            mkdir_list = json.loads(mkdir_input)
-        except json.JSONDecodeError:
-            mkdir_list = [d.strip() for d in mkdir_input.replace("\n", ",").split(",") if d.strip()]
+    # Parse mkdir (line-separated)
+    mkdir_list = [d.strip() for d in mkdir_input.splitlines() if d.strip()]
 
     # Build generic modules list (compiler + ninja if enabled)
     generic_modules = compiler_modules.split(",")
@@ -106,51 +105,31 @@ def main():
 
     # === BUILD COMMON CONTEXT ===
 
-    # Parse cmake options (JSON dict to list)
-    cmake_options = []
-    if cmake_options_input:
-        cmake_opts_dict = json.loads(cmake_options_input)
-        if not isinstance(cmake_opts_dict, dict):
-            raise ValueError(f"cmake_options must be a dict, got {type(cmake_opts_dict).__name__}")
-        cmake_options = [f"{k}={cmake_value(v)}" for k, v in cmake_opts_dict.items()]
+    # Parse cmake options (line-separated KEY=VALUE pairs)
+    cmake_options = [opt.strip() for opt in cmake_options_input.splitlines() if opt.strip()]
 
-    # Parse ctest options (JSON dict to list)
-    ctest_options = []
-    if ctest_options_input:
-        ctest_opts_dict = json.loads(ctest_options_input)
-        if not isinstance(ctest_opts_dict, dict):
-            raise ValueError(f"ctest_options must be a dict, got {type(ctest_opts_dict).__name__}")
-        ctest_options = [f"{k}={v}" if v else k for k, v in ctest_opts_dict.items()]
+    # Parse ctest options (line-separated, fully formed options e.g. --output-on-failure)
+    ctest_options = [opt.strip() for opt in ctest_options_input.splitlines() if opt.strip()]
 
     # Add install lib dir if specified
     if install_lib_dir:
-        cmake_options.insert(0, f"-DINSTALL_LIB_DIR={install_lib_dir}")
+        cmake_options.insert(0, f"INSTALL_LIB_DIR={install_lib_dir}")
 
-    # Parse dependency cmake options (YAML format)
+    # Parse dependency cmake options (line-separated repo=opts pairs)
     dep_cmake_map = {}
-    if dep_cmake_options_input:
-        try:
-            dep_cmake_map = yaml.safe_load(dep_cmake_options_input) or {}
-        except yaml.YAMLError:
-            print("::warning::Could not parse dependency_cmake_options as YAML")
+    for line in dep_cmake_options_input.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if "=" in line:
+            key, value = line.split("=", 1)
+            dep_cmake_map[key.strip()] = value.strip()
 
-    # Parse modules
-    package_modules = []
-    if modules_input:
-        try:
-            package_modules = json.loads(modules_input)
-        except json.JSONDecodeError:
-            # Try as newline/comma-separated
-            package_modules = [m.strip() for m in modules_input.replace("\n", ",").split(",") if m.strip()]
+    # Parse modules (line-separated)
+    package_modules = [m.strip() for m in modules_input.splitlines() if m.strip()]
 
-    # Parse environment variables
-    env_list = []
-    if env_vars_input:
-        try:
-            env_dict = json.loads(env_vars_input)
-            env_list = [f"{k}={v}" for k, v in env_dict.items()]
-        except json.JSONDecodeError:
-            print("::warning::Could not parse env_vars as JSON")
+    # Parse environment variables (line-separated KEY=VALUE pairs)
+    env_list = [v.strip() for v in env_vars_input.splitlines() if v.strip()]
 
     # Auto-detect bundle.yml
     use_ecbundle = False
@@ -324,7 +303,6 @@ def main():
         "ecbundle": ecbundle,
         "use_ecbundle": use_ecbundle,
         "pytest_cmd": pytest_cmd_input or None,
-        "install_type": os.environ.get("INPUT_INSTALL_TYPE", "module"),
         "prefix_compiler_specific": os.environ.get("INPUT_PREFIX_COMPILER_SPECIFIC", "false") == "true",
         "clean_before_install": clean_before_install,
         "install_prefix": install_prefix,

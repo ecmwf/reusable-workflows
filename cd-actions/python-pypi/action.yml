@@ -27,9 +27,9 @@ inputs:
     required: false
     default: ''
   env_vars:
-    description: 'Environment variables as JSON object (e.g., {"KEY": "value"})'
+    description: 'Environment variables as line separated key=value pairs (e.g., "KEY=value")'
     required: false
-    default: '{}'
+    default: ''
   testpypi:
     description: 'Publish to TestPyPI instead of PyPI (overrides is_prerelease)'
     required: false
@@ -38,38 +38,27 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Parse build configuration
-      id: config
-      shell: bash
-      env:
-        INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
-        INPUT_BUILDARGS: ${{ inputs.buildargs }}
-        INPUT_ENV_VARS: ${{ inputs.env_vars }}
-        INPUT_TESTPYPI: ${{ inputs.testpypi }}
-      run: python3 "${{ github.action_path }}/scripts/parse_config.py"
-
     - name: Set environment variables from config
-      if: steps.config.outputs.env_vars != ''
+      if: inputs.env_vars != ''
       shell: bash
-      working-directory: ${{ steps.config.outputs.working_directory }}
       run: |
-        echo '${{ steps.config.outputs.env_vars }}' >> $GITHUB_ENV
+        echo '${{ inputs.env_vars }}' >> $GITHUB_ENV
 
     - name: Build package with uv
       shell: bash
-      working-directory: ${{ steps.config.outputs.working_directory }}
+      working-directory: ${{ inputs.working_directory }}
       run: |
         echo "Building package with uv..."
-        echo "Build args: ${{ steps.config.outputs.buildargs }}"
-        uv build ${{ steps.config.outputs.buildargs }}
+        echo "Build args: ${{ inputs.buildargs }}"
+        uv build ${{ inputs.buildargs }}
         echo ""
         echo "Built packages:"
         ls -lh dist/
 
     - name: Publish to PyPI
-      if: ${{ false && inputs.dry_run != 'true' && steps.config.outputs.testpypi != 'true' }} # Enable when ready
+      if: ${{ false && inputs.dry_run != 'true' && inputs.testpypi != 'true' }} # Enable when ready
       shell: bash
-      working-directory: ${{ steps.config.outputs.working_directory }}
+      working-directory: ${{ inputs.working_directory }}
       env:
         UV_PUBLISH_TOKEN: ${{ inputs.pypi_token }}
       run: |
@@ -77,9 +66,9 @@ runs:
         uv publish --publish-url https://upload.pypi.org/legacy/
 
     - name: Publish to TestPyPI
-      if: ${{ inputs.dry_run != 'true' && steps.config.outputs.testpypi == 'true' }}
+      if: ${{ inputs.dry_run != 'true' && inputs.testpypi == 'true' }}
       shell: bash
-      working-directory: ${{ steps.config.outputs.working_directory }}
+      working-directory: ${{ inputs.working_directory }}
       env:
         UV_PUBLISH_TOKEN: ${{ inputs.pypi_test_token }}
       run: |
@@ -90,6 +79,6 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.run_id }}-${{ inputs.name }}
-        path: ${{ steps.config.outputs.working_directory }}/dist/*.whl
+        path: ${{ inputs.working_directory }}/dist/*.whl
         if-no-files-found: error
         retention-days: 90
