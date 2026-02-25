@@ -221,6 +221,15 @@ jobs:
                       matrix_item["dry_run_install_prefix"] = build_config.get("dry_run_install_prefix", "")
                       matrix_item["site"] = build_config.get("site", "hpc-batch")
                       matrix_item["sync_module"] = str(build_config.get("sync_module", True)).lower()
+                      matrix_item["use_ninja"] = str(build_config.get("use_ninja", True)).lower()
+                      matrix_item["force_build"] = str(build_config.get("force_build", False)).lower()
+                      matrix_item["ecbundle"] = str(build_config.get("ecbundle", False)).lower()
+                      matrix_item["bundle_yml"] = build_config.get("bundle_yml", "")
+                      matrix_item["install_lib_dir"] = build_config.get("install_lib_dir", "lib")
+                      matrix_item["mkdir"] = json.dumps(build_config.get("mkdir", []))
+                      matrix_item["pytest_cmd"] = build_config.get("pytest_cmd", "")
+                      matrix_item["workdir"] = build_config.get("workdir", "")
+                      matrix_item["output_dir"] = build_config.get("output_dir", "")
 
                   elif build_type == "tarball":
                       matrix_item["ecbuild_version"] = build_config.get("ecbuild_version", "")
@@ -325,7 +334,16 @@ jobs:
           dry_run_install: ${{ matrix.dry_run_install }}
           dry_run_install_prefix: ${{ matrix.dry_run_install_prefix }}
           site: ${{ matrix.site }}
-          
+          use_ninja: ${{ matrix.use_ninja }}
+          force_build: ${{ matrix.force_build }}
+          ecbundle: ${{ matrix.ecbundle }}
+          bundle_yml: ${{ matrix.bundle_yml }}
+          install_lib_dir: ${{ matrix.install_lib_dir }}
+          mkdir: ${{ matrix.mkdir }}
+          pytest_cmd: ${{ matrix.pytest_cmd }}
+          workdir: ${{ matrix.workdir }}
+          output_dir: ${{ matrix.output_dir }}
+
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
         uses: ecmwf/reusable-workflows/cd-actions/tarball@v2
