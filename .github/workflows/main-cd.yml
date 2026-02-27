@@ -72,186 +72,18 @@ jobs:
     name: Load and Validate Configuration
     runs-on: ubuntu-latest
     outputs:
-      config: ${{ steps.load.outputs.config }}
-      build_matrix: ${{ steps.generate-matrix.outputs.matrix }}
-      release_enabled: ${{ steps.parse-release.outputs.enabled }}
+      config: ${{ steps.load-config.outputs.config }}
+      build_matrix: ${{ steps.load-config.outputs.build_matrix }}
+      release_enabled: ${{ steps.load-config.outputs.release_enabled }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        
-      - name: Check configuration file exists
-        id: check-config
-        run: |
-          if [[ ! -f "${{ inputs.config_file }}" ]]; then
-            echo "Configuration file ${{ inputs.config_file }} not found"
-            echo "Looking for alternative locations..."
-            if [[ -f ".github/workflows/cd-config.yml" ]]; then
-              echo "config_file=.github/workflows/cd-config.yml" >> $GITHUB_OUTPUT
-            else
-              echo "No configuration file found. Please create ${{ inputs.config_file }}"
-              exit 1
-            fi
-          else
-            echo "config_file=${{ inputs.config_file }}" >> $GITHUB_OUTPUT
-          fi
-        
-      - name: Load configuration
-        id: load
-        run: |
-          config=$(cat "${{ steps.check-config.outputs.config_file }}")
-          echo "Raw configuration loaded"
-          # Validate YAML syntax
-          echo "$config" | yq > /dev/null
-          echo "config<<EOF" >> $GITHUB_OUTPUT
-          echo "$config" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-      - name: Generate build matrix
-        id: generate-matrix
-        shell: python3 {0}
-        run: |
-          import yaml, json, os
 
-          def deep_merge(common, specific, overrides=None, path=''):
-              """
-              Merge common config into specific config with override support.
-
-              Overrides:
-              - Wildcard '*' to skip all common config
-              - Dot notation for nested overrides (e.g., 'dependency_cmake_options.ecmwf/atlas')
-              """
-              if overrides is None:
-                  overrides = []
-              if '*' in overrides:
-                  return specific.copy()
-
-              result = {}
-              all_keys = set(common.keys()) | set(specific.keys())
-
-              for key in all_keys:
-                  common_val = common.get(key)
-                  specific_val = specific.get(key)
-                  current_path = f'{path}.{key}' if path else key
-
-                  # Check if this key or path should be overridden
-                  is_override = key in overrides or current_path in overrides
-
-                  if specific_val is None:
-                      result[key] = common_val
-                  elif common_val is None or is_override:
-                      result[key] = specific_val
-                  elif isinstance(common_val, dict) and isinstance(specific_val, dict):
-                      # Filter overrides for nested keys
-                      nested_overrides = [o for o in overrides if o.startswith(f'{key}.') or o.startswith(f'{current_path}.')]
-                      result[key] = deep_merge(common_val, specific_val, nested_overrides, current_path)
-                  elif isinstance(common_val, list) and isinstance(specific_val, list):
-                      result[key] = common_val + specific_val
-                  else:
-                      result[key] = specific_val
-
-              return result
-
-          config_yaml = '''${{ steps.load.outputs.config }}'''
-          config = yaml.safe_load(config_yaml)
-
-          common_config = config.get('common_config', {})
-          matrix = {'include': []}
-          for build in config.get('builds', []):
-              if build.get('enabled', True):
-                  build_type = build['type']
-                  build_config_raw = build.get('config', {})
-                  overrides = build.get('common_config_overrides', [])
-
-                  # Get type-specific common config and merge
-                  type_common = common_config.get(build_type, {})
-                  build_config = deep_merge(type_common, build_config_raw, overrides)
-
-                  matrix_item = {
-                      'name': build['name'],
-                      'runner': ['self-hosted', 'platform-builder'],
-                      'type': build_type,
-                  }
-
-                  # Add type-specific config fields as individual matrix values
-                  if build_type == 'conda':
-                      matrix_item['conda_dir'] = build_config.get('conda_dir', './.cd/conda')
-                      # Convert channels list to comma-separated string
-                      channels = build_config.get('channels', ['conda-forge'])
-                      if isinstance(channels, list):
-                          matrix_item['channels'] = ','.join(channels)
-                      else:
-                          matrix_item['channels'] = str(channels)
-                      matrix_item['conda_build_args'] = build_config.get('conda_build_args', '--no-anaconda-upload')
-
-                  elif build_type == 'python-pypi':
-                      matrix_item['working_directory'] = build_config.get('working_directory', './')
-                      matrix_item['buildargs'] = build_config.get('buildargs', '')
-                      # Keep env_vars as JSON string
-                      matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
-
-                  elif build_type == 'hpc':
-                      matrix_item['runner'] = ['self-hosted', 'linux', 'hpc']
-                      matrix_item['platform'] = build_config.get('platform', 'gnu-12.2.0')
-                      matrix_item['install_type'] = build_config.get('install_type', 'module')
-                      matrix_item['install_prefix'] = build_config.get('install_prefix', '')
-                      matrix_item['prefix_compiler_specific'] = str(build_config.get('prefix_compiler_specific', False)).lower()
-                      cmake_options = build_config.get('cmake_options', {})
-                      if not isinstance(cmake_options, dict):
-                          raise ValueError(f"cmake_options must be a dict, got {type(cmake_options).__name__}")
-                      matrix_item['cmake_options'] = json.dumps(cmake_options) if cmake_options else ''
-
-                      ctest_options = build_config.get('ctest_options', {})
-                      if not isinstance(ctest_options, dict):
-                          raise ValueError(f"ctest_options must be a dict, got {type(ctest_options).__name__}")
-                      matrix_item['ctest_options'] = json.dumps(ctest_options) if ctest_options else ''
-                      matrix_item['self_test'] = str(build_config.get('self_test', True)).lower()
-                      matrix_item['env_vars'] = json.dumps(build_config.get('env_vars', {}))
-                      matrix_item['parallel'] = str(build_config.get('parallel', ''))
-                      matrix_item['dependencies'] = build_config.get('dependencies', '')
-                      dep_cmake_raw = build_config.get('dependency_cmake_options', {})
-                      if not isinstance(dep_cmake_raw, dict):
-                          raise ValueError(f"dependency_cmake_options must be a dict, got {type(dep_cmake_raw).__name__}")
-                      dep_cmake_converted = {}
-                      for repo, opts in dep_cmake_raw.items():
-                          if not isinstance(opts, list):
-                              raise ValueError(f"dependency_cmake_options['{repo}'] must be a list, got {type(opts).__name__}")
-                          dep_cmake_converted[repo] = ','.join(opts)
-                      matrix_item['dependency_cmake_options'] = yaml.dump(dep_cmake_converted, default_flow_style=False) if dep_cmake_converted else ''
-                      matrix_item['python_dependencies'] = build_config.get('python_dependencies', '')
-                      matrix_item['python_version'] = build_config.get('python_version', '')
-                      matrix_item['python_requirements'] = build_config.get('python_requirements', '')
-                      matrix_item['python_toml_opt_dep_sections'] = build_config.get('python_toml_opt_dep_sections', '')
-                      matrix_item['conda_deps'] = build_config.get('conda_deps', '')
-                      matrix_item['stages'] = json.dumps(build_config.get('stages', []))
-                      matrix_item['modules'] = json.dumps(build_config.get('modules', []))
-                      matrix_item['install_command'] = build_config.get('install_command', '')
-                      finalize = build_config.get('finalize', {})
-                      matrix_item['lock_permissions'] = str(finalize.get('lock_permissions', True)).lower()
-                      matrix_item['module_name'] = build_config.get('module_name', '')
-                      matrix_item['ntasks'] = str(build_config.get('ntasks', ''))
-                      matrix_item['gpus'] = str(build_config.get('gpus', ''))
-                      matrix_item['queue'] = build_config.get('queue', '')
-                      matrix_item['post_script'] = build_config.get('post_script', '')
-                      matrix_item['clean_before_install'] = str(build_config.get('clean_before_install', False)).lower()
-                      matrix_item['site'] = build_config.get('site', 'hpc-batch')
-                      
-                  elif build_type == 'tarball':
-                      matrix_item['ecbuild_version'] = build_config.get('ecbuild_version', '')
-                      matrix_item['cmake_options'] = build_config.get('cmake_options', '')
-
-                      matrix_item['confluence_space'] = build_config.get('confluence_space', '')
-                      matrix_item['confluence_page_title'] = build_config.get('confluence_page_title', 'Releases')
-
-                  matrix['include'].append(matrix_item)
-
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"matrix={json.dumps(matrix)}\n")
-          
-      - name: Parse release configuration
-        id: parse-release
-        run: |
-          enabled=$(echo '${{ steps.load.outputs.config }}' | yq '.release.enabled // false')
-          echo "enabled=$enabled" >> $GITHUB_OUTPUT
+      - name: Load and generate matrix
+        id: load-config
+        uses: ecmwf/reusable-workflows/cd-actions/load-config@cd-hpc-simpl
+        with:
+          config_file: ${{ inputs.config_file }}
 
   build:
     name: ${{ matrix.name }}
@@ -270,7 +102,7 @@ jobs:
           
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@cd-hpc-simpl
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -285,7 +117,7 @@ jobs:
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-hpc-simpl
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -299,7 +131,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-simpl
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
@@ -309,7 +141,6 @@ jobs:
           github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ secrets.HPC_CI_SSH_USER }}
           platform: ${{ matrix.platform }}
-          install_type: ${{ matrix.install_type }}
           install_prefix: ${{ matrix.install_prefix }}
           prefix_compiler_specific: ${{ matrix.prefix_compiler_specific }}
           cmake_options: ${{ matrix.cmake_options }}
@@ -328,14 +159,26 @@ jobs:
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
           lock_permissions: ${{ matrix.lock_permissions }}
+          sync_module: ${{ matrix.sync_module }}
           module_name: ${{ matrix.module_name }}
           ntasks: ${{ matrix.ntasks }}
           gpus: ${{ matrix.gpus }}
           queue: ${{ matrix.queue }}
           post_script: ${{ matrix.post_script }}
           clean_before_install: ${{ matrix.clean_before_install }}
+          dry_run_install: ${{ matrix.dry_run_install }}
+          dry_run_install_prefix: ${{ matrix.dry_run_install_prefix }}
           site: ${{ matrix.site }}
-          
+          use_ninja: ${{ matrix.use_ninja }}
+          force_build: ${{ matrix.force_build }}
+          ecbundle: ${{ matrix.ecbundle }}
+          bundle_yml: ${{ matrix.bundle_yml }}
+          install_lib_dir: ${{ matrix.install_lib_dir }}
+          mkdir: ${{ matrix.mkdir }}
+          pytest_cmd: ${{ matrix.pytest_cmd }}
+          workdir: ${{ matrix.workdir }}
+          output_dir: ${{ matrix.output_dir }}
+
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
         uses: ecmwf/reusable-workflows/cd-actions/tarball@v2

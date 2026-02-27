@@ -1,0 +1,23 @@
+{# SBATCH options for HPC job submission #}
+
+{% macro sbatch_options() %}
+{% if site == 'lumi' %}
+#SBATCH --account=project_465000454
+#SBATCH --time=01:00:00
+#SBATCH --ntasks={{ ntasks }}
+#SBATCH --cpus-per-task={{ parallel }}
+#SBATCH --mem-per-cpu=1750
+#SBATCH --partition=small
+{% else %}
+# TROIKA queue={{ queue }}
+#SBATCH --mem=64GB
+#SBATCH --cpus-per-task={{ parallel }}
+#SBATCH --ntasks={{ ntasks }}
+{% if site != 'ag-batch' %}
+#SBATCH --gres=ssdtmp:30G
+{% endif %}
+{% if gpus %}
+#SBATCH --gres=gpu:{{ gpus }}
+{% endif %}
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,78 @@
+{# Python package build macros for HPC build templates #}
+{% from 'base.jinja' import start_group, end_group, cd_pkg_subdir with context %}
+{% from 'git.jinja' import git_fetch with context %}
+{% from 'environment.jinja' import set_env with context %}
+
+{# === Python Package Build === #}
+{% macro python_package(package) -%}
+    {{ set_env(env) }}
+    {{ git_fetch(package) }}
+    {{ cd_pkg_subdir(package) }}
+
+    {% if ci_options.conda_deps %}
+    {% set pip_cmd = "pip" %}
+    {% set python_build_cmd = "python -m build --sdist" %}
+
+    {{ start_group("Setup Conda environment") }}
+    module load conda/new
+    conda create -y -p {{ ci_options.workdir }}/env_{{ package.name }}
+    conda activate {{ ci_options.workdir }}/env_{{ package.name }}
+    conda install -y python={{ ci_options.python_version }} {{ ci_options.conda_deps }} -c conda-forge
+    {% else %}
+    {% set pip_cmd = "uv pip" %}
+    {% set python_build_cmd = "uv build --sdist --no-sources" %}
+
+    {{ start_group("Setup uv environment") }}
+    module load uv
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
+    uv venv --python {{ ci_options.python_version }} {{ ci_options.workdir }}/env_{{ package.name }}
+    source {{ ci_options.workdir }}/env_{{ package.name }}/bin/activate
+    {% endif %}
+
+    {{ pip_cmd }} install pytest pytest-cov build
+    if [ -f {{ ci_options.workdir }}/{{ package.name}}/{{ ci_options.requirements_path}} ]; then
+        {{ pip_cmd }} install -r {{ ci_options.workdir }}/{{ package.name}}/{{ ci_options.requirements_path}}
+    fi
+    if [ -n {{ ci_options.toml_opt_dep_sections }} ]; then
+        {{ pip_cmd }} install -e .[{{ ci_options.toml_opt_dep_sections }}]
+    fi
+    cd -
+    {{ end_group() }}
+
+    {% for dep in packages if dep.type == "dependency-python" %}
+    {{ git_fetch(dep) }}
+    {{ start_group("Installing dependency " + dep.name) }}
+    {{ cd_pkg_subdir(dep) }}
+    {{ python_build_cmd }}
+    {{ pip_cmd }} install dist/*
+    {{ end_group() }}
+    {% endfor %}
+
+    {{ start_group("Building " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    {{ python_build_cmd }}
+    {{ end_group() }}
+
+    {{ start_group("Installing: " + package.name) }}
+    {% if ci_options.skip_install %}
+    echo "Dry run: skipping pip install of {{ package.name }}"
+    {% else %}
+    {{ pip_cmd }} install dist/*
+    {% endif %}
+    {{ end_group() }}
+
+    {% if ci_options.self_test %}
+    {{ start_group("Testing: " + package.name) }}
+    export DYLD_LIBRARY_PATH=$LIB_PATH
+    export FINDLIBS_DISABLE_PACKAGE=yes
+    {% if ci_options.pytest_cmd %}
+    {{ ci_options.pytest_cmd }}
+    {% else %}
+    DYLD_LIBRARY_PATH=$LIB_PATH pytest --cov=./ --cov-report=xml
+    python -m coverage report
+    {% endif %}
+    {{ end_group() }}
+    {% endif %}
+
+    module reset
+{%- endmacro %}

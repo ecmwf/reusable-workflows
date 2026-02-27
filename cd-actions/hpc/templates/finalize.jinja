@@ -1,0 +1,141 @@
+{# Finalization macros for HPC build templates #}
+{% from 'base.jinja' import start_group, end_group with context %}
+
+{# === README Generation === #}
+{% macro generate_readme(install_prefix, build_log) -%}
+{{ start_group("Generate README.txt") }}
+INSTALL_PREFIX="{{ install_prefix }}" BUILD_LOG="{{ build_log }}" python3 << 'GENERATE_README'
+import os
+import re
+
+install_prefix = os.environ["INSTALL_PREFIX"]
+build_log = os.environ["BUILD_LOG"]
+readme_file = os.path.join(install_prefix, "README.txt")
+
+if not os.path.isdir(install_prefix):
+    print(f"Install prefix {install_prefix} not found, skipping README generation")
+    exit(0)
+
+if not os.path.exists(build_log):
+    print(f"Build log not found at {build_log}, skipping README generation")
+    exit(0)
+
+with open(build_log, "r", errors="replace") as f:
+    log_content = f.read()
+
+# Remove ANSI color codes
+log_content = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
+
+# Extract package version lines (deduplicated)
+seen = set()
+readme_lines = []
+current_stage = None
+
+for line in log_content.splitlines():
+    # Track stage markers for staged builds
+    if "::STAGE_MARKER::" in line:
+        stage_match = re.search(r'::STAGE_MARKER::(\S+)', line)
+        if stage_match:
+            current_stage = stage_match.group(1)
+        continue
+
+    if re.match(r'^--\s+\[', line):
+        match = re.search(r'\[([^\]]+)\]', line)
+        if match:
+            pkg = match.group(1)
+            if pkg not in seen:
+                seen.add(pkg)
+                readme_lines.append(line.strip())
+    elif line.startswith("-- system"):
+        system_line = line.strip()
+        if current_stage:
+            system_line += f" [stage: {current_stage}]"
+        readme_lines.append(system_line)
+
+if readme_lines:
+    with open(readme_file, "w") as f:
+        f.write("\n".join(readme_lines) + "\n")
+    print(f"Generated README.txt with {len(readme_lines)} entries:")
+    print("\n".join(readme_lines[:10]))
+    if len(readme_lines) > 10:
+        print(f"... and {len(readme_lines) - 10} more entries")
+else:
+    print("No package version info found in build log")
+GENERATE_README
+{{ end_group() }}
+{%- endmacro %}
+
+
+{# === Redact Build Log === #}
+{% macro redact_build_log(build_log) -%}
+{{ start_group("Redact build log") }}
+if [ -f "{{ build_log }}" ]; then
+    sed -i \
+        -e 's|{{ github.user }}|[REDACTED]|g' \
+        -e 's|{{ github.token }}|[REDACTED]|g' \
+        "{{ build_log }}"
+fi
+{{ end_group() }}
+{%- endmacro %}
+
+
+{# === Module Sync Commands === #}
+{% macro sync_module_commands(module_name) -%}
+{{ start_group("Synchronize module") }}
+module load modulemgr
+modulemgr -v -f sync {{ module_name }}
+{% if ci_options.sync_clusters %}
+/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ module_name }}
+modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ module_name }}
+{% endif %}
+{{ end_group() }}
+{%- endmacro %}
+
+
+{# === Post Script Execution === #}
+{% macro post_script() -%}
+{% if ci_options.post_script %}
+{{ start_group("Executing post script") }}
+if [ -f {{ ci_options.workdir }}/{{ ci_options.main_package_name }}/{{ ci_options.post_script }} ]; then
+    bash {{ ci_options.workdir }}/{{ ci_options.main_package_name }}/{{ ci_options.post_script }}
+else
+    echo "::error::Post script {{ ci_options.post_script }} not found!"
+    error_trap
+fi
+{{ end_group() }}
+{% endif %}
+{%- endmacro %}
+
+
+{# === Job Footer with README Generation and Permission Locking === #}
+{% macro job_footer() %}
+
+{# Close tee subprocess by restoring stdout - ensures all buffered output is flushed #}
+if [ -n "${__BUILD_LOG_TEE:-}" ]; then
+    exec 1>&3 2>&4  # Restore original stdout/stderr (sends EOF to tee)
+    sleep 0.1  # Brief pause to let tee flush
+fi
+
+{% if ci_options.skip_install %}
+{{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
+echo "Dry run: skipping README generation and permission lock"
+{% else %}
+{{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
+
+# Copy build log to install prefix
+cp "{{ ci_options.workdir }}/build.log" "{{ ci_options.install_prefix }}/build.log" 2>/dev/null || true
+
+{{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
+
+{% if ci_options.lock_permissions %}
+{{ start_group("Lock permissions") }}
+echo "Locking permissions on {{ ci_options.install_prefix }}"
+timeout 300 chmod -R a-w "{{ ci_options.install_prefix }}" || echo "Warning: chmod timed out or failed (continuing anyway)"
+{{ end_group() }}
+{% endif %}
+{% endif %}
+
+{% if ci_options.sync_module %}
+{{ sync_module_commands(module_name=ci_options.module_name or ci_options.main_package_name) }}
+{% endif %}
+{%- endmacro %}

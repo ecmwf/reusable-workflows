@@ -1,0 +1,103 @@
+{# Environment setup macros for HPC build templates #}
+{% from 'base.jinja' import start_group, end_group with context %}
+
+{# === Environment Setup === #}
+{% macro set_env(variables) -%}
+{{ start_group("Export environment variables") }}
+{% for item in variables %}
+echo "{{ item }}"
+export {{ item }}
+{% endfor %}
+{{ end_group() }}
+{%- endmacro %}
+
+
+{% macro load_modules(generic_modules, package_modules) -%}
+{{ start_group("Loading modules") }}
+module reset
+{% for item in generic_modules %}
+echo "Loading {{ item }}"
+module load {{ item }}
+{% endfor %}
+{% for item in package_modules %}
+echo "Loading {{ item }}"
+module load {{ item }}
+{% endfor %}
+module list
+{{ end_group() }}
+{%- endmacro %}
+
+
+{# === Export Package Environment === #}
+{% macro export_package_env(package, include_cmake_prefix=false, base_path=none) -%}
+{% set path = base_path if base_path else package.prefix %}
+cd {{ ci_options.workdir }}
+export {{ package.name|replace("-", "_") }}_DIR="{{ path }}"
+export {{ package.name|upper|replace("-", "_") }}_DIR="{{ path }}"
+export {{ package.name|upper|replace("-", "_") }}_PATH="{{ path }}"
+export PATH="{{ path }}/bin:$PATH"
+export BIN_PATH="{{ path }}/bin:$BIN_PATH"
+export INCLUDE_PATH="{{ path }}/include:$INCLUDE_PATH"
+export INSTALL_PATH="{{ path }}:$INSTALL_PATH"
+export LIB_PATH="{{ path }}/lib:$LIB_PATH"
+export LD_LIBRARY_PATH="{{ path }}/lib:$LD_LIBRARY_PATH"
+{% if include_cmake_prefix %}
+export CMAKE_PREFIX_PATH="{{ path }}:$CMAKE_PREFIX_PATH"
+{% endif %}
+{%- endmacro %}
+
+
+{# === Build Log Setup === #}
+{% macro setup_build_log() -%}
+BUILD_LOG="{{ ci_options.workdir }}/build.log"
+{% if not ci_options.skip_install %}
+chmod -R u+w "{{ ci_options.base_install_prefix }}" 2>/dev/null || chmod -R u+w "{{ ci_options.install_prefix }}" 2>/dev/null || true
+mkdir -p "{{ ci_options.install_prefix }}"
+{% endif %}
+: > "$BUILD_LOG"
+
+# Save original stdout/stderr before tee redirection
+exec 3>&1 4>&2
+exec > >(tee "$BUILD_LOG") 2>&1
+__BUILD_LOG_TEE=1
+export __BUILD_LOG_TEE
+
+echo "Build started: $(date -u)"
+echo "Build name: {{ ci_options.build_name }}"
+echo "Repository: {{ ci_options.main_package_name }}"
+{%- endmacro %}
+
+
+{# === Clean Install Directory === #}
+{% macro clean_install_dir(package) -%}
+{% set is_main = package.type in ["main", "main-python", "ecbundle"] %}
+{% if is_main and ci_options.skip_install %}
+{% elif ci_options.clean_before_install %}
+{{ start_group("Cleaning before install: " + package.name) }}
+if cd {{ package.prefix }} 2>/dev/null; then
+  # Resolve symlinks and '..' then validate the path is safe to clean.
+  # Allowed: /usr/local/apps/<app>/<version-or-deeper>, or any path under $TMPDIR / $SCRATCH.
+  CLEAN_PATH="$(realpath "{{ package.prefix }}")"
+  if [[ "$CLEAN_PATH" == /usr/local/apps/* ]]; then
+      if [[ ! "$CLEAN_PATH" =~ ^/usr/local/apps/[^/]+/.+ ]]; then
+          echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - path must be at least /usr/local/apps/<app>/<version>"
+          exit 1
+      fi
+  elif [[ -n "${TMPDIR:-}" && "$CLEAN_PATH" == "${TMPDIR}"/* ]]; then
+    :
+  elif [[ -n "${SCRATCH:-}" && "$CLEAN_PATH" == "${SCRATCH}"/* ]]; then
+    :
+  else
+      echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - not under /usr/local/apps/<app>/<version>, \$TMPDIR, or \$SCRATCH"
+      exit 1
+  fi
+  echo "Removing the previous install: {{ package.prefix }}"
+  find . -type f -or -type d -exec chmod u+w {} \;
+  rm -rfv ./*
+  cd -
+else
+  echo "Nothing to clean up."
+fi
+{{ end_group() }}
+{% endif %}
+{%- endmacro %}

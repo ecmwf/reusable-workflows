@@ -6,8 +6,8 @@ import json
 import sys
 import time
 from datetime import datetime, timezone
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 # Configuration
 LOCK_REPO = "ecmwf/reusable-workflows"
@@ -20,28 +20,25 @@ GITHUB_API = "https://api.github.com"
 def gh_api_request(endpoint, method="GET", data=None, token=None):
     """Make GitHub API request"""
     url = f"{GITHUB_API}{endpoint}"
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
     req = Request(url, headers=headers, method=method)
     if data:
-        req.data = json.dumps(data).encode('utf-8')
-        req.add_header('Content-Type', 'application/json')
+        req.data = json.dumps(data).encode("utf-8")
+        req.add_header("Content-Type", "application/json")
 
     try:
         with urlopen(req) as response:
-            body = response.read().decode('utf-8')
+            body = response.read().decode("utf-8")
             # 204 No Content responses have no body
             if not body:
                 return None
             return json.loads(body)
     except HTTPError as e:
-        error_body = e.read().decode('utf-8')
-        raise Exception(f"GitHub API error {e.code}: {error_body}")
+        error_body = e.read().decode("utf-8")
+        raise Exception(f"GitHub API error {e.code}: {error_body}") from e
 
 
 def main():
@@ -75,9 +72,9 @@ def main():
                 "package_artifact_name": args.artifact_name,
                 "caller_run_id": args.caller_run_id,
                 "caller_repo": args.caller_repo,
-            }
+            },
         },
-        token=args.gh_pat
+        token=args.gh_pat,
     )
 
     time.sleep(5)  # Wait for workflow to appear
@@ -88,8 +85,7 @@ def main():
 
     for _ in range(30):
         runs = gh_api_request(
-            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs?per_page=5",
-            token=args.gh_pat
+            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs?per_page=5", token=args.gh_pat
         )
 
         for run in runs.get("workflow_runs", []):
@@ -115,16 +111,15 @@ def main():
     interval = POLL_INTERVAL
 
     while elapsed < MAX_WAIT:
-        data = gh_api_request(
-            f"/repos/{LOCK_REPO}/actions/runs/{run_id}",
-            token=args.gh_pat
-        )
+        data = gh_api_request(f"/repos/{LOCK_REPO}/actions/runs/{run_id}", token=args.gh_pat)
 
         status = data["status"]
         conclusion = data.get("conclusion")
 
-        print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] "
-              f"Status: {status}, Conclusion: {conclusion} (elapsed: {elapsed}s)")
+        print(
+            f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] "
+            f"Status: {status}, Conclusion: {conclusion} (elapsed: {elapsed}s)"
+        )
 
         if status == "completed":
             print()
