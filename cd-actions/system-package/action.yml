@@ -406,8 +406,10 @@ runs:
             'debian-12': 'debian:12',
             'debian-13': 'debian:13',
             'rocky-8': 'rockylinux/rockylinux:8',
-            'rocky-9': 'rockylinux/rockylinux:9',
-            'rocky-10': 'rockylinux/rockylinux:10',
+            'rocky-8.7': 'rockylinux/rockylinux:8.7',
+            'rocky-8.10': 'rockylinux/rockylinux:8.10',
+            'rocky-9.7': 'rockylinux/rockylinux:9.7',
+            'rocky-10.1': 'rockylinux/rockylinux:10.1',
             'fedora-43': 'fedora:43',
             'centos7-': 'centos:7',
         }
