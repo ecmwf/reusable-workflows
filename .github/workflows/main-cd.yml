@@ -273,7 +273,7 @@ jobs:
                           'install_test': str(build_config.get('install_test', False)).lower(),
                           'install_test_os_image': build_config.get('install_test_os_image', ''),
                           'install_test_command': build_config.get('install_test_command', ''),
-                          'build_type': build_config.get('build_type', 'RelWithDebInfo'),
+                          'build_type': build_config.get('build_type', 'Release'),
                           'env': build_config.get('env', ''),
                           'deb_section': build_config.get('deb_section', ''),
                           'deb_priority': build_config.get('deb_priority', 'optional'),

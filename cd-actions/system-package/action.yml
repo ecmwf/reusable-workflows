@@ -103,7 +103,7 @@ inputs:
   build_type:
     description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
     required: false
-    default: 'RelWithDebInfo'
+    default: 'Release'
   env:
     description: 'Environment variables (VAR=value, one per line)'
     required: false
