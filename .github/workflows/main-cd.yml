@@ -81,7 +81,7 @@ jobs:
 
       - name: Load and generate matrix
         id: load-config
-        uses: ecmwf/reusable-workflows/cd-actions/load-config@cd-hpc-simpl
+        uses: ecmwf/reusable-workflows/cd-actions/load-config@v2
         with:
           config_file: ${{ inputs.config_file }}
 
@@ -102,7 +102,7 @@ jobs:
           
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@cd-hpc-simpl
+        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -117,7 +117,7 @@ jobs:
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-hpc-simpl
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -131,7 +131,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-simpl
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
