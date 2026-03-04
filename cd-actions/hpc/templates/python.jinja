@@ -33,7 +33,7 @@
     if [ -f {{ ci_options.workdir }}/{{ package.name}}/{{ ci_options.requirements_path}} ]; then
         {{ pip_cmd }} install -r {{ ci_options.workdir }}/{{ package.name}}/{{ ci_options.requirements_path}}
     fi
-    if [ -n {{ ci_options.toml_opt_dep_sections }} ]; then
+    if [ -n "{{ ci_options.toml_opt_dep_sections }}" ]; then
         {{ pip_cmd }} install -e .[{{ ci_options.toml_opt_dep_sections }}]
     fi
     cd -
