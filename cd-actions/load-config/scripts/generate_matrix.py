@@ -113,8 +113,8 @@ for build in config.get("builds", []):
             matrix_item["prefix_compiler_specific"] = bool_to_str(build_config.get("prefix_compiler_specific", False), "prefix_compiler_specific")
 
             # Build Configuration
-            cmake_options = dict_to_str_line_separated(build_config.get("cmake_options", {}), "cmake_options")
-            ctest_options = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
+            matrix_item["cmake_options"] = dict_to_str_line_separated(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
             matrix_item["self_test"] = bool_to_str(build_config.get("self_test", True), "self_test")
             matrix_item["env_vars"] = dict_to_str_line_separated(build_config.get("env_vars", {}), "env_vars")
             matrix_item["parallel"] = str(build_config.get("parallel", ""))
