@@ -1,5 +1,8 @@
-import json, os, yaml
+import json
+import os
+import yaml
 
+from pathlib import Path
 
 def deep_merge(common, specific, overrides=None, path=""):
     if overrides is None:
@@ -66,6 +69,11 @@ def dict_to_str_line_separated(source, source_name):
     else:
         raise ValueError(f"{source_name} must be a dict, got {type(source)}")
 
+action_path = Path(os.environ["GITHUB_ACTION_PATH"])
+config_dir = action_path / "config"
+with open(config_dir / "runners.yml") as f:
+    runners_config = yaml.safe_load(f)
+
 config_yaml = os.environ["STEP_LOAD_CONFIG"]
 config = yaml.safe_load(config_yaml)
 common_config = config.get("common_config", {})
@@ -81,7 +89,7 @@ for build in config.get("builds", []):
 
         matrix_item = {
             "name": build["name"],
-            "runner": ["self-hosted", "platform-builder"],
+            "runner": runners_config.get(build_type, runners_config.get("default", ["self-hosted", "platform-builder"])),
             "type": build_type,
         }
 
@@ -98,7 +106,6 @@ for build in config.get("builds", []):
 
         elif build_type == "hpc":
             # Platform
-            matrix_item["runner"] = ["self-hosted", "linux", "hpc"]
             matrix_item["platform"] = build_config.get("platform", "gnu-14.2.0")
 
             # Installation
