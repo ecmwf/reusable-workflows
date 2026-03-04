@@ -114,6 +114,7 @@ jobs:
           conda_dir: ${{ matrix.conda_dir }}
           channels: ${{ matrix.channels }}
           conda_build_args: ${{ matrix.conda_build_args }}
+          skip_installation_test: ${{ matrix.skip_installation_test }}
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
