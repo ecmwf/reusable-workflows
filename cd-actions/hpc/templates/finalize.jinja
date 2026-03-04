@@ -110,20 +110,14 @@ fi
 {# === Job Footer with README Generation and Permission Locking === #}
 {% macro job_footer() %}
 
-{# Close tee subprocess by restoring stdout - ensures all buffered output is flushed #}
-if [ -n "${__BUILD_LOG_TEE:-}" ]; then
-    exec 1>&3 2>&4  # Restore original stdout/stderr (sends EOF to tee)
-    sleep 0.1  # Brief pause to let tee flush
-fi
-
 {% if ci_options.skip_install %}
-{{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
 echo "Dry run: skipping README generation and permission lock"
 {% else %}
-{{ redact_build_log(build_log=ci_options.workdir + "/build.log") }}
+# Copy output file as build log to install prefix
+OUTPUT_SRC="${__OUTPUT_FILE:-/proc/self/fd/1}"
+cp "$OUTPUT_SRC" "{{ ci_options.install_prefix }}/build.log" 2>/dev/null || true
 
-# Copy build log to install prefix
-cp "{{ ci_options.workdir }}/build.log" "{{ ci_options.install_prefix }}/build.log" 2>/dev/null || true
+{{ redact_build_log(build_log=ci_options.install_prefix + "/build.log") }}
 
 {{ generate_readme(install_prefix=ci_options.install_prefix, build_log=ci_options.install_prefix + "/build.log") }}
 
