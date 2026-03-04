@@ -1,0 +1,65 @@
+name: Load CD Configuration
+description: Load and validate cd-config.yml, generate build matrix and parse release settings
+
+inputs:
+  config_file:
+    description: 'Path to build configuration file'
+    required: false
+    default: '.github/cd-config.yml'
+
+outputs:
+  config:
+    description: 'Raw YAML configuration'
+    value: ${{ steps.load.outputs.config }}
+  build_matrix:
+    description: 'JSON build matrix for strategy.matrix'
+    value: ${{ steps.generate-matrix.outputs.matrix }}
+  release_enabled:
+    description: 'Whether release is enabled in config'
+    value: ${{ steps.parse-release.outputs.enabled }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check configuration file exists
+      id: check-config
+      shell: bash
+      run: |
+        if [[ ! -f "${{ inputs.config_file }}" ]]; then
+          echo "Configuration file ${{ inputs.config_file }} not found"
+          echo "Looking for alternative locations..."
+          if [[ -f ".github/workflows/cd-config.yml" ]]; then
+            echo "config_file=.github/workflows/cd-config.yml" >> $GITHUB_OUTPUT
+          else
+            echo "No configuration file found. Please create ${{ inputs.config_file }}"
+            exit 1
+          fi
+        else
+          echo "config_file=${{ inputs.config_file }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Load configuration
+      id: load
+      shell: bash
+      run: |
+        config=$(cat "${{ steps.check-config.outputs.config_file }}")
+        echo "Raw configuration loaded"
+        # Validate YAML syntax
+        echo "$config" | yq > /dev/null
+        echo "config<<EOF" >> $GITHUB_OUTPUT
+        echo "$config" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Generate build matrix
+      id: generate-matrix
+      shell: bash
+      env:
+        STEP_LOAD_CONFIG: ${{ steps.load.outputs.config }}
+      run: python3 "${{ github.action_path }}/scripts/generate_matrix.py"
+
+    - name: Parse release configuration
+      id: parse-release
+      shell: bash
+      run: |
+        enabled=$(echo '${{ steps.load.outputs.config }}' | yq '.release.enabled // false')
+        echo "enabled=$enabled" >> $GITHUB_OUTPUT

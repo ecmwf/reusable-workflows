@@ -1,0 +1,40 @@
+{# Git operations for HPC build templates #}
+{% from 'base.jinja' import start_group, end_group, cd_pkg_subdir with context %}
+
+{# === Git Operations === #}
+{% macro git_fetch(package) -%}
+    {# Note that for the benefit of packages that use auto versioning, we need a fetch deeper than 1, plus tags #}
+    {{ start_group( "Fetching " + package.type + " package: " + package.name) }}
+    cd {{ ci_options.workdir }}
+    mkdir {{ ci_options.workdir }}/{{ package.name }}
+    cd {{ ci_options.workdir }}/{{ package.name }}
+    git init
+    git remote add origin https://{{ github.user }}:{{ github.token }}@github.com/{{ package.owner }}/{{ package.repo }}.git
+    git fetch --depth 20 --tags origin {{ package.ref }}
+    git checkout FETCH_HEAD
+    {{ end_group() }}
+{%- endmacro %}
+
+
+{# === Version Extraction === #}
+{% macro set_package_version(package) -%}
+    {{ cd_pkg_subdir(package) }}
+
+    if [ -e VERSION ]; then
+        export PACKAGE_VERSION=$(cat VERSION)
+    elif [ -e CMakeLists.txt ]; then
+        export PACKAGE_VERSION=$(grep -oP {% raw %} 'project\(.*VERSION\s+\K[0-9]+(\.[0-9]+){0,3}' {% endraw %} CMakeLists.txt)
+    elif [ -e bundle.yml ];then
+        export PACKAGE_VERSION=$(python3 -c "import yaml; print(yaml.safe_load(open('bundle.yml', 'r'))['version'])")
+    else
+        echo "Error: Could not find CMakeLists.txt, VERSION, or bundle.yml"
+        error_trap
+    fi
+
+    if [ -z "$PACKAGE_VERSION" ]; then
+        echo "Error: Could not parse package version."
+        error_trap
+    fi
+
+    echo "{{ package.name }} detected version $PACKAGE_VERSION"
+{%- endmacro %}

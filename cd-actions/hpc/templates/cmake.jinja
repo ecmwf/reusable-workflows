@@ -1,0 +1,114 @@
+{# CMake build macros for HPC build templates #}
+{% from 'base.jinja' import start_group, end_group, cd_pkg_subdir, print_cmake_options, print_ctest_options, print_ecbundle_options with context %}
+{% from 'git.jinja' import git_fetch, set_package_version with context %}
+{% from 'environment.jinja' import load_modules, set_env, clean_install_dir, export_package_env with context %}
+
+{# === Staged Build Install === #}
+{% macro staged_install(stage, package) -%}
+{% if ci_options.skip_install %}
+echo "Dry run: skipping install for stage {{ stage.name }}"
+{% elif stage.install_command %}
+{{ stage.install_command }}
+{% else %}
+cd {{ ci_options.workdir }}/{{ package.name }}/build
+time cmake --install . > /dev/null
+{% endif %}
+{%- endmacro %}
+
+
+{# === CMake Package Build === #}
+{% macro cmake_package(package) -%}
+{{ git_fetch(package) }}
+{{ set_package_version(package=package) }}
+{{ start_group("Check cache: " + package.name) }}
+{% if ci_options.force_build %}
+echo "Ignoring cache"
+{% endif %}
+export ARTIFACT_CACHE_DIR=$SCRATCH/github-artifacts-cache
+{% set use_cache = ci_options.hpc_config.enable_cache and package.type != "main" %}
+if {{ (not ci_options.force_build and use_cache)|lower }} && [ -f $ARTIFACT_CACHE_DIR/{{ package.cache_key }}.tar.gz ]; then
+    echo "Cache hit: {{ package.cache_key }}"
+    echo "Restore cache: {{ package.name }}"
+    mkdir -p {{ package.prefix }}
+    cd $ARTIFACT_CACHE_DIR
+    tar -xzf {{ package.cache_key }}.tar.gz -C {{ package.prefix }}
+    {{ end_group() }}
+else
+    {% if not ci_options.force_build and use_cache %}
+    echo "Cache miss: {{ package.cache_key }}"
+    {% endif %}
+    {{ end_group() }}
+
+    {{ load_modules(generic_modules, package.modules) }}
+    {{ set_env(env) }}
+
+    {{ start_group( "Building " + package.name) }}
+    {% if package.name == "ecbuild" %}
+    {{ cd_pkg_subdir(package) }}
+    mkdir build
+    cd build
+    ../bin/ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} {{ print_cmake_options(package.cmake_options) }}
+    {% elif ci_options.ecbundle %}
+    {{ cd_pkg_subdir(package) }}
+    ecbundle create --github-token={{ github.token }} --shallow --threads={{ ci_options.cpus_per_task }}
+    {% else %}
+    {{ cd_pkg_subdir(package) }}
+    mkdir build
+    cd build
+    ecbuild --prefix={{ package.prefix }} .. {% if "ninja" in generic_modules or "ninja" in package.modules %}-GNinja{% endif %} {{ print_cmake_options(package.cmake_options) }}
+    {% endif %}
+
+    {% if ci_options.ecbundle %}
+    {{ cd_pkg_subdir(package) }}
+    ecbundle build --install --threads={{ ci_options.cpus_per_task }} --install-dir={{ package.prefix }} {{ print_ecbundle_options(package.cmake_options) }}
+    {% else %}
+    {{ cd_pkg_subdir(package) }}
+    cd build
+    time cmake --build .
+    {% endif %}
+    {{ end_group() }}
+
+    {% if package.type == "main" %}
+    {{ clean_install_dir(package) }}
+    {% endif %}
+
+    {% if not ci_options.ecbundle %}
+    {% if package.type == "main" and ci_options.skip_install %}
+    echo "Dry run: skipping installation of {{ package.name }}"
+    {% else %}
+    {{ start_group("Installing: " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    cd build
+    export INSTALL_PREFIX="{{ package.prefix }}"
+    {% if package.install_command is defined and package.install_command %}
+    {{ package.install_command }}
+    {% else %}
+    time cmake --install . > /dev/null
+    {% endif %}
+    {{ end_group() }}
+    {% endif %}
+    {% endif %}
+
+    {% if package.type == "main" and ci_options.self_test %}
+    {{ start_group("Testing: " + package.name) }}
+    {{ cd_pkg_subdir(package) }}
+    cd build
+    time ctest {{ print_ctest_options(package.ctest_options) }}
+    {{ end_group() }}
+    {% endif %}
+
+    {% if use_cache %}
+    {{ start_group("Save cache: " + package.name) }}
+    cd {{ ci_options.workdir }}
+    tar -czf {{ package.cache_key + ".tar.gz" }} -C {{ package.prefix }} .
+    mv {{ package.cache_key + ".tar.gz" }} $ARTIFACT_CACHE_DIR/
+    {{ end_group() }}
+    {% endif %}
+fi
+
+{% if package.type == "main" and ci_options.skip_install %}
+{{ export_package_env(package, base_path=ci_options.workdir + "/" + package.name + "/build") }}
+{% else %}
+{{ export_package_env(package) }}
+{% endif %}
+{%- endmacro %}

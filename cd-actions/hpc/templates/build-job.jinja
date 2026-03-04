@@ -1,4 +1,10 @@
-{% from 'macros.jinja' import start_group, end_group, cmake_package, python_package, post_script, job_footer, setup_ecbundle, git_fetch, set_package_version, load_modules, set_env, ecbundle_workflow, print_cmake_options, export_package_env, clean_install_dir, setup_build_log, staged_install with context %}
+{% from 'base.jinja' import start_group, end_group, print_cmake_options with context %}
+{% from 'git.jinja' import git_fetch, set_package_version with context %}
+{% from 'environment.jinja' import load_modules, set_env, export_package_env, clean_install_dir, setup_build_log with context %}
+{% from 'cmake.jinja' import cmake_package, staged_install with context %}
+{% from 'python.jinja' import python_package with context %}
+{% from 'ecbundle.jinja' import setup_ecbundle, ecbundle_workflow with context %}
+{% from 'finalize.jinja' import post_script, job_footer with context %}
 
 {# Build in work directory #}
 cd {{ ci_options.workdir }}

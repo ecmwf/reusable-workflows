@@ -1,0 +1,62 @@
+gnu-14.2.0:
+  compiler: gnu-14.2.0
+  compiler_cc: gcc
+  compiler_cxx: g++
+  compiler_fc: gfortran
+  compiler_modules: gcc/14.2.0
+
+gnu-12.2.0:
+  compiler: gnu-12.2.0
+  compiler_cc: gcc
+  compiler_cxx: g++
+  compiler_fc: gfortran
+  compiler_modules: gcc/12.2.0
+
+gnu-11.5.0:
+  compiler: gnu-11.5.0
+  compiler_cc: gcc
+  compiler_cxx: g++
+  compiler_fc: gfortran
+  compiler_modules: gcc/11.5.0
+
+gnu-8.5.0:
+  compiler: gnu-8.5.0
+  compiler_cc: gcc
+  compiler_cxx: g++
+  compiler_fc: gfortran
+  compiler_modules: gcc/8.5.0
+
+nvidia-22.11:
+  compiler: nvidia-22.11
+  compiler_cc: nvc
+  compiler_cxx: nvc++
+  compiler_fc: nvfortran
+  compiler_modules: prgenv/nvidia,nvidia/22.11
+
+nvidia-24.11:
+  compiler: nvidia-24.11
+  compiler_cc: nvc
+  compiler_cxx: nvc++
+  compiler_fc: nvfortran
+  compiler_modules: prgenv/nvidia,nvidia/24.11
+
+intel-2021.4.0:
+  compiler: intel-2021.4.0
+  compiler_cc: icc
+  compiler_cxx: icpc
+  compiler_fc: ifort
+  compiler_modules: prgenv/intel,intel/2021.4.0
+
+intel-2025.0.1:
+  compiler: intel-2025.0.1
+  compiler_cc: icx
+  compiler_cxx: icpx
+  compiler_fc: ifx
+  compiler_modules: prgenv/intel-llvm,intel/2025.0.1
+
+amd-4.0.0:
+  compiler: aocc-4.0.0
+  compiler_cc: clang
+  compiler_cxx: clang++
+  compiler_fc: flang
+  compiler_modules: prgenv/amd,aocc/4.0.0
