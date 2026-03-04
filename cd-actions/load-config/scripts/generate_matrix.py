@@ -49,7 +49,7 @@ def bool_to_str(source, source_name):
     if isinstance(source, bool):
         return str(source).lower()
     elif isinstance(source, str):
-        return str(bool(source))
+        return "true" if source.lower() in ("true", "1", "yes") else "false"
     else:
         raise ValueError(f"{source_name} must be a bool, got {type(source)}")
 
@@ -95,8 +95,8 @@ for build in config.get("builds", []):
 
         if build_type == "conda":
             matrix_item["conda_dir"] = build_config.get("conda_dir", "./.cd/conda")
-            channels = list_to_str_comma_separated(build_config.get("channels", ["conda-forge"]), "channels")
-            matrix_item["conda_build_args"] = list_to_str_comma_separated(build_config.get("conda_build_args", ["--no-anaconda-upload"]), "conda_build_args")
+            matrix_item["channels"] = list_to_str_line_separated(build_config.get("channels", ["conda-forge"]), "channels")
+            matrix_item["conda_build_args"] = list_to_str_line_separated(build_config.get("conda_build_args", ["--no-anaconda-upload"]), "conda_build_args")
             matrix_item["skip_installation_test"] = bool_to_str(build_config.get("skip_installation_test", False), "skip_installation_test")
 
         elif build_type == "python-pypi":

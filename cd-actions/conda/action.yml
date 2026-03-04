@@ -34,11 +34,11 @@ inputs:
     required: false
     default: './.cd/conda'
   channels:
-    description: 'Comma-separated list of conda channels to use (appended to hardcoded internal ECMWF nexus channels)'
+    description: 'Conda channels to use as line-separated values (appended to internal ECMWF nexus channels)'
     required: false
     default: 'conda-forge'
   conda_build_args:
-    description: 'Additional arguments for conda mambabuild command'
+    description: 'Additional arguments for conda mambabuild command as line-separated values'
     required: false
     default: '--no-anaconda-upload'
 

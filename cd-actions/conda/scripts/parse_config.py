@@ -16,10 +16,11 @@ def main():
 
     conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
     channels_input = os.environ.get("INPUT_CHANNELS", "conda-forge")
-    conda_build_args = os.environ.get("INPUT_CONDA_BUILD_ARGS", "")
+    conda_build_args_input = os.environ.get("INPUT_CONDA_BUILD_ARGS", "")
+    conda_build_args = " ".join(a.strip() for a in conda_build_args_input.splitlines() if a.strip())
 
-    # Parse comma-separated channels
-    channels_list = [c.strip() for c in channels_input.split(",") if c.strip()]
+    # Parse line-separated channels
+    channels_list = [c.strip() for c in channels_input.splitlines() if c.strip()]
     channels = f"-c {' -c '.join(channels_list)}" if channels_list else ""
 
     # Determine Nexus URL based on prerelease flag

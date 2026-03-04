@@ -96,7 +96,7 @@ inputs:
     required: false
     default: ''
   dependency_cmake_options:
-    description: 'CMake options for dependencies as line separated key=value pairs (e.g., "owner/repo: -DOPTION=VALUE")'
+    description: 'CMake options for dependencies as line separated key=value pairs (e.g., "owner/repo=-DOPTION=VALUE,-DFOO=BAR")'
     required: false
     default: ''
   python_dependencies:
