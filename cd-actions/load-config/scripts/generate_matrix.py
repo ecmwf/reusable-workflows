@@ -74,6 +74,9 @@ config_dir = action_path / "config"
 with open(config_dir / "runners.yml") as f:
     runners_config = yaml.safe_load(f)
 
+with open(config_dir / "platforms-system-package.yml") as f:
+    sp_platforms_config = yaml.safe_load(f)
+
 config_yaml = os.environ["STEP_LOAD_CONFIG"]
 config = yaml.safe_load(config_yaml)
 common_config = config.get("common_config", {})
@@ -91,6 +94,7 @@ for build in config.get("builds", []):
             "name": build["name"],
             "runner": runners_config.get(build_type, runners_config.get("default", ["self-hosted", "platform-builder"])),
             "type": build_type,
+            "container": "",
         }
 
         if build_type == "conda":
@@ -161,6 +165,58 @@ for build in config.get("builds", []):
             matrix_item["cmake_options"] = dict_to_str_space_separated(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["confluence_space"] = build_config.get("confluence_space", "")
             matrix_item["confluence_page_title"] = build_config.get("confluence_page_title", "Releases")
+
+        elif build_type == "system-package":
+            platform_name = build_config.get("os", "")
+            if platform_name not in sp_platforms_config:
+                print(f"::error::Unknown platform: {platform_name}")
+                raise SystemExit(1)
+
+            defaults = sp_platforms_config[platform_name]
+            os_id = defaults["os"]
+            matrix_item["container"] = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
+            matrix_item["os"] = os_id
+            matrix_item["nexus_token_secret"] = defaults["nexus_token_secret"]
+            matrix_item["nexus_url_secret"] = defaults["nexus_url_secret"]
+
+            raw_deps = build_config.get("package_deps", [])
+            if isinstance(raw_deps, list):
+                matrix_item["package_deps"] = ", ".join(raw_deps)
+            else:
+                matrix_item["package_deps"] = str(raw_deps)
+
+            matrix_item["skip_version_check"] = bool_to_str(build_config.get("skip_version_check", False), "skip_version_check")
+            matrix_item["description"] = build_config.get("description", "")
+            matrix_item["license"] = build_config.get("license", "")
+            matrix_item["maintainer"] = build_config.get("maintainer", "software@ecmwf.int")
+            matrix_item["vendor"] = build_config.get("vendor", "ECMWF")
+            matrix_item["homepage_url"] = build_config.get("homepage_url", "")
+            matrix_item["install_prefix"] = build_config.get("install_prefix", "/opt/ecmwf")
+            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", False), "self_test")
+            matrix_item["install_test"] = bool_to_str(build_config.get("install_test", False), "install_test")
+            matrix_item["install_test_os_image"] = build_config.get("install_test_os_image", "")
+            matrix_item["install_test_command"] = build_config.get("install_test_command", "")
+            matrix_item["build_type"] = build_config.get("build_type", "Release")
+            matrix_item["env"] = build_config.get("env", "")
+            matrix_item["deb_section"] = build_config.get("deb_section", "")
+            matrix_item["deb_priority"] = build_config.get("deb_priority", "optional")
+            matrix_item["rpm_group"] = build_config.get("rpm_group", "")
+            matrix_item["dependencies"] = build_config.get("dependencies", "")
+            matrix_item["dependency_branch"] = build_config.get("dependency_branch", "")
+            matrix_item["cmake_options"] = build_config.get("cmake_options", "")
+            matrix_item["ctest_options"] = build_config.get("ctest_options", "")
+            matrix_item["dependency_cmake_options"] = build_config.get("dependency_cmake_options", "")
+            matrix_item["cmake"] = bool_to_str(build_config.get("cmake", False), "cmake")
+            matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", False), "ecbundle")
+            matrix_item["self_build"] = bool_to_str(build_config.get("self_build", True), "self_build")
+            matrix_item["toolchain_file"] = build_config.get("toolchain_file", "")
+            matrix_item["parallelism_factor"] = str(build_config.get("parallelism_factor", "2"))
+            matrix_item["compiler_cc"] = build_config.get("compiler_cc", "gcc")
+            matrix_item["compiler_cxx"] = build_config.get("compiler_cxx", "g++")
+            matrix_item["compiler_fc"] = build_config.get("compiler_fc", "gfortran")
+            matrix_item["cache_suffix"] = build_config.get("cache_suffix", "")
+            matrix_item["save_cache"] = bool_to_str(build_config.get("save_cache", True), "save_cache")
+            matrix_item["recreate_cache"] = bool_to_str(build_config.get("recreate_cache", False), "recreate_cache")
 
         matrix["include"].append(matrix_item)
 
