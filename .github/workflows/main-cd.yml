@@ -81,7 +81,7 @@ jobs:
 
       - name: Load and generate matrix
         id: load-config
-        uses: ecmwf/reusable-workflows/cd-actions/load-config@v2
+        uses: ecmwf/reusable-workflows/cd-actions/load-config@cd-sp-docker-ref
         with:
           config_file: ${{ inputs.config_file }}
 
@@ -90,6 +90,14 @@ jobs:
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
     runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
+        password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+      options: '--user root'
+      volumes:
+        - '/var/run/docker.sock:/var/run/docker.sock'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
@@ -102,7 +110,7 @@ jobs:
           
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@cd-sp-docker-ref
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -118,7 +126,7 @@ jobs:
 
       - name: Build with Python PyPI
         if: ${{ matrix.type == 'python-pypi' }}
-        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@cd-sp-docker-ref
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
@@ -132,7 +140,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-sp-docker-ref
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
@@ -182,7 +190,7 @@ jobs:
 
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
-        uses: ecmwf/reusable-workflows/cd-actions/tarball@v2
+        uses: ecmwf/reusable-workflows/cd-actions/tarball@cd-sp-docker-ref
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
@@ -191,6 +199,51 @@ jobs:
           confluence_token: ${{ needs.detect-release-type.outputs.is_prerelease == 'false' && needs.detect-release-type.outputs.is_dry_run == 'false' && secrets.CONFLUENCE_TARBALL_UPLOAD_TOKEN || '' }}
           confluence_space: ${{ matrix.confluence_space }}
           confluence_page_title: ${{ matrix.confluence_page_title }}
+
+      - name: Build System Package
+        if: ${{ matrix.type == 'system-package' }}
+        uses: ecmwf/reusable-workflows/cd-actions/system-package@cd-sp-docker-ref
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          skip_version_check: ${{ matrix.skip_version_check }}
+          package_deps: ${{ matrix.package_deps }}
+          description: ${{ matrix.description }}
+          license: ${{ matrix.license }}
+          maintainer: ${{ matrix.maintainer }}
+          vendor: ${{ matrix.vendor }}
+          homepage_url: ${{ matrix.homepage_url }}
+          install_prefix: ${{ matrix.install_prefix }}
+          self_test: ${{ matrix.self_test }}
+          install_test: ${{ matrix.install_test }}
+          install_test_os_image: ${{ matrix.install_test_os_image }}
+          install_test_command: ${{ matrix.install_test_command }}
+          build_type: ${{ matrix.build_type }}
+          env: ${{ matrix.env }}
+          deb_section: ${{ matrix.deb_section }}
+          deb_priority: ${{ matrix.deb_priority }}
+          rpm_group: ${{ matrix.rpm_group }}
+          os: ${{ matrix.os }}
+          dependencies: ${{ matrix.dependencies }}
+          dependency_branch: ${{ matrix.dependency_branch }}
+          cmake_options: ${{ matrix.cmake_options }}
+          ctest_options: ${{ matrix.ctest_options }}
+          dependency_cmake_options: ${{ matrix.dependency_cmake_options }}
+          cmake: ${{ matrix.cmake }}
+          ecbundle: ${{ matrix.ecbundle }}
+          self_build: ${{ matrix.self_build }}
+          toolchain_file: ${{ matrix.toolchain_file }}
+          parallelism_factor: ${{ matrix.parallelism_factor }}
+          compiler_cc: ${{ matrix.compiler_cc }}
+          compiler_cxx: ${{ matrix.compiler_cxx }}
+          compiler_fc: ${{ matrix.compiler_fc }}
+          cache_suffix: ${{ matrix.cache_suffix }}
+          save_cache: ${{ matrix.save_cache }}
+          recreate_cache: ${{ matrix.recreate_cache }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
+          nexus_token: ${{ secrets[matrix.nexus_token_secret] }}
+          nexus_url: ${{ secrets[matrix.nexus_url_secret] }}
 
   release:
     name: Create Release
@@ -217,7 +270,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub release
-        uses: ecmwf/reusable-workflows/cd-actions/release@v2
+        uses: ecmwf/reusable-workflows/cd-actions/release@cd-sp-docker-ref
         with:
           config: ${{ steps.prepare-config.outputs.config }}
           ref_name: ${{ inputs.ref_name }}
