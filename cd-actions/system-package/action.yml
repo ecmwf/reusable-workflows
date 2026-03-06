@@ -25,15 +25,15 @@ inputs:
     required: false
     default: ''
   cmake_options:
-    description: 'CMake options for the current repository build (-DVAR=value ...)'
+    description: 'CMake options as line-separated key=value pairs (e.g., "-DCMAKE_BUILD_TYPE=Release\n-DENABLE_TESTS=ON")'
     required: false
     default: ''
   ctest_options:
-    description: 'CTest options for the current repository tests (-R regex ...)'
+    description: 'CTest options as line-separated values (e.g., "--output-on-failure\n-j=8")'
     required: false
     default: ''
   dependency_cmake_options:
-    description: 'CMake options for dependency builds (owner/repo: "-DVAR=value")'
+    description: 'CMake options for dependencies as line-separated key=value pairs (e.g., "owner/repo=-DOPTION=VALUE,-DFOO=BAR")'
     required: false
     default: ''
   cmake:
@@ -294,7 +294,8 @@ runs:
         cmake_options="-C ${{ steps.overrides.outputs.overrides_file }}"
         cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}"
 
-        user_opts="${{ inputs.cmake_options }}"
+        # Convert line-separated options to space-separated
+        user_opts=$(echo "${{ inputs.cmake_options }}" | tr '\n' ' ' | xargs)
         if [ -n "$user_opts" ]; then
           cmake_options="$cmake_options $user_opts"
         fi
