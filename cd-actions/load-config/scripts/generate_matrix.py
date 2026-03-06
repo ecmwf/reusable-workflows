@@ -55,7 +55,11 @@ def bool_to_str(source, source_name):
 
 def dict_to_str_line_separated(source, source_name):
     if isinstance(source, dict):
-        return "\n".join([f"{k}={v}" for k, v in source.items()])
+        def format_option_with_default_prefix(k, v):
+            if not k.startswith('-'):
+                k = f"-D{k}"
+            return f"{k}={v}" if v != '' else k
+        return "\n".join([format_option_with_default_prefix(k, v) for k, v in source.items()])
     elif isinstance(source, str):
         return source
     else:
