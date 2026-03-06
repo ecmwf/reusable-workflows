@@ -400,22 +400,18 @@ runs:
 
         os_id = '${{ inputs.os }}'
 
-        os_to_docker = {
-            'ubuntu-2204': 'ubuntu:22.04',
-            'ubuntu-2404': 'ubuntu:24.04',
-            'debian-11': 'debian:11',
-            'debian-12': 'debian:12',
-            'debian-13': 'debian:13',
-            'rocky-8': 'rockylinux/rockylinux:8',
-            'rocky-8.7': 'rockylinux/rockylinux:8.7',
-            'rocky-8.10': 'rockylinux/rockylinux:8.10',
-            'rocky-9.7': 'rockylinux/rockylinux:9.7',
-            'rocky-10.1': 'rockylinux/rockylinux:10.1',
-            'fedora-43': 'fedora:43',
-            'centos7-': 'centos:7',
+        # Map OS names that differ from their Docker Hub image name.
+        image_name_map = {
+            'rocky': 'rockylinux/rockylinux',
         }
 
-        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if '/' not in os_to_docker.get(os_id, '') else ''}{os_to_docker.get(os_id, '')}"
+        # Parse "<name>-<version>" from the os input.
+        name, _, version = os_id.partition('-')
+        image_name = image_name_map.get(name, name)
+        is_library = '/' not in image_name
+        docker_ref = f"{image_name}:{version}" if version else image_name
+
+        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if is_library else ''}{docker_ref}"
 
         if docker_image:
             print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
