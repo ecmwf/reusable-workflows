@@ -188,7 +188,7 @@ for build in config.get("builds", []):
             matrix_item["vendor"] = build_config.get("vendor", "ECMWF")
             matrix_item["homepage_url"] = build_config.get("homepage_url", "")
             matrix_item["install_prefix"] = build_config.get("install_prefix", "/opt/ecmwf")
-            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", False), "self_test")
+            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", True), "self_test")
             matrix_item["install_test"] = bool_to_str(build_config.get("install_test", False), "install_test")
             matrix_item["install_test_os_image"] = build_config.get("install_test_os_image", "")
             matrix_item["install_test_command"] = build_config.get("install_test_command", "")
