@@ -495,7 +495,7 @@ on:
 
 jobs:
   publish:
-    uses: ecmwf/reusable-workflows/.github/workflows/publish-rust-crate.yml@v1
+    uses: ecmwf/reusable-workflows/.github/workflows/publish-rust-crate.yml@v2
     with:
       manifest-path: Cargo.toml
       dry-run: false
