@@ -61,7 +61,7 @@ jobs:
       LOCKED_FLAG: ${{ inputs.locked && '--locked' || '' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Using @master because @stable/@nightly are branch shortcuts that set
       # the default toolchain — redundant when the toolchain input is explicit.
