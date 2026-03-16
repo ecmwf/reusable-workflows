@@ -20,7 +20,7 @@ jobs:
           stale-issue-message: >
             This issue has been marked as inactive due to inactivity.
             It will be closed if no further activity occurs in the next 10 days.
-          exempt-issue-labels: good first issue
+          exempt-issue-labels: 'good first issue,help wanted,roadmap,known-issue'
 
           # PR settings
           days-before-pr-stale: 90 # (~3 months)
@@ -29,6 +29,6 @@ jobs:
           stale-pr-message: >
             This PR has been marked as inactive due to inactivity.
             It will be closed if no further activity occurs in the next 10 days.
-          exempt-pr-labels: autorelease: pending
+          exempt-pr-labels: 'autorelease: pending'
 
           remove-stale-when-updated: true
