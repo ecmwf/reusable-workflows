@@ -108,6 +108,7 @@ jobs:
         id: crates-io
         run: |
           response_code=$(curl -sS -o /tmp/crates-version.json -w "%{http_code}" \
+            -H "User-Agent: ecmwf-reusable-workflows (https://github.com/ecmwf/reusable-workflows)" \
             "https://crates.io/api/v1/crates/${{ steps.crate.outputs.crate_name }}/${{ steps.crate.outputs.crate_version }}")
 
           case "${response_code}" in
