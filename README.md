@@ -15,6 +15,7 @@ A collection of [reusable GitHub workflows] for ECMWF repositories.
 - [docs.yml](#docsyml): Workflow for testing Sphinx-based documentation
 - [qa-precommit-run.yml](#qa-precommit): Runs the pre-commit hooks on all files server-side as a QA drop-in.
 - [qa-pytest-pyproject.yml](#qa-pytest-pyproject): Runs pytest after a `pyproject.toml` install with a markdown report.
+- [publish-rust-crate.yml](#publish-rust-crateyml): Workflow for publishing Rust crates to crates.io
 - [sync.yml](#syncyml): Workflow for syncing a Git repository
 
 [Samples]
@@ -481,6 +482,78 @@ Expands in `pytest -v -m "${{ inputs.skip-tests }}"` to coordinate marked tests.
 **Default:** `'pytest'`
 **Type:** `string`
 **Example:** `'poetry run pytest'`
+
+## publish-rust-crate.yml
+
+### Usage
+
+```yaml
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    uses: ecmwf/reusable-workflows/.github/workflows/publish-rust-crate.yml@v2
+    with:
+      manifest-path: Cargo.toml
+      dry-run: false
+    secrets:
+      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+```
+
+### Inputs
+
+#### `manifest-path`
+
+Path to `Cargo.toml` for the crate to publish.
+**Default:** `'Cargo.toml'`
+**Type:** `string`
+
+#### `toolchain`
+
+Rust toolchain to install.
+**Default:** `'stable'`
+**Type:** `string`
+
+#### `dry-run`
+
+Run `cargo publish` in dry-run mode only.
+**Default:** `false`
+**Type:** `boolean`
+
+#### `run-checks`
+
+Run `cargo fmt`, `cargo clippy` and `cargo test` before publishing.
+**Default:** `true`
+**Type:** `boolean`
+
+#### `locked`
+
+Use `--locked` flag for `cargo clippy` and `cargo test` to enforce `Cargo.lock`.
+**Default:** `true`
+**Type:** `boolean`
+
+#### `cargo-publish-args`
+
+Extra arguments appended to `cargo publish`.
+**Default:** `''`
+**Type:** `string`
+
+#### `environment`
+
+GitHub deployment environment for publish protection. When set, the publish job will require the configured environment approvals and rules before running.
+**Default:** `''`
+**Type:** `string`
+**Example:** `'release'`
+
+### Secrets
+
+#### `cargo_registry_token`
+
+**Required** crates.io API token used by `cargo publish`.
+**Example:** `${{ secrets.CARGO_REGISTRY_TOKEN }}`
 
 ## sync.yml
 
