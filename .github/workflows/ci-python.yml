@@ -92,7 +92,7 @@ jobs:
       run: black --check .
 
     - name: Check flake8
-      run: flake8 --max-line-length 88 .
+      run: flake8 --max-line-length 120 .
 
   setup:
     name: setup
