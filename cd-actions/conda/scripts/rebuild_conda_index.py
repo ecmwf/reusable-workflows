@@ -42,9 +42,7 @@ def fetch_cache_db(nexus_url: str, auth: str, arch: str, dest_dir: Path) -> bool
         return False
 
 
-def discover_remote_architectures(
-    nexus_url: str, auth_tuple: tuple[str, str] | None
-) -> list[str]:
+def discover_remote_architectures(nexus_url: str, auth_tuple: tuple[str, str] | None) -> list[str]:
     """Discover all available architectures in the remote Nexus repository."""
     available_archs = []
 
@@ -79,9 +77,7 @@ def prepare_directory_structure(
             package_architectures.add(arch)
 
     if not package_architectures:
-        print(
-            "Error: Could not detect architectures from package paths", file=sys.stderr
-        )
+        print("Error: Could not detect architectures from package paths", file=sys.stderr)
         print(f"Expected packages to be in one of: {STANDARD_ARCHS}", file=sys.stderr)
         sys.exit(1)
 
@@ -181,16 +177,12 @@ def upload_to_nexus(
     def upload_file(local_path: Path, remote_url: str) -> bool:
         """Upload a single file to Nexus."""
         if dry_run:
-            print(
-                f"  [DRY RUN] Would upload {local_path.relative_to(work_dir)} to {remote_url}"
-            )
+            print(f"  [DRY RUN] Would upload {local_path.relative_to(work_dir)} to {remote_url}")
             return True
 
         try:
             with open(local_path, "rb") as f:
-                response = requests.put(
-                    remote_url, data=f, auth=auth_tuple, timeout=300
-                )
+                response = requests.put(remote_url, data=f, auth=auth_tuple, timeout=300)
                 response.raise_for_status()
             print(f"  ✓ Uploaded {local_path.relative_to(work_dir)}")
             return True
@@ -204,9 +196,7 @@ def upload_to_nexus(
         if not arch_dir.exists():
             continue
 
-        for package in list(arch_dir.glob("*.tar.bz2")) + list(
-            arch_dir.glob("*.conda")
-        ):
+        for package in list(arch_dir.glob("*.tar.bz2")) + list(arch_dir.glob("*.conda")):
             remote_url = urljoin(nexus_url, f"{arch}/{package.name}")
             if not upload_file(package, remote_url):
                 sys.exit(1)
@@ -258,9 +248,7 @@ def find_packages(search_dir: Path) -> list[Path]:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Rebuild conda repository index using conda_index"
-    )
+    parser = argparse.ArgumentParser(description="Rebuild conda repository index using conda_index")
     parser.add_argument(
         "--package-dir",
         required=True,
@@ -324,9 +312,7 @@ def main():
         print(f"Working directory: {work_dir}\n")
 
         print("=== Step 1: Preparing directory structure ===")
-        architectures = prepare_directory_structure(
-            packages, nexus_url, auth_tuple, work_dir
-        )
+        architectures = prepare_directory_structure(packages, nexus_url, auth_tuple, work_dir)
 
         print("\n=== Step 2: First conda_index run (update cache) ===")
         run_conda_index(work_dir, update_cache=True)

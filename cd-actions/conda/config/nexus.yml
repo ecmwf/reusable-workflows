@@ -1,0 +1,4 @@
+production:
+  url: https://nexus.ecmwf.int/repository/conda-ecmwf-public
+test:
+  url: https://nexus-test.ecmwf.int/repository/conda-ecmwf-public

@@ -1,0 +1,167 @@
+---
+name: Publish Rust crate
+
+on:
+  workflow_call:
+    inputs:
+      manifest-path:
+        description: Path to Cargo.toml for the crate to publish.
+        required: false
+        default: Cargo.toml
+        type: string
+      toolchain:
+        description: Rust toolchain to install.
+        required: false
+        default: stable
+        type: string
+      dry-run:
+        description: Run cargo publish in dry-run mode only.
+        required: false
+        default: false
+        type: boolean
+      run-checks:
+        description: Run formatting, clippy and tests before publishing.
+        required: false
+        default: true
+        type: boolean
+      locked:
+        description: Use --locked flag for cargo commands to enforce Cargo.lock.
+        required: false
+        default: true
+        type: boolean
+      cargo-publish-args:
+        description: Extra arguments appended to cargo publish.
+        required: false
+        default: ''
+        type: string
+      environment:
+        description: GitHub deployment environment for publish protection.
+        required: false
+        default: ''
+        type: string
+    secrets:
+      cargo_registry_token:
+        description: crates.io API token used by cargo publish.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish-rust-crate
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || '' }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      MANIFEST_PATH: ${{ inputs.manifest-path }}
+      EXTRA_ARGS: ${{ inputs.cargo-publish-args }}
+      LOCKED_FLAG: ${{ inputs.locked && '--locked' || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Using @master because @stable/@nightly are branch shortcuts that set
+      # the default toolchain — redundant when the toolchain input is explicit.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: ${{ inputs.run-checks && 'rustfmt, clippy' || '' }}
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Read crate metadata
+        id: crate
+        run: |
+          manifest_path=$(realpath "${MANIFEST_PATH}")
+          metadata_json=$(cargo metadata --manifest-path "${MANIFEST_PATH}" --format-version 1 --no-deps)
+          crate_name=$(jq -r --arg manifest_path "${manifest_path}" '.packages[] | select(.manifest_path == $manifest_path) | .name' <<<"${metadata_json}")
+          crate_version=$(jq -r --arg manifest_path "${manifest_path}" '.packages[] | select(.manifest_path == $manifest_path) | .version' <<<"${metadata_json}")
+
+          if [ -z "${crate_name}" ] || [ -z "${crate_version}" ]; then
+            echo "::error::Could not resolve crate metadata for ${manifest_path}."
+            exit 1
+          fi
+
+          echo "crate_name=${crate_name}" >> "${GITHUB_OUTPUT}"
+          echo "crate_version=${crate_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run formatting check
+        if: ${{ inputs.run-checks }}
+        run: cargo fmt --all --check --manifest-path "${MANIFEST_PATH}"
+
+      - name: Run clippy
+        if: ${{ inputs.run-checks }}
+        run: cargo clippy --all-targets --all-features ${LOCKED_FLAG} --manifest-path "${MANIFEST_PATH}" -- -D warnings
+
+      - name: Run tests
+        if: ${{ inputs.run-checks }}
+        run: cargo test --all-features ${LOCKED_FLAG} --manifest-path "${MANIFEST_PATH}"
+
+      # Guard against re-publishing an already-released version. This avoids a
+      # hard failure from cargo publish and makes the workflow safely re-runnable.
+      - name: Check if crate version already exists on crates.io
+        id: crates-io
+        run: |
+          response_code=$(curl -sS -o /tmp/crates-version.json -w "%{http_code}" \
+            -H "User-Agent: ecmwf-reusable-workflows (https://github.com/ecmwf/reusable-workflows)" \
+            "https://crates.io/api/v1/crates/${{ steps.crate.outputs.crate_name }}/${{ steps.crate.outputs.crate_version }}")
+
+          case "${response_code}" in
+            200) echo "already_published=true"  >> "${GITHUB_OUTPUT}" ;;
+            404) echo "already_published=false" >> "${GITHUB_OUTPUT}" ;;
+            *)
+              echo "::error::Unexpected crates.io response code ${response_code}."
+              cat /tmp/crates-version.json
+              exit 1
+              ;;
+          esac
+
+      - name: Dry-run publish
+        if: ${{ inputs.dry-run }}
+        run: |
+          extra_args=()
+          if [ -n "${EXTRA_ARGS}" ]; then
+            read -r -a extra_args <<<"${EXTRA_ARGS}"
+          fi
+
+          cargo publish --dry-run --manifest-path "${MANIFEST_PATH}" "${extra_args[@]}"
+
+      - name: Publish to crates.io
+        if: ${{ !inputs.dry-run && steps.crates-io.outputs.already_published != 'true' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.cargo_registry_token }}
+        run: |
+          extra_args=()
+          if [ -n "${EXTRA_ARGS}" ]; then
+            read -r -a extra_args <<<"${EXTRA_ARGS}"
+          fi
+
+          for attempt in 1 2 3; do
+            if cargo publish --manifest-path "${MANIFEST_PATH}" "${extra_args[@]}"; then
+              echo "## Published to crates.io" >> "${GITHUB_STEP_SUMMARY}"
+              echo "- **crate:** ${{ steps.crate.outputs.crate_name }}" >> "${GITHUB_STEP_SUMMARY}"
+              echo "- **version:** ${{ steps.crate.outputs.crate_version }}" >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "::warning::Publish attempt ${attempt}/3 failed, retrying in 30s..."
+              sleep 30
+            fi
+          done
+
+          echo "::error::Publish failed after 3 attempts."
+          exit 1
+
+      - name: Skip publish because version exists
+        if: ${{ !inputs.dry-run && steps.crates-io.outputs.already_published == 'true' }}
+        run: |
+          echo "## Publish skipped" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Crate version already exists on crates.io." >> "${GITHUB_STEP_SUMMARY}"
+          echo "- **crate:** ${{ steps.crate.outputs.crate_name }}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- **version:** ${{ steps.crate.outputs.crate_version }}" >> "${GITHUB_STEP_SUMMARY}"

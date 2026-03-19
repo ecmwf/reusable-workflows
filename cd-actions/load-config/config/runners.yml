@@ -1,0 +1,7 @@
+default:
+  - self-hosted
+  - platform-builder
+hpc:
+  - self-hosted
+  - linux
+  - hpc
