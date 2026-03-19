@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/stale@v9
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
 
           # Issue settings
           days-before-issue-stale: 90 # (~3 months)
