@@ -1,0 +1,503 @@
+name: System Package Builder
+description: Build DEB/RPM system packages using CMake/CPack
+
+inputs:
+  name:
+    description: 'Build name for artifacts'
+    required: true
+  ref_name:
+    description: 'Git ref name for artifacts'
+    required: true
+  dry_run:
+    description: 'Dry run mode - build only, no uploads'
+    required: false
+    default: 'false'
+  skip_version_check:
+    description: 'Skip tag-vs-VERSION validation'
+    required: false
+    default: 'false'
+  dependencies:
+    description: 'List of dependency repositories to build (e.g. owner/repo@ref, one per line)'
+    required: false
+    default: ''
+  dependency_branch:
+    description: 'Default branch/tag for dependency repositories'
+    required: false
+    default: ''
+  cmake_options:
+    description: 'CMake options as line-separated key=value pairs (e.g., "-DCMAKE_BUILD_TYPE=Release\n-DENABLE_TESTS=ON")'
+    required: false
+    default: ''
+  ctest_options:
+    description: 'CTest options as line-separated values (e.g., "--output-on-failure\n-j=8")'
+    required: false
+    default: ''
+  dependency_cmake_options:
+    description: 'CMake options for dependencies as line-separated key=value pairs (e.g., "owner/repo=-DOPTION=VALUE,-DFOO=BAR")'
+    required: false
+    default: ''
+  cmake:
+    description: 'Use CMake instead of ecbuild for build configuration'
+    required: false
+    default: 'false'
+  ecbundle:
+    description: 'Use ecbundle for building bundles'
+    required: false
+    default: 'false'
+  self_build:
+    description: 'Whether to build from currently checked out repository'
+    required: false
+    default: 'true'
+  self_test:
+    description: 'Run tests after build before packaging'
+    required: false
+    default: 'true'
+  toolchain_file:
+    description: 'Path to CMake toolchain file'
+    required: false
+    default: ''
+  parallelism_factor:
+    description: 'Number of threads for build job'
+    required: false
+    default: '2'
+  package_deps:
+    description: 'Runtime package dependencies (comma-separated). Translated to CPACK_DEBIAN_PACKAGE_DEPENDS or CPACK_RPM_PACKAGE_REQUIRES.'
+    required: false
+    default: ''
+  description:
+    description: 'Package description. Falls back to GitHub repository description if empty.'
+    required: false
+    default: ''
+  license:
+    description: 'Package license (SPDX identifier). Falls back to GitHub repository license if empty.'
+    required: false
+    default: ''
+  maintainer:
+    description: 'Package maintainer email (e.g. name@example.com).'
+    required: false
+    default: 'software@ecmwf.int'
+  vendor:
+    description: 'Package vendor name'
+    required: false
+    default: 'ECMWF'
+  homepage_url:
+    description: 'Project homepage URL. Falls back to GitHub repository URL.'
+    required: false
+    default: ''
+  install_prefix:
+    description: 'Package installation prefix (e.g. /opt/ecmwf)'
+    required: false
+    default: '/opt/ecmwf'
+  install_test:
+    description: 'Run package installation test in Docker container'
+    required: false
+    default: 'false'
+  install_test_os_image:
+    description: 'Docker image to use for install tests'
+    required: false
+    default: ''
+  install_test_command:
+    description: 'Command to run after package installation in Docker (e.g., "myapp --version")'
+    required: false
+    default: ''
+  build_type:
+    description: 'CMake build type (Release, Debug, RelWithDebInfo, MinSizeRel)'
+    required: false
+    default: 'Release'
+  env:
+    description: 'Environment variables (VAR=value, one per line)'
+    required: false
+    default: ''
+  deb_section:
+    description: 'Debian package section (e.g. libs, science, devel)'
+    required: false
+    default: ''
+  deb_priority:
+    description: 'Debian package priority (optional, required, important, standard)'
+    required: false
+    default: 'optional'
+  rpm_group:
+    description: 'RPM package group (e.g. Development/Libraries)'
+    required: false
+    default: ''
+  cache_suffix:
+    description: 'String appended to build cache key. Change to invalidate the cache.'
+    required: false
+    default: ''
+  save_cache:
+    description: 'Save builds to cache'
+    required: false
+    default: 'true'
+  recreate_cache:
+    description: 'Skip restoring from cache and rebuild from scratch'
+    required: false
+    default: 'false'
+  os:
+    description: 'Platform OS identifier (e.g. debian-12, rocky-9)'
+    required: true
+  compiler_cc:
+    description: 'C compiler command'
+    required: false
+    default: 'gcc'
+  compiler_cxx:
+    description: 'C++ compiler command'
+    required: false
+    default: 'g++'
+  compiler_fc:
+    description: 'Fortran compiler command'
+    required: false
+    default: 'gfortran'
+  gh_pat:
+    description: 'GitHub PAT for repo access'
+    required: false
+  nexus_token:
+    description: 'Nexus credential (user:token)'
+    required: false
+  nexus_url:
+    description: 'Nexus upload URL'
+    required: false
+
+outputs:
+  package_path:
+    description: 'Absolute path to generated package'
+    value: ${{ steps.build.outputs.package_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Derive build configuration
+      id: config
+      shell: bash
+      run: |
+        os="${{ inputs.os }}"
+        case "$os" in
+          debian-*|ubuntu-*)
+            echo "cpack_generator=DEB" >> "$GITHUB_OUTPUT"
+            echo "upload_method=multipart" >> "$GITHUB_OUTPUT"
+            ;;
+          rocky-*|fedora-*)
+            echo "cpack_generator=RPM" >> "$GITHUB_OUTPUT"
+            echo "upload_method=put" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "::error::Unsupported OS: $os"
+            exit 1
+            ;;
+        esac
+
+    - name: Generate CPack overrides
+      id: overrides
+      shell: python3 {0}
+      run: |
+        import os
+
+        def cmake_escape(s):
+            """Escape backslashes, double-quotes, and semicolons for CMake strings."""
+            return s.replace('\\', '\\\\').replace('"', '\\"').replace(';', '\\;')
+
+        cpack_generator = '${{ steps.config.outputs.cpack_generator }}'
+        package_deps = '''${{ inputs.package_deps }}'''.strip()
+        description = '''${{ inputs.description }}'''.strip()
+
+        if not description:
+            description = '''${{ github.event.repository.description }}'''.strip()
+
+        license = '''${{ inputs.license }}'''.strip()
+        if not license:
+            license = '''${{ github.event.repository.license.spdx_id }}'''.strip()
+        if license == 'NOASSERTION':
+            license = ''
+
+        maintainer = '''${{ inputs.maintainer }}'''.strip()
+        vendor = '''${{ inputs.vendor }}'''.strip()
+
+        homepage_url = '''${{ inputs.homepage_url }}'''.strip()
+        if not homepage_url:
+            homepage_url = 'https://github.com/${{ github.repository }}'
+
+        install_prefix = '''${{ inputs.install_prefix }}'''.strip()
+        deb_section = '''${{ inputs.deb_section }}'''.strip()
+        deb_priority = '''${{ inputs.deb_priority }}'''.strip()
+        rpm_group = '''${{ inputs.rpm_group }}'''.strip()
+
+        if cpack_generator == 'DEB':
+            deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
+        else:
+            deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
+
+        overrides_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-overrides.cmake')
+        lines = []
+
+        if package_deps:
+            lines.append(f'set({deps_var} "{cmake_escape(package_deps)}" CACHE STRING "" FORCE)')
+            print(f"Package deps ({deps_var}): {package_deps}")
+
+        if description:
+            lines.append(f'set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "{cmake_escape(description)}" CACHE STRING "" FORCE)')
+            print(f"Description: {description}")
+        else:
+            print("Description: (none)")
+
+        if license:
+            lines.append(f'set(CPACK_RPM_PACKAGE_LICENSE "{cmake_escape(license)}" CACHE STRING "" FORCE)')
+            print(f"License: {license}")
+        else:
+            print("License: (none)")
+
+        # DEB-specific options
+        if cpack_generator == 'DEB':
+            lines.append(f'set(CPACK_DEBIAN_PACKAGE_MAINTAINER "{cmake_escape(maintainer)}" CACHE STRING "" FORCE)')
+            print(f"Maintainer: {maintainer}")
+            if deb_section:
+                lines.append(f'set(CPACK_DEBIAN_PACKAGE_SECTION "{cmake_escape(deb_section)}" CACHE STRING "" FORCE)')
+                print(f"DEB Section: {deb_section}")
+            if deb_priority:
+                lines.append(f'set(CPACK_DEBIAN_PACKAGE_PRIORITY "{cmake_escape(deb_priority)}" CACHE STRING "" FORCE)')
+                print(f"DEB Priority: {deb_priority}")
+            lines.append('set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON CACHE BOOL "" FORCE)')
+
+        # RPM-specific options
+        if cpack_generator == 'RPM':
+            lines.append('set(CPACK_RPM_SPEC_MORE_DEFINE "%global __brp_check_rpaths %{nil}" CACHE STRING "" FORCE)')
+            if rpm_group:
+                lines.append(f'set(CPACK_RPM_PACKAGE_GROUP "{cmake_escape(rpm_group)}" CACHE STRING "" FORCE)')
+                print(f"RPM Group: {rpm_group}")
+
+        # Common metadata
+        if vendor:
+            lines.append(f'set(CPACK_PACKAGE_VENDOR "{cmake_escape(vendor)}" CACHE STRING "" FORCE)')
+            lines.append(f'set(CPACK_RPM_PACKAGE_VENDOR "{cmake_escape(vendor)}" CACHE STRING "" FORCE)')
+            print(f"Vendor: {vendor}")
+
+        if homepage_url:
+            lines.append(f'set(CPACK_PACKAGE_HOMEPAGE_URL "{cmake_escape(homepage_url)}" CACHE STRING "" FORCE)')
+            lines.append(f'set(CPACK_RPM_PACKAGE_URL "{cmake_escape(homepage_url)}" CACHE STRING "" FORCE)')
+            print(f"Homepage URL: {homepage_url}")
+
+        if install_prefix:
+            lines.append(f'set(CPACK_PACKAGING_INSTALL_PREFIX "{cmake_escape(install_prefix)}" CACHE STRING "" FORCE)')
+            print(f"Install Prefix: {install_prefix}")
+
+        with open(overrides_file, 'w') as f:
+            for line in lines:
+                f.write(line + '\n')
+
+        print(f"Wrote {len(lines)} overrides to {overrides_file}")
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"overrides_file={overrides_file}\n")
+
+    - name: Prepare cmake_options
+      id: cmake-opts
+      shell: bash
+      run: |
+        cmake_options="-C ${{ steps.overrides.outputs.overrides_file }}"
+        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}"
+
+        # Convert line-separated options to space-separated
+        user_opts=$(echo "${{ inputs.cmake_options }}" | tr '\n' ' ' | xargs)
+        if [ -n "$user_opts" ]; then
+          cmake_options="$cmake_options $user_opts"
+        fi
+
+        echo "cmake_options=$cmake_options" >> "$GITHUB_OUTPUT"
+        echo "Final cmake_options: $cmake_options"
+
+    - name: Set environment variables
+      if: ${{ inputs.env != '' }}
+      shell: bash
+      run: echo "${{ inputs.env }}" >> "$GITHUB_ENV"
+
+    - name: Check version number
+      if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
+      shell: python3 {0}
+      run: |
+        import os
+        import re
+        import sys
+
+        tag = "${{ inputs.ref_name }}"
+
+        def check_version():
+            file_name = "VERSION"
+            if os.path.isfile(file_name):
+                with open(file_name, 'r') as f:
+                    version = f.read().strip()
+                    return version
+            else:
+                print(f"::warning::{file_name} file not found! Using {file_name} is the preferred method.")
+                return
+
+        def check_cmakelists():
+            file_name = "CMakeLists.txt"
+            if os.path.isfile(file_name):
+                with open(file_name, 'r') as f:
+                    content = f.read()
+                    pattern = r"project\([\s\w]+VERSION\s+((?:\d+)(?:.\d+){0,3})"
+
+                    hit = re.search(pattern, content)
+                    version = hit.group(1)
+                    return version
+            else:
+                print(f"::warning::{file_name} file not found!")
+                return
+
+        version = check_version() or check_cmakelists()
+
+        if not version:
+            print("::error::Version not found!")
+            sys.exit(1)
+
+        if version != tag:
+            print(f"::error::Git tag ({tag}) and project version ({version}) do not match!")
+            sys.exit(1)
+
+        print("OK: Git tag and project versions match.")
+
+    - name: Build package
+      id: build
+      uses: ecmwf/build-package@v2
+      with:
+        cmake_options: ${{ steps.cmake-opts.outputs.cmake_options }}
+        cpack_generator: ${{ steps.config.outputs.cpack_generator }}
+        force_build: true
+        recreate_cache: ${{ inputs.recreate_cache }}
+        save_cache: ${{ inputs.save_cache }}
+        cache_suffix: ${{ inputs.cache_suffix }}
+        self_coverage: false
+        compiler: gnu
+        compiler_cc: ${{ inputs.compiler_cc }}
+        compiler_cxx: ${{ inputs.compiler_cxx }}
+        compiler_fc: ${{ inputs.compiler_fc }}
+        os: ${{ inputs.os }}
+        self_test: ${{ inputs.self_test }}
+        self_build: ${{ inputs.self_build }}
+        cmake: ${{ inputs.cmake }}
+        ecbundle: ${{ inputs.ecbundle }}
+        dependencies: ${{ inputs.dependencies }}
+        dependency_branch: ${{ inputs.dependency_branch || github.ref }}
+        dependency_cmake_options: ${{ inputs.dependency_cmake_options }}
+        ctest_options: ${{ inputs.ctest_options }}
+        toolchain_file: ${{ inputs.toolchain_file }}
+        parallelism_factor: ${{ inputs.parallelism_factor }}
+        github_token: ${{ inputs.gh_pat || github.token }}
+
+    - name: Verify package
+      shell: bash
+      run: |
+        if [ -z "${{ steps.build.outputs.package_path }}" ] || [ ! -f "${{ steps.build.outputs.package_path }}" ]; then
+          echo "::error::Built package not found!"
+          exit 1
+        fi
+        echo "Package built successfully: ${{ steps.build.outputs.package_path }}"
+
+    - name: Determine Docker image for install test
+      id: docker-image
+      if: ${{ inputs.install_test == 'true' }}
+      shell: python3 {0}
+      run: |
+        import os
+
+        os_id = '${{ inputs.os }}'
+
+        # Map OS names that differ from their Docker Hub image name.
+        image_name_map = {
+            'rocky': 'rockylinux/rockylinux',
+        }
+
+        # Parse "<name>-<version>" from the os input.
+        name, _, version = os_id.partition('-')
+        image_name = image_name_map.get(name, name)
+        is_library = '/' not in image_name
+        docker_ref = f"{image_name}:{version}" if version else image_name
+
+        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if is_library else ''}{docker_ref}"
+
+        if docker_image:
+            print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
+        else:
+            print(f"::warning::No Docker image mapping for OS '{os_id}', skipping install test")
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"docker_image={docker_image}\n")
+
+    - name: Test package installation in Docker
+      if: ${{ inputs.install_test == 'true' && steps.docker-image.outputs.docker_image != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        package_path="${{ steps.build.outputs.package_path }}"
+        package_name="$(basename "$package_path")"
+        docker_image="${{ steps.docker-image.outputs.docker_image }}"
+        cpack_generator="${{ steps.config.outputs.cpack_generator }}"
+        os_id="${{ inputs.os }}"
+        install_test_command="${{ inputs.install_test_command }}"
+
+        echo "Testing package installation in Docker container"
+        echo "  Image: $docker_image"
+        echo "  Package: $package_name"
+        if [ -n "$install_test_command" ]; then
+          echo "  Post-install command: $install_test_command"
+        fi
+
+        if [ "$cpack_generator" == "DEB" ]; then
+          install_cmd="apt-get update && apt-get install -y /tmp/$package_name"
+        elif [ "$cpack_generator" == "RPM" ]; then
+          case "$os_id" in
+            rocky-*)
+              install_cmd="dnf -y install epel-release && dnf install -y /tmp/$package_name"
+              ;;
+            *)
+              install_cmd="dnf install -y /tmp/$package_name"
+              ;;
+          esac
+        else
+          echo "::error::Unsupported cpack_generator for install test: $cpack_generator"
+          exit 1
+        fi
+
+        if [ -n "$install_test_command" ]; then
+          install_cmd="$install_cmd && $install_test_command"
+        fi
+
+        docker run --rm -i "$docker_image" sh -xc "cat > /tmp/$package_name && $install_cmd" < "$package_path"
+
+        echo "Package installation test passed"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.run_id }}-${{ inputs.name }}
+        path: ${{ steps.build.outputs.package_path }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Upload to Nexus
+      if: ${{ inputs.dry_run != 'true' }}
+      shell: bash
+      run: |
+        token="${{ inputs.nexus_token }}"
+        url="${{ inputs.nexus_url }}"
+
+        if [ -z "$token" ] || [ -z "$url" ]; then
+          echo "::warning::No Nexus token or URL provided, skipping upload"
+          exit 0
+        fi
+
+        package_path="${{ steps.build.outputs.package_path }}"
+
+        if [ "${{ steps.config.outputs.upload_method }}" == "multipart" ]; then
+          response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${package_path}" "$url")
+        elif [ "${{ steps.config.outputs.upload_method }}" == "put" ]; then
+          file_name=$(basename "$package_path")
+          response=$(curl -w "%{http_code}" --user "$token" --upload-file "${package_path}" "${url}/${file_name}")
+        fi
+
+        status=$(echo "$response" | tail -c 4)
+        if [ "$status" -eq 201 ] || [ "$status" -eq 200 ]; then
+          echo "Successfully uploaded!"
+        else
+          echo "$status: Upload failed"
+          exit 1
+        fi

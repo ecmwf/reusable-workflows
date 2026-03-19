@@ -113,7 +113,7 @@ def main():
 
     # Add install lib dir if specified
     if install_lib_dir:
-        cmake_options.insert(0, f"INSTALL_LIB_DIR={install_lib_dir}")
+        cmake_options.insert(0, f"-DINSTALL_LIB_DIR={install_lib_dir}")
 
     # Parse dependency cmake options (line-separated repo=opts pairs)
     dep_cmake_map = {}
@@ -331,7 +331,7 @@ def main():
         stage.setdefault("modules", [])
         stage_cmake = stage.get("cmake_options", {})
         if isinstance(stage_cmake, dict):
-            stage["cmake_options"] = [f"{k}={cmake_value(v)}" for k, v in stage_cmake.items()]
+            stage["cmake_options"] = [f"{'' if k.startswith('-') else '-D'}{k}={cmake_value(v)}" for k, v in stage_cmake.items()]
         else:
             stage["cmake_options"] = []
         stage.setdefault("build_command", "")
