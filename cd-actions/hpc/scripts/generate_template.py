@@ -369,6 +369,7 @@ def main():
         f.write(sbatch)
         f.write("\nSBATCH_EOF\n")
 
+    print(f"Site: {site}")
     print("Generated template:")
     print(rendered[:2000])
     if len(rendered) > 2000:
