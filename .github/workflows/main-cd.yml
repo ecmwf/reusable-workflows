@@ -81,7 +81,7 @@ jobs:
 
       - name: Load and generate matrix
         id: load-config
-        uses: ecmwf/reusable-workflows/cd-actions/load-config@v2
+        uses: ecmwf/reusable-workflows/cd-actions/load-config@cd-hpc-default-site
         with:
           config_file: ${{ inputs.config_file }}
 
@@ -140,7 +140,7 @@ jobs:
 
       - name: Build with HPC
         if: ${{ matrix.type == 'hpc' }}
-        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@cd-hpc-default-site
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
