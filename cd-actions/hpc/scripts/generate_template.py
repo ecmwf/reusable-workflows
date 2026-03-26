@@ -70,7 +70,7 @@ def main():
     ntasks = os.environ.get("INPUT_NTASKS", "").strip() or str(defaults["ntasks"])
     gpus = os.environ.get("INPUT_GPUS", "").strip()
     queue = os.environ.get("INPUT_QUEUE", "").strip() or defaults["queue"]
-    site = os.environ.get("INPUT_SITE", "hpc-batch")
+    site = os.environ.get("INPUT_SITE", "aa-batch")
     sync_clusters = sync_clusters_map.get(site, sync_clusters_map.get("aa-batch", []))
     do_sync = os.environ.get("STEP_CONFIG_DO_SYNC", "false") == "true"
     if not sync_clusters:

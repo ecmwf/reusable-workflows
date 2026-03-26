@@ -144,7 +144,7 @@ for build in config.get("builds", []):
             matrix_item["clean_before_install"] = bool_to_str(build_config.get("clean_before_install", False), "clean_before_install")
             matrix_item["dry_run_install"] = bool_to_str(build_config.get("dry_run_install", False), "dry_run_install")
             matrix_item["dry_run_install_prefix"] = build_config.get("dry_run_install_prefix", "")
-            matrix_item["site"] = build_config.get("site", "hpc-batch")
+            matrix_item["site"] = build_config.get("site", "aa-batch")
             matrix_item["sync_module"] = bool_to_str(build_config.get("sync_module", True), "sync_module")
             matrix_item["use_ninja"] = bool_to_str(build_config.get("use_ninja", True), "use_ninja")
             matrix_item["force_build"] = bool_to_str(build_config.get("force_build", False), "force_build")
