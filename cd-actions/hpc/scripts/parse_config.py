@@ -12,8 +12,12 @@ import yaml
 
 
 def main():
-    # Load platform map from config file
+    # Load shared defaults
     action_path = Path(os.environ["GITHUB_ACTION_PATH"])
+    with open(action_path.parent / "defaults.yml") as f:
+        shared_defaults = yaml.safe_load(f)
+
+    # Load platform map from config file
     config_dir = action_path / "config"
     with open(config_dir / "platforms.yml") as f:
         platform_map = yaml.safe_load(f)
@@ -37,7 +41,7 @@ def main():
     dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
     dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
     sync_module_input = os.environ.get("INPUT_SYNC_MODULE", "true") == "true"
-    site = os.environ.get("INPUT_SITE", "hpc-batch")
+    site = os.environ.get("INPUT_SITE", shared_defaults["hpc"]["site"])
     do_sync = not dry_run and sync_module_input and site != "ag-batch"
 
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()

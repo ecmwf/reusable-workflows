@@ -176,7 +176,7 @@ inputs:
   site:
     description: 'HPC site name'
     required: false
-    default: 'hpc-batch'
+    default: 'aa-batch'
   workdir:
     description: 'Work directory on HPC'
     required: false

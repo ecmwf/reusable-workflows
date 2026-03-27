@@ -23,12 +23,15 @@ def cache_key(name, ref, compiler, cmake_opts):
 
 
 def main():
-    # Load HPC defaults from config
+    # Load shared defaults and HPC config
     action_dir = Path(os.environ["GITHUB_ACTION_PATH"])
+    with open(action_dir.parent / "defaults.yml") as f:
+        shared_defaults = yaml.safe_load(f)
+    defaults = shared_defaults["hpc"]
+
     config_dir = action_dir / "config"
     with open(config_dir / "hpc.yml") as f:
         hpc_config = yaml.safe_load(f)
-    defaults = hpc_config["defaults"]
     sync_clusters_map = hpc_config["sync_clusters"]
 
     # Load Jinja templates
@@ -70,7 +73,7 @@ def main():
     ntasks = os.environ.get("INPUT_NTASKS", "").strip() or str(defaults["ntasks"])
     gpus = os.environ.get("INPUT_GPUS", "").strip()
     queue = os.environ.get("INPUT_QUEUE", "").strip() or defaults["queue"]
-    site = os.environ.get("INPUT_SITE", "hpc-batch")
+    site = os.environ.get("INPUT_SITE", defaults["site"])
     sync_clusters = sync_clusters_map.get(site, sync_clusters_map.get("aa-batch", []))
     do_sync = os.environ.get("STEP_CONFIG_DO_SYNC", "false") == "true"
     if not sync_clusters:
@@ -369,6 +372,7 @@ def main():
         f.write(sbatch)
         f.write("\nSBATCH_EOF\n")
 
+    print(f"Site: {site}")
     print("Generated template:")
     print(rendered[:2000])
     if len(rendered) > 2000:
