@@ -5,9 +5,3 @@ sync_clusters:
   ad-batch: [aa, ab, ac]
   ag-batch: []
   lumi: []
-
-defaults:
-  parallel: 64
-  ntasks: 1
-  queue: nf
-  python_version: "3.12"
