@@ -41,6 +41,8 @@ def main():
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    # ecbundle-build adds its own -D prefix, so we need to strip ours
+    jinja_env.filters["strip_d_prefix"] = lambda s: s[2:] if s.startswith("-D") else s
 
     # Check if staged build (parse JSON to check for actual stages)
     stages_input = os.environ.get("INPUT_STAGES", "").strip()
