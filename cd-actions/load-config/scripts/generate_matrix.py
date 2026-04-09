@@ -55,11 +55,19 @@ def bool_to_str(source, source_name):
 
 def dict_to_str_line_separated(source, source_name):
     if isinstance(source, dict):
-        def format_option_with_default_prefix(k, v):
+        return "\n".join([f"{k}={v}" if v != '' else k for k, v in source.items()])
+    elif isinstance(source, str):
+        return source
+    else:
+        raise ValueError(f"{source_name} must be a dict, got {type(source)}")
+
+def dict_to_cmake_args(source, source_name):
+    if isinstance(source, dict):
+        def format_cmake_option(k, v):
             if not k.startswith('-'):
                 k = f"-D{k}"
             return f"{k}={v}" if v != '' else k
-        return "\n".join([format_option_with_default_prefix(k, v) for k, v in source.items()])
+        return "\n".join([format_cmake_option(k, v) for k, v in source.items()])
     elif isinstance(source, str):
         return source
     else:
@@ -118,7 +126,7 @@ for build in config.get("builds", []):
             matrix_item["prefix_compiler_specific"] = bool_to_str(build_config.get("prefix_compiler_specific", d.get("prefix_compiler_specific", False)), "prefix_compiler_specific")
 
             # Build Configuration
-            matrix_item["cmake_options"] = dict_to_str_line_separated(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
             matrix_item["self_test"] = bool_to_str(build_config.get("self_test", d.get("self_test", True)), "self_test")
             matrix_item["env_vars"] = dict_to_str_line_separated(build_config.get("env_vars", {}), "env_vars")
@@ -131,7 +139,7 @@ for build in config.get("builds", []):
                     dep_cmake_processed[repo] = ",".join(opts)
                 else:
                     dep_cmake_processed[repo] = opts
-            matrix_item["dependency_cmake_options"] = dict_to_str_line_separated(dep_cmake_processed, "dependency_cmake_options")
+            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(dep_cmake_processed, "dependency_cmake_options")
             matrix_item["python_dependencies"] = list_to_str_line_separated(build_config.get("python_dependencies", []), "python_dependencies")
             matrix_item["python_version"] = build_config.get("python_version", "")
             matrix_item["python_requirements"] = build_config.get("python_requirements", "")
@@ -163,7 +171,7 @@ for build in config.get("builds", []):
 
         elif build_type == "tarball":
             matrix_item["ecbuild_version"] = build_config.get("ecbuild_version", "")
-            matrix_item["cmake_options"] = dict_to_str_line_separated(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["confluence_space"] = build_config.get("confluence_space", "")
             matrix_item["confluence_page_title"] = build_config.get("confluence_page_title", d.get("confluence_page_title", "Releases"))
 
@@ -204,9 +212,9 @@ for build in config.get("builds", []):
             matrix_item["rpm_group"] = build_config.get("rpm_group", "")
             matrix_item["dependencies"] = list_to_str_line_separated(build_config.get("dependencies", []), "dependencies")
             matrix_item["dependency_branch"] = build_config.get("dependency_branch", "")
-            matrix_item["cmake_options"] = dict_to_str_line_separated(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
-            matrix_item["dependency_cmake_options"] = dict_to_str_line_separated(build_config.get("dependency_cmake_options", {}), "dependency_cmake_options")
+            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(build_config.get("dependency_cmake_options", {}), "dependency_cmake_options")
             matrix_item["cmake"] = bool_to_str(build_config.get("cmake", d.get("cmake", False)), "cmake")
             matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", d.get("ecbundle", False)), "ecbundle")
             matrix_item["self_build"] = bool_to_str(build_config.get("self_build", d.get("self_build", True)), "self_build")
