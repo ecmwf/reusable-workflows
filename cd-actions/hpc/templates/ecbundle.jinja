@@ -45,7 +45,7 @@ ecbundle-create --no-colour --verbose --shallow --update
 {{ start_group("ecbundle-build") }}
 cd {{ ci_options.workdir }}/{{ package.name }}
 ecbundle-build \
-    --cmake="{{ package.cmake_options|join(' ') }}" \
+    --cmake="{{ package.cmake_options|map('strip_d_prefix')|join(' ') }}" \
     -j{{ ci_options.parallel }} \
     --no-colour \
     {% if not ci_options.skip_install %}--install{% endif %} \

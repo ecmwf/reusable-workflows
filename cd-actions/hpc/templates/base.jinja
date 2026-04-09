@@ -28,7 +28,7 @@ echo "::endgroup::"
 {# Print ecbundle cmake options #}
 {% macro print_ecbundle_options(options) -%}
 {% if (options is defined) and options %}
---cmake="{{ options|join(" ") }}"
+--cmake="{{ options|map('strip_d_prefix')|join(" ") }}"
 {%- endif %}
 {%- endmacro %}
 
