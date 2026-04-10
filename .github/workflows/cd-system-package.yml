@@ -292,7 +292,7 @@ jobs:
       - name: Build System Package${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
         uses: ecmwf/reusable-workflows/cd-actions/system-package@v2
         with:
-          name: ${{ inputs.name }}
+          name: ${{ format('{0}-{1}', inputs.name, inputs.os) }}
           ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
           dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
           skip_version_check: ${{ inputs.skip_version_check }}
