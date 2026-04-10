@@ -1,0 +1,75 @@
+name: CD Python PyPI
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: 'Build name for artifacts'
+        required: false
+        type: string
+        default: 'python-pypi'
+      ref_name:
+        description: 'Git ref name (defaults to PR head ref or github.ref_name)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Force dry run mode - build only, no uploads'
+        required: false
+        type: boolean
+        default: false
+      working_directory:
+        description: 'Working directory for build (for monorepos)'
+        required: false
+        type: string
+        default: './'
+      buildargs:
+        description: 'Additional arguments for uv build command'
+        required: false
+        type: string
+        default: ''
+      env_vars:
+        description: 'Environment variables as line-separated key=value pairs'
+        required: false
+        type: string
+        default: ''
+      pypi_token:
+        description: 'PyPI API token (defaults to PYPI_API_TOKEN secret)'
+        required: false
+        type: string
+        default: ''
+      pypi_test_token:
+        description: 'TestPyPI API token (defaults to PYPI_TEST_API_TOKEN secret)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    name: Build Python PyPI
+    runs-on: [self-hosted, platform-builder]
+    steps:
+      - name: Detect release type
+        id: detect-release-type
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        with:
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ inputs.dry_run }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build with Python PyPI
+        uses: ecmwf/reusable-workflows/cd-actions/python-pypi@v2
+        with:
+          name: ${{ inputs.name }}
+          ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
+          dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
+          pypi_token: ${{ inputs.pypi_token || secrets.PYPI_API_TOKEN }}
+          pypi_test_token: ${{ inputs.pypi_test_token || secrets.PYPI_TEST_API_TOKEN }}
+          working_directory: ${{ inputs.working_directory }}
+          buildargs: ${{ inputs.buildargs }}
+          env_vars: ${{ inputs.env_vars }}
+          testpypi: ${{ steps.detect-release-type.outputs.is_prerelease }}

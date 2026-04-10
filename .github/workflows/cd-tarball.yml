@@ -1,0 +1,73 @@
+name: CD Tarball
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: 'Build name for artifacts'
+        required: false
+        type: string
+        default: 'tarball'
+      ref_name:
+        description: 'Git ref name (defaults to PR head ref or github.ref_name)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Force dry run mode - build only, no uploads'
+        required: false
+        type: boolean
+        default: false
+      ecbuild_version:
+        description: 'ecbuild version/tag to checkout (defaults to latest release)'
+        required: false
+        type: string
+        default: ''
+      cmake_options:
+        description: 'CMake options as line-separated values'
+        required: false
+        type: string
+        default: ''
+      confluence_space:
+        description: 'Confluence space key for tarball upload'
+        required: false
+        type: string
+        default: ''
+      confluence_page_title:
+        description: 'Confluence page title for tarball upload'
+        required: false
+        type: string
+        default: 'Releases'
+      confluence_token:
+        description: 'Confluence API token (defaults to CONFLUENCE_TARBALL_UPLOAD_TOKEN secret)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    name: Build Tarball
+    runs-on: [self-hosted, platform-builder]
+    steps:
+      - name: Detect release type
+        id: detect-release-type
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        with:
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ inputs.dry_run }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build Tarball
+        uses: ecmwf/reusable-workflows/cd-actions/tarball@v2
+        with:
+          name: ${{ inputs.name }}
+          ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
+          ecbuild_version: ${{ inputs.ecbuild_version }}
+          cmake_options: ${{ inputs.cmake_options }}
+          confluence_token: ${{ inputs.confluence_token || (steps.detect-release-type.outputs.is_prerelease == 'false' && steps.detect-release-type.outputs.is_dry_run == 'false' && secrets.CONFLUENCE_TARBALL_UPLOAD_TOKEN) || '' }}
+          confluence_space: ${{ inputs.confluence_space }}
+          confluence_page_title: ${{ inputs.confluence_page_title }}

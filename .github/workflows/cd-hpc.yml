@@ -1,0 +1,290 @@
+name: CD HPC
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: 'Build name for identification'
+        required: false
+        type: string
+        default: 'hpc'
+      ref_name:
+        description: 'Git ref name (defaults to PR head ref or github.ref_name)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Force dry run mode - build only, no module sync'
+        required: false
+        type: boolean
+        default: false
+      platform:
+        description: 'Compiler platform (e.g., gnu-14.2.0, intel-2025.0.1)'
+        required: true
+        type: string
+      install_prefix:
+        description: 'Custom install prefix (defaults to /usr/local/apps/<module>/<ref>)'
+        required: false
+        type: string
+        default: ''
+      prefix_compiler_specific:
+        description: 'Suffix <compiler>/<version> to install prefix'
+        required: false
+        type: string
+        default: 'false'
+      cmake_options:
+        description: 'CMake options as line-separated values'
+        required: false
+        type: string
+        default: ''
+      ctest_options:
+        description: 'CTest options as line-separated values'
+        required: false
+        type: string
+        default: ''
+      self_test:
+        description: 'Run tests after building'
+        required: false
+        type: string
+        default: 'true'
+      env_vars:
+        description: 'Environment variables as line-separated key=value pairs'
+        required: false
+        type: string
+        default: ''
+      parallel:
+        description: 'Number of parallel build jobs'
+        required: false
+        type: string
+        default: ''
+      use_ninja:
+        description: 'Use ninja build system instead of make'
+        required: false
+        type: string
+        default: 'true'
+      force_build:
+        description: 'Force rebuild, ignoring cache'
+        required: false
+        type: string
+        default: 'false'
+      ecbundle:
+        description: 'Use ecbundle for bundle-based projects'
+        required: false
+        type: string
+        default: 'false'
+      bundle_yml:
+        description: 'Path to bundle.yml for declarative bundle builds'
+        required: false
+        type: string
+        default: ''
+      dependencies:
+        description: 'Build dependencies as line-separated values (e.g., "owner/repo@ref")'
+        required: false
+        type: string
+        default: ''
+      dependency_cmake_options:
+        description: 'CMake options for dependencies as line-separated key=value pairs'
+        required: false
+        type: string
+        default: ''
+      python_dependencies:
+        description: 'Python dependencies to build from source as line-separated values'
+        required: false
+        type: string
+        default: ''
+      python_version:
+        description: 'Python version to use for build'
+        required: false
+        type: string
+        default: ''
+      python_requirements:
+        description: 'Path to pip requirements file'
+        required: false
+        type: string
+        default: ''
+      python_toml_opt_dep_sections:
+        description: 'Optional dependency sections from pyproject.toml as line-separated values'
+        required: false
+        type: string
+        default: ''
+      conda_deps:
+        description: 'Conda packages to install as line-separated values'
+        required: false
+        type: string
+        default: ''
+      stages:
+        description: 'JSON array of build stages for multi-config builds'
+        required: false
+        type: string
+        default: ''
+      modules:
+        description: 'Modules to load as line-separated values'
+        required: false
+        type: string
+        default: ''
+      install_command:
+        description: 'Custom install command (use $INSTALL_PREFIX for install path)'
+        required: false
+        type: string
+        default: ''
+      lock_permissions:
+        description: 'Lock install directory permissions after build'
+        required: false
+        type: string
+        default: 'true'
+      sync_module:
+        description: 'Sync module to other clusters after build'
+        required: false
+        type: string
+        default: 'true'
+      module_name:
+        description: 'Module name for sync (if different from repo name)'
+        required: false
+        type: string
+        default: ''
+      ntasks:
+        description: 'Number of tasks for the job'
+        required: false
+        type: string
+        default: ''
+      gpus:
+        description: 'Number of GPUs required'
+        required: false
+        type: string
+        default: ''
+      queue:
+        description: 'HPC queue (nf, ng, deploy)'
+        required: false
+        type: string
+        default: ''
+      site:
+        description: 'HPC site name'
+        required: false
+        type: string
+        default: 'aa-batch'
+      workdir:
+        description: 'Work directory on HPC'
+        required: false
+        type: string
+        default: ''
+      output_dir:
+        description: 'Output directory on HPC'
+        required: false
+        type: string
+        default: ''
+      post_script:
+        description: 'Bash script to run after build (path relative to repo root)'
+        required: false
+        type: string
+        default: ''
+      clean_before_install:
+        description: 'Remove existing install directory before install'
+        required: false
+        type: string
+        default: 'false'
+      install_lib_dir:
+        description: 'CMake INSTALL_LIB_DIR value (lib or lib64)'
+        required: false
+        type: string
+        default: 'lib'
+      mkdir:
+        description: 'Directories to create in workdir before build as line-separated values'
+        required: false
+        type: string
+        default: ''
+      pytest_cmd:
+        description: 'Custom pytest command for Python package testing'
+        required: false
+        type: string
+        default: ''
+      dry_run_install:
+        description: 'Install module during dry runs'
+        required: false
+        type: string
+        default: 'false'
+      dry_run_install_prefix:
+        description: 'Custom install prefix for dry_run_install'
+        required: false
+        type: string
+        default: ''
+      github_user:
+        description: 'GitHub user for authentication (defaults to BUILD_PACKAGE_HPC_GITHUB_USER secret)'
+        required: false
+        type: string
+        default: ''
+      github_token:
+        description: 'GitHub PAT for repository access (defaults to GH_REPO_READ_TOKEN secret)'
+        required: false
+        type: string
+        default: ''
+      troika_user:
+        description: 'HPC submission user (defaults to HPC_CI_SSH_USER secret)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    name: Build HPC
+    runs-on: [self-hosted, linux, hpc]
+    steps:
+      - name: Detect release type
+        id: detect-release-type
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        with:
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ inputs.dry_run }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build with HPC
+        uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
+        with:
+          name: ${{ inputs.name }}
+          ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
+          sha: ${{ github.event.pull_request.head.sha || github.sha }}
+          dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
+          github_user: ${{ inputs.github_user || secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
+          github_token: ${{ inputs.github_token || secrets.GH_REPO_READ_TOKEN }}
+          troika_user: ${{ inputs.troika_user || secrets.HPC_CI_SSH_USER }}
+          platform: ${{ inputs.platform }}
+          install_prefix: ${{ inputs.install_prefix }}
+          prefix_compiler_specific: ${{ inputs.prefix_compiler_specific }}
+          cmake_options: ${{ inputs.cmake_options }}
+          ctest_options: ${{ inputs.ctest_options }}
+          self_test: ${{ inputs.self_test }}
+          env_vars: ${{ inputs.env_vars }}
+          parallel: ${{ inputs.parallel }}
+          use_ninja: ${{ inputs.use_ninja }}
+          force_build: ${{ inputs.force_build }}
+          ecbundle: ${{ inputs.ecbundle }}
+          bundle_yml: ${{ inputs.bundle_yml }}
+          dependencies: ${{ inputs.dependencies }}
+          dependency_cmake_options: ${{ inputs.dependency_cmake_options }}
+          python_dependencies: ${{ inputs.python_dependencies }}
+          python_version: ${{ inputs.python_version }}
+          python_requirements: ${{ inputs.python_requirements }}
+          python_toml_opt_dep_sections: ${{ inputs.python_toml_opt_dep_sections }}
+          conda_deps: ${{ inputs.conda_deps }}
+          stages: ${{ inputs.stages }}
+          modules: ${{ inputs.modules }}
+          install_command: ${{ inputs.install_command }}
+          lock_permissions: ${{ inputs.lock_permissions }}
+          sync_module: ${{ inputs.sync_module }}
+          module_name: ${{ inputs.module_name }}
+          ntasks: ${{ inputs.ntasks }}
+          gpus: ${{ inputs.gpus }}
+          queue: ${{ inputs.queue }}
+          site: ${{ inputs.site }}
+          workdir: ${{ inputs.workdir }}
+          output_dir: ${{ inputs.output_dir }}
+          post_script: ${{ inputs.post_script }}
+          clean_before_install: ${{ inputs.clean_before_install }}
+          install_lib_dir: ${{ inputs.install_lib_dir }}
+          mkdir: ${{ inputs.mkdir }}
+          pytest_cmd: ${{ inputs.pytest_cmd }}
+          dry_run_install: ${{ inputs.dry_run_install }}
+          dry_run_install_prefix: ${{ inputs.dry_run_install_prefix }}
