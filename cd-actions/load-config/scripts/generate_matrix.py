@@ -64,6 +64,8 @@ def dict_to_str_line_separated(source, source_name):
 def dict_to_cmake_args(source, source_name):
     if isinstance(source, dict):
         def format_cmake_option(k, v):
+            if isinstance(v, bool):
+                v = "ON" if v else "OFF"
             if not k.startswith('-'):
                 k = f"-D{k}"
             return f"{k}={v}" if v != '' else k
