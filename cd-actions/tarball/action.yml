@@ -26,6 +26,22 @@ inputs:
     description: 'Confluence space key (e.g., MAGP)'
     required: false
     default: ''
+  dependencies:
+    description: 'List of dependency repositories to build (one per line, format: owner/repo@ref)'
+    required: false
+    default: ''
+  dependency_branch:
+    description: 'Default branch/tag for dependency repositories'
+    required: false
+    default: ''
+  dependency_cmake_options:
+    description: 'CMake options for dependencies (line-separated, format: -Downer/repo=-DOPTION=VALUE,...)'
+    required: false
+    default: ''
+  gh_pat:
+    description: 'GitHub PAT for repo access'
+    required: false
+    default: ''
   confluence_page_title:
     description: 'Confluence page title'
     required: false
@@ -63,6 +79,77 @@ runs:
           https://github.com/ecmwf/ecbuild.git "${{ runner.temp }}/ecbuild"
         echo "${{ runner.temp }}/ecbuild/bin" >> $GITHUB_PATH
         echo "Added ecbuild to PATH"
+
+    - name: Build dependencies
+      if: ${{ inputs.dependencies != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        install_prefix="${{ runner.temp }}/install"
+        mkdir -p "$install_prefix"
+
+        # Mask PAT in logs
+        if [ -n "${{ inputs.gh_pat }}" ]; then
+          echo "::add-mask::${{ inputs.gh_pat }}"
+        fi
+
+        # Parse dependency cmake options into associative array
+        declare -A dep_cmake_opts
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          # Strip -D prefix added by matrix generator
+          line="${line#-D}"
+          repo="${line%%=*}"
+          opts="${line#*=}"
+          # Convert commas to spaces
+          dep_cmake_opts["$repo"]="${opts//,/ }"
+        done <<< "${{ inputs.dependency_cmake_options }}"
+
+        while IFS= read -r dep; do
+          [ -z "$dep" ] && continue
+
+          # Parse owner/repo@ref format
+          if [[ "$dep" == *"@"* ]]; then
+            repo="${dep%%@*}"
+            ref="${dep#*@}"
+          else
+            repo="$dep"
+            ref="${{ inputs.dependency_branch }}"
+          fi
+
+          name=$(basename "$repo")
+          echo "::group::Building dependency: $name ($repo${ref:+@$ref})"
+
+          # Clone
+          clone_url="https://github.com/${repo}.git"
+          if [ -n "${{ inputs.gh_pat }}" ]; then
+            clone_url="https://x-access-token:${{ inputs.gh_pat }}@github.com/${repo}.git"
+          fi
+
+          dep_src="${{ runner.temp }}/deps-src/$name"
+          git clone --depth 1 --quiet ${ref:+--branch "$ref"} "$clone_url" "$dep_src"
+
+          # Build and install
+          dep_build="$dep_src/build"
+          mkdir -p "$dep_build"
+          cd "$dep_build"
+
+          cmake_opts="${dep_cmake_opts[$repo]:-}"
+          ecbuild \
+            -DCMAKE_INSTALL_PREFIX="$install_prefix" \
+            -DCMAKE_PREFIX_PATH="$install_prefix" \
+            $cmake_opts \
+            ..
+
+          cmake --build . -j"$(nproc)"
+          cmake --install .
+
+          echo "::endgroup::"
+        done <<< "${{ inputs.dependencies }}"
+
+        # Export prefix for subsequent steps
+        echo "CMAKE_PREFIX_PATH=$install_prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
 
     - name: Create build directory
       shell: bash

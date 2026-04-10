@@ -174,6 +174,16 @@ for build in config.get("builds", []):
             matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["confluence_space"] = build_config.get("confluence_space", "")
             matrix_item["confluence_page_title"] = build_config.get("confluence_page_title", d.get("confluence_page_title", "Releases"))
+            matrix_item["dependencies"] = list_to_str_line_separated(build_config.get("dependencies", []), "dependencies")
+            matrix_item["dependency_branch"] = build_config.get("dependency_branch", "")
+            dep_cmake_raw = build_config.get("dependency_cmake_options", {})
+            dep_cmake_processed = {}
+            for repo, opts in dep_cmake_raw.items():
+                if isinstance(opts, list):
+                    dep_cmake_processed[repo] = ",".join(opts)
+                else:
+                    dep_cmake_processed[repo] = opts
+            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(dep_cmake_processed, "dependency_cmake_options")
 
         elif build_type == "system-package":
             platform_name = build_config.get("os", "")
