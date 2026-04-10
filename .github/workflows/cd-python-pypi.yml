@@ -54,6 +54,8 @@ jobs:
         with:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ inputs.dry_run }}
+          deployment_regex: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
+          prerelease_regex: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
 
       - name: Checkout repository
         uses: actions/checkout@v5

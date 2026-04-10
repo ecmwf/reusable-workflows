@@ -10,6 +10,12 @@ inputs:
     description: 'Force dry run mode'
     required: false
     default: 'false'
+  deployment_regex:
+    description: 'Regex pattern for deployment tags'
+    required: true
+  prerelease_regex:
+    description: 'Regex pattern for prerelease tags'
+    required: true
 
 outputs:
   is_dry_run:
@@ -31,8 +37,8 @@ runs:
       env:
         INPUT_REF_NAME: ${{ inputs.ref_name || github.event.pull_request.head.ref || github.ref_name }}
         INPUT_DRY_RUN: ${{ inputs.dry_run }}
-        DEPLOYMENT_REGEX: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
-        PRERELEASE_REGEX: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
+        DEPLOYMENT_REGEX: ${{ inputs.deployment_regex }}
+        PRERELEASE_REGEX: ${{ inputs.prerelease_regex }}
       run: |
         import re
         import os
