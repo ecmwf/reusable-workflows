@@ -4,16 +4,16 @@ on:
   workflow_call:
     inputs:
       config_file:
-        description: 'Path to build configuration file'
+        description: "Path to build configuration file"
         required: false
         type: string
-        default: '.github/cd-config.yml'
+        default: ".github/cd-config.yml"
       ref_name:
-        description: 'Git ref name for artifacts and release'
+        description: "Git ref name for artifacts and release"
         required: true
         type: string
       dry_run:
-        description: 'Dry run mode - build only, no uploads or releases'
+        description: "Dry run mode - build only, no uploads or releases"
         required: false
         type: boolean
         default: false
@@ -81,7 +81,7 @@ jobs:
 
       - name: Load and generate matrix
         id: load-config
-        uses: ecmwf/reusable-workflows/cd-actions/load-config@v2
+        uses: ecmwf/reusable-workflows/cd-actions/load-config@cd-tarball-deps
         with:
           config_file: ${{ inputs.config_file }}
 
@@ -95,9 +95,9 @@ jobs:
       credentials:
         username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
         password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
-      options: '--user root'
+      options: "--user root"
       volumes:
-        - '/var/run/docker.sock:/var/run/docker.sock'
+        - "/var/run/docker.sock:/var/run/docker.sock"
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
@@ -107,7 +107,7 @@ jobs:
         with:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          
+
       - name: Build with Conda
         if: ${{ matrix.type == 'conda' }}
         uses: ecmwf/reusable-workflows/cd-actions/conda@v2
@@ -115,7 +115,7 @@ jobs:
           name: ${{ matrix.name }}
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
-          test_nexus: 'true'
+          test_nexus: "true"
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN) || '' }}
           nexus_test_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
@@ -190,7 +190,7 @@ jobs:
 
       - name: Build Tarball
         if: ${{ matrix.type == 'tarball' }}
-        uses: ecmwf/reusable-workflows/cd-actions/tarball@v2
+        uses: ecmwf/reusable-workflows/cd-actions/tarball@cd-tarball-deps
         with:
           name: ${{ matrix.name }}
           ref_name: ${{ github.event.pull_request.head.ref || inputs.ref_name }}
