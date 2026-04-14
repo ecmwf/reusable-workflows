@@ -16,8 +16,7 @@ inputs:
 runs:
   using: composite
   steps:
-    # v7 uses Node20, which cannot run out of the box on CentOS7
-    - uses: actions/github-script@v6
+    - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       with:
         github-token: ${{ inputs.token }}
         script: |
@@ -49,9 +48,9 @@ runs:
           for (const dep of deps){
             for (const job of jobs){
               if (
-                job.name.toLowerCase().includes(`/ ${dep} (`) && 
-                job.name.toLowerCase().includes(platformName) && 
-                job.status == "completed" && 
+                job.name.toLowerCase().includes(`/ ${dep} (`) &&
+                job.name.toLowerCase().includes(platformName) &&
+                job.status == "completed" &&
                 job.conclusion == "failure"
               ){
                 core.setFailed(`==> Build of upstream package ${dep} failed on platform ${platformName}, exiting.`);

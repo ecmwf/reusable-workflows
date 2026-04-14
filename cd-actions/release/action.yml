@@ -50,7 +50,7 @@ runs:
         print(f"Make latest: {make_latest}")
         
     - name: Download all artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         pattern: ${{ github.run_id }}-*
         merge-multiple: true
@@ -92,7 +92,7 @@ runs:
 
     - name: Create GitHub release with artifacts
       if: ${{ steps.files.outputs.has_files == 'true' }}
-      uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
+      uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
       with:
         tag_name: ${{ inputs.ref_name }}
         name: ${{ steps.config.outputs.release_name }}

@@ -14,7 +14,7 @@ runs:
       shell: bash
     - name: Restore cached Doxygen
       id: doxygen-cache
-      uses: actions/cache@v4
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         # Anything you install to this path will be reused on the next run
         path: ~/.local/doxygen
