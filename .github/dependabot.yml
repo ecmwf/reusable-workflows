@@ -1,14 +1,17 @@
 version: 2
 updates:
-
   # Maintain dependencies for NPM
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
 
   # Maintain dependencies for GH workflows
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
