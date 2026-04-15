@@ -1,0 +1,94 @@
+name: CD Conda
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: 'Build name for artifacts'
+        required: false
+        type: string
+        default: 'conda'
+      ref_name:
+        description: 'Git ref name (defaults to PR head ref or github.ref_name)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Force dry run mode - build only, no uploads'
+        required: false
+        type: boolean
+        default: false
+      test_nexus:
+        description: 'Use test Nexus repository'
+        required: false
+        type: string
+        default: 'true'
+      conda_dir:
+        description: 'Directory containing conda recipe (meta.yaml)'
+        required: false
+        type: string
+        default: './.cd/conda'
+      channels:
+        description: 'Conda channels as line-separated values'
+        required: false
+        type: string
+        default: 'conda-forge'
+      conda_build_args:
+        description: 'Additional arguments for conda mambabuild as line-separated values'
+        required: false
+        type: string
+        default: '--no-anaconda-upload'
+      skip_installation_test:
+        description: 'Skip testing package installation from Nexus'
+        required: false
+        type: string
+        default: 'false'
+      gh_pat:
+        description: 'GitHub PAT token (defaults to GH_REPO_READ_TOKEN secret)'
+        required: false
+        type: string
+        default: ''
+      nexus_token:
+        description: 'Nexus upload token as user:token (defaults to NEXUS_CONDA_UPLOAD secrets)'
+        required: false
+        type: string
+        default: ''
+      nexus_test_token:
+        description: 'Nexus test upload token as user:token (defaults to NEXUS_TEST_CONDA_UPLOAD secrets)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    name: Build Conda
+    runs-on: [self-hosted, platform-builder]
+    steps:
+      - name: Detect release type
+        id: detect-release-type
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        with:
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ inputs.dry_run }}
+          deployment_regex: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
+          prerelease_regex: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build with Conda${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
+        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        with:
+          name: ${{ inputs.name }}
+          ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
+          dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
+          test_nexus: ${{ inputs.test_nexus }}
+          gh_pat: ${{ inputs.gh_pat || secrets.GH_REPO_READ_TOKEN }}
+          nexus_token: ${{ inputs.nexus_token || (secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN)) || '' }}
+          nexus_test_token: ${{ inputs.nexus_test_token || (secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN)) || '' }}
+          conda_dir: ${{ inputs.conda_dir }}
+          channels: ${{ inputs.channels }}
+          conda_build_args: ${{ inputs.conda_build_args }}
+          skip_installation_test: ${{ inputs.skip_installation_test }}
