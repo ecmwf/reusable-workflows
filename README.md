@@ -646,6 +646,26 @@ npm install
 npm run lint
 ```
 
+## Action Pinning
+
+This repository uses [pinact] to pin GitHub Actions and reusable workflows to their commit SHA for security. Actions from the `ecmwf` organisation and files under `sync-files/` are excluded from pinning.
+
+### Running pinact
+
+To pin actions in workflow files and documentation:
+
+```
+pinact run
+```
+
+To update pinned actions to their latest versions (skipping versions released less than 7 days ago):
+
+```
+pinact run -u --min-age 7
+```
+
+For installation instructions, see the [pinact documentation][pinact-install].
+
 ## Licence
 
 This software is licensed under the terms of the Apache License Version 2.0 which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -655,5 +675,7 @@ In applying this licence, ECMWF does not waive the privileges and immunities gra
 [reusable GitHub workflows]: https://docs.github.com/en/actions/learn-github-actions/reusing-workflows
 [Samples]: https://github.com/ecmwf/reusable-workflows/tree/develop/samples
 [codecov service]: https://codecov.io
+[pinact]: https://github.com/suzuki-shunsuke/pinact
+[pinact-install]: https://github.com/suzuki-shunsuke/pinact/blob/main/INSTALL.md
 [inputs for the build-package]: https://github.com/ecmwf/build-package#inputs
 [inputs for the sync-repository]: https://github.com/ecmwf/sync-repository#inputs

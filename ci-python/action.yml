@@ -74,7 +74,7 @@ runs:
 
     - name: Checkout repository
       if: ${{ inputs.checkout == 'true' }}
-      uses: actions/checkout@v3
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         repository: ${{ steps.inputs.outputs.repo }}
         ref: ${{ steps.inputs.outputs.ref }}
@@ -224,13 +224,13 @@ runs:
 
     - name: Upload Extra Artifact
       if: ${{ always() && inputs.upload_extra_artifact != 'none' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: ${{ inputs.upload_extra_artifact }}-${{ matrix.os }}-${{ matrix.compiler }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ inputs.upload_extra_artifact }}/
 
     - name: Codecov Upload
       if: ${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
       with:
         token: ${{ inputs.codecov_token }}
