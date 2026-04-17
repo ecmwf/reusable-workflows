@@ -1,0 +1,171 @@
+name: Build and Push Image
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description:
+          The source repository name, in case it differs from the current one. Repository names should
+          follow the standard GitHub `owner/name` format.
+        required: false
+        default: ${{ github.repository }}
+        type: string
+      ref:
+        description: The source repository reference, in case it differs from the current one.
+        required: false
+        default: ${{ github.ref }}
+        type: string
+      registry:
+        description: Container registry hostname.
+        required: true
+        type: string
+      image_repository:
+        description: Image repository path relative to the registry, without the tag.
+        required: true
+        type: string
+      image_tag:
+        description: Image tag. Defaults to the checked out commit SHA when unset.
+        required: false
+        default: ''
+        type: string
+      deployment_environment:
+        description: Optional deployment environment name to expose as `DEPLOYMENT_ENVIRONMENT`.
+        required: false
+        default: ''
+        type: string
+      environment_files_directory:
+        description:
+          Optional directory containing environment files named `<environment_file_prefix>.common` and
+          `<environment_file_prefix>.<deployment_environment>`.
+        required: false
+        default: ''
+        type: string
+      environment_file_prefix:
+        description: Prefix for optional environment files.
+        required: false
+        default: 'actions.env'
+        type: string
+      context:
+        description: Docker build context.
+        required: false
+        default: '.'
+        type: string
+      dockerfile:
+        description: Path to the Dockerfile, relative to the repository root.
+        required: false
+        default: './Dockerfile'
+        type: string
+      platforms:
+        description: Target platforms for the Docker build.
+        required: false
+        default: 'linux/amd64'
+        type: string
+      push:
+        description: Whether to push the built image to the registry.
+        required: false
+        default: true
+        type: boolean
+      build_args:
+        description: Optional newline-separated Docker build arguments in `key=value` form.
+        required: false
+        default: ''
+        type: string
+    secrets:
+      registry_username:
+        description: Optional username for registry authentication.
+        required: false
+      registry_password:
+        description: Optional password or token for registry authentication.
+        required: false
+    outputs:
+      image:
+        description: Fully qualified image reference including tag.
+        value: ${{ jobs.build_and_push.outputs.image }}
+      image_tag:
+        description: Image tag used for the build.
+        value: ${{ jobs.build_and_push.outputs.image_tag }}
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.prepare.outputs.image }}
+      image_tag: ${{ steps.prepare.outputs.image_tag }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Prepare Image Metadata
+        id: prepare
+        shell: bash
+        env:
+          REGISTRY_USERNAME: ${{ secrets.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+        run: |
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            image_tag="${{ inputs.image_tag }}"
+          else
+            image_tag="${GITHUB_SHA}"
+          fi
+
+          image="${{ inputs.registry }}/${{ inputs.image_repository }}:${image_tag}"
+
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+
+          if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
+            echo "login=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "login=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -n "${{ inputs.deployment_environment }}" ]]; then
+            echo "DEPLOYMENT_ENVIRONMENT=${{ inputs.deployment_environment }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Load Environment Variables
+        if: ${{ inputs.environment_files_directory != '' }}
+        shell: bash
+        run: |
+          common_file="${{ inputs.environment_files_directory }}/${{ inputs.environment_file_prefix }}.common"
+
+          if [[ -f "$common_file" ]]; then
+            cat "$common_file" >> "$GITHUB_ENV"
+            echo "" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -z "${{ inputs.deployment_environment }}" ]]; then
+            exit 0
+          fi
+
+          environment_file="${{ inputs.environment_files_directory }}/${{ inputs.environment_file_prefix }}.${{ inputs.deployment_environment }}"
+          if [[ ! -f "$environment_file" ]]; then
+            echo "::error::Environment file not found: $environment_file"
+            exit 1
+          fi
+
+          cat "$environment_file" >> "$GITHUB_ENV"
+
+      - name: Log in to Registry
+        if: steps.prepare.outputs.login == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry_username }}
+          password: ${{ secrets.registry_password }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
+          build-args: ${{ inputs.build_args }}
+          tags: ${{ steps.prepare.outputs.image }}

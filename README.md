@@ -13,6 +13,7 @@ A collection of [reusable GitHub workflows] for ECMWF repositories.
 - [ci-python.yml](#ci-pythonyml): Continuous Integration and Continuous Deployment workflow for Python-based projects
 - [ci-node.yml](#ci-nodeyml): Continuous Integration workflow for NodeJS-based projects
 - [docs.yml](#docsyml): Workflow for testing Sphinx-based documentation
+- [build-and-push-image.yml](#build-and-push-imageyml): Build and optionally push a Docker image to a container registry
 - [qa-precommit-run.yml](#qa-precommit): Runs the pre-commit hooks on all files server-side as a QA drop-in.
 - [qa-pytest-pyproject.yml](#qa-pytest-pyproject): Runs pytest after a `pyproject.toml` install with a markdown report.
 - [publish-rust-crate.yml](#publish-rust-crateyml): Workflow for publishing Rust crates to crates.io
@@ -320,6 +321,52 @@ The source repository reference.
 
 Public URL of the Microsoft Teams incoming webhook. To get the value, make sure that channel in Teams has the appropriate connector set up. It will only be used if [notify_teams](#notify_teams-2) input is switched on.
 **Example:** `https://webhook.office.com/webhookb2/...`
+
+## build-and-push-image.yml
+
+### Build and Push Usage
+
+```yaml
+jobs:
+  build-image:
+    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v1
+    with:
+      registry: ghcr.io
+      image_repository: my-org/my-app
+      deployment_environment: prod
+      environment_files_directory: environments
+      build_args: |
+        environment=prod
+    secrets:
+      registry_username: ${{ secrets.REGISTRY_USERNAME }}
+      registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+```
+
+### Build and Push Inputs
+
+- **repository**: Source repository name. Default: `${{ github.repository }}`. Type: `string`.
+- **ref**: Source repository reference. Default: `${{ github.ref }}`. Type: `string`.
+- **registry**: Container registry hostname. Type: `string`.
+- **image_repository**: Image repository path relative to the registry, without the tag. Type: `string`.
+- **image_tag**: Image tag to publish. Defaults to the checked out commit SHA when unset. Default: `''`. Type: `string`.
+- **deployment_environment**: Optional deployment environment name, exposed as `DEPLOYMENT_ENVIRONMENT`. Default: `''`. Type: `string`.
+- **environment_files_directory**: Optional directory containing `<environment_file_prefix>.common` and `<environment_file_prefix>.<deployment_environment>`. Default: `''`. Type: `string`.
+- **environment_file_prefix**: Prefix used when loading optional environment files. Default: `'actions.env'`. Type: `string`.
+- **context**: Docker build context. Default: `'.'`. Type: `string`.
+- **dockerfile**: Path to the Dockerfile, relative to the repository root. Default: `'./Dockerfile'`. Type: `string`.
+- **platforms**: Target platforms for the Docker build. Default: `'linux/amd64'`. Type: `string`.
+- **push**: Whether to push the built image to the registry. Default: `true`. Type: `boolean`.
+- **build_args**: Optional newline-separated Docker build arguments in `key=value` form. Default: `''`. Type: `string`.
+
+### Build and Push Outputs
+
+- **image**: Fully qualified image reference including tag.
+- **image_tag**: Image tag used for the build.
+
+### Build and Push Secrets
+
+- **registry_username**: Optional username for registry authentication.
+- **registry_password**: Optional password or token for registry authentication.
 
 ## docs.yml
 
