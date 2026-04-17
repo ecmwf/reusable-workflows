@@ -11,12 +11,13 @@ parser.add_argument("--path", type=str)
 parser.add_argument("--remote-path", type=str, default=".")
 parser.add_argument("--space", type=str)
 parser.add_argument("--name", type=str)
+parser.add_argument("--recursive", type=lambda x: x.lower() != "false", default=True)
 
 args = parser.parse_args()
 
 error = False
 for k, v in vars(args).items():
-    if not v:
+    if v is None:
         print(f'::error::Input "{k}" not provided!')
         error = True
 
@@ -32,10 +33,10 @@ site_content_manager = client.content(site=site)
 # upload all the contents of a directory
 print("Uploading...")
 res = site_content_manager.upload(
-    local_path=args.path, remote_path=args.remote_path, recursive=True
+    local_path=args.path, remote_path=args.remote_path, recursive=args.recursive
 )
 print(res)
-if isinstance(res, list) and len(res):
+if (isinstance(res, list) and len(res)) or isinstance(res, str):
     print(f"Successfully uploaded to sites.ecmwf.int/{args.space}/{args.name}")
 else:
     print("::error::Upload failed!")
