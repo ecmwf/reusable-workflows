@@ -333,8 +333,7 @@ jobs:
     with:
       registry: ghcr.io
       image_repository: my-org/my-app
-      deployment_environment: prod
-      environment_files_directory: environments
+      environment_file: environments/prod.env
       build_args: |
         environment=prod
     secrets:
@@ -349,9 +348,7 @@ jobs:
 - **registry**: Container registry hostname. Type: `string`.
 - **image_repository**: Image repository path relative to the registry, without the tag. Type: `string`.
 - **image_tag**: Image tag to publish. Defaults to the checked out commit SHA when unset. Default: `''`. Type: `string`.
-- **deployment_environment**: Optional deployment environment name, exposed as `DEPLOYMENT_ENVIRONMENT`. Default: `''`. Type: `string`.
-- **environment_files_directory**: Optional directory containing `<environment_file_prefix>.common` and `<environment_file_prefix>.<deployment_environment>`. Default: `''`. Type: `string`.
-- **environment_file_prefix**: Prefix used when loading optional environment files. Default: `'actions.env'`. Type: `string`.
+- **environment_file**: Optional path to a file containing environment variables to load during the build. Default: `''`. Type: `string`.
 - **context**: Docker build context. Default: `'.'`. Type: `string`.
 - **dockerfile**: Path to the Dockerfile, relative to the repository root. Default: `'./Dockerfile'`. Type: `string`.
 - **platforms**: Target platforms for the Docker build. Default: `'linux/amd64'`. Type: `string`.

@@ -28,22 +28,10 @@ on:
         required: false
         default: ''
         type: string
-      deployment_environment:
-        description: Optional deployment environment name to expose as `DEPLOYMENT_ENVIRONMENT`.
+      environment_file:
+        description: Optional path to a file containing environment variables to load into the build.
         required: false
         default: ''
-        type: string
-      environment_files_directory:
-        description:
-          Optional directory containing environment files named `<environment_file_prefix>.common` and
-          `<environment_file_prefix>.<deployment_environment>`.
-        required: false
-        default: ''
-        type: string
-      environment_file_prefix:
-        description: Prefix for optional environment files.
-        required: false
-        default: 'actions.env'
         type: string
       context:
         description: Docker build context.
@@ -122,32 +110,15 @@ jobs:
             echo "login=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [[ -n "${{ inputs.deployment_environment }}" ]]; then
-            echo "DEPLOYMENT_ENVIRONMENT=${{ inputs.deployment_environment }}" >> "$GITHUB_ENV"
-          fi
-
       - name: Load Environment Variables
-        if: ${{ inputs.environment_files_directory != '' }}
+        if: ${{ inputs.environment_file != '' }}
         shell: bash
         run: |
-          common_file="${{ inputs.environment_files_directory }}/${{ inputs.environment_file_prefix }}.common"
-
-          if [[ -f "$common_file" ]]; then
-            cat "$common_file" >> "$GITHUB_ENV"
-            echo "" >> "$GITHUB_ENV"
-          fi
-
-          if [[ -z "${{ inputs.deployment_environment }}" ]]; then
-            exit 0
-          fi
-
-          environment_file="${{ inputs.environment_files_directory }}/${{ inputs.environment_file_prefix }}.${{ inputs.deployment_environment }}"
-          if [[ ! -f "$environment_file" ]]; then
-            echo "::error::Environment file not found: $environment_file"
+          if [[ ! -f "${{ inputs.environment_file }}" ]]; then
+            echo "::error::Environment file not found: ${{ inputs.environment_file }}"
             exit 1
           fi
-
-          cat "$environment_file" >> "$GITHUB_ENV"
+          cat "${{ inputs.environment_file }}" >> "$GITHUB_ENV"
 
       - name: Log in to Registry
         if: steps.prepare.outputs.login == 'true'
