@@ -1,0 +1,50 @@
+hpc:
+  site: aa-batch
+  platform: gnu-14.2.0
+  parallel: 64
+  ntasks: 1
+  queue: nf
+  python_version: "3.12"
+  self_test: true
+  lock_permissions: true
+  sync_module: true
+  use_ninja: true
+  install_lib_dir: lib
+  prefix_compiler_specific: false
+  clean_before_install: false
+  dry_run_install: false
+  force_build: false
+  ecbundle: false
+
+conda:
+  conda_dir: ./.cd/conda
+  channels:
+    - conda-forge
+  conda_build_args:
+    - --no-anaconda-upload
+  skip_installation_test: false
+
+python-pypi:
+  working_directory: ./
+
+tarball:
+  confluence_page_title: Releases
+
+system-package:
+  maintainer: software@ecmwf.int
+  vendor: ECMWF
+  install_prefix: /opt/ecmwf
+  build_type: Release
+  deb_priority: optional
+  parallelism_factor: 2
+  compiler_cc: gcc
+  compiler_cxx: g++
+  compiler_fc: gfortran
+  self_test: true
+  self_build: true
+  save_cache: true
+  recreate_cache: false
+  skip_version_check: false
+  install_test: false
+  cmake: false
+  ecbundle: false

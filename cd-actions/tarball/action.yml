@@ -15,7 +15,7 @@ inputs:
     required: false
     default: ''
   cmake_options:
-    description: 'Additional CMake options for ecbuild'
+    description: 'CMake options as line-separated key=value pairs (e.g., "-DCMAKE_BUILD_TYPE=Release\n-DENABLE_TESTS=ON")'
     required: false
     default: ''
   confluence_token:
@@ -73,7 +73,8 @@ runs:
     - name: Run ecbuild
       shell: bash
       run: |
-        cmake_options="${{ inputs.cmake_options }}"
+        # Convert line-separated options to space-separated
+        cmake_options=$(echo "${{ inputs.cmake_options }}" | tr '\n' ' ' | xargs)
 
         echo "Running ecbuild in build directory..."
         cd build
@@ -139,7 +140,7 @@ runs:
         echo "safe_ref_name=${ref_name//\//-}" >> $GITHUB_OUTPUT
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: ${{ github.run_id }}-${{ inputs.name }}-${{ steps.sanitize.outputs.safe_ref_name }}
         path: ${{ steps.find-tarball.outputs.tarball_path }}

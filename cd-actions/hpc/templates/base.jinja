@@ -14,7 +14,7 @@ echo "::endgroup::"
 {# Print cmake options with -D prefix #}
 {% macro print_cmake_options(options) -%}
 {% if (options is defined) and options %}
-{% for opt in options %}-D{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
+{% for opt in options %}{{ opt }}{{ " " if not loop.last else "" }}{% endfor %}
 {%- endif %}
 {%- endmacro %}
 
@@ -28,7 +28,7 @@ echo "::endgroup::"
 {# Print ecbundle cmake options #}
 {% macro print_ecbundle_options(options) -%}
 {% if (options is defined) and options %}
---cmake="{{ options|join(" ") }}"
+--cmake="{{ options|map('strip_d_prefix')|join(" ") }}"
 {%- endif %}
 {%- endmacro %}
 

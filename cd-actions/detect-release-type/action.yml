@@ -1,0 +1,73 @@
+name: Detect Release Type
+description: Detect release type from git ref using tag regex patterns
+
+inputs:
+  ref_name:
+    description: 'Git ref name (defaults to PR head ref or github.ref_name)'
+    required: false
+    default: ''
+  dry_run:
+    description: 'Force dry run mode'
+    required: false
+    default: 'false'
+  deployment_regex:
+    description: 'Regex pattern for deployment tags'
+    required: true
+  prerelease_regex:
+    description: 'Regex pattern for prerelease tags'
+    required: true
+
+outputs:
+  is_dry_run:
+    description: 'Whether this is a dry run'
+    value: ${{ steps.detect.outputs.is_dry_run }}
+  is_prerelease:
+    description: 'Whether this is a prerelease'
+    value: ${{ steps.detect.outputs.is_prerelease }}
+  ref_name:
+    description: 'Resolved git ref name'
+    value: ${{ steps.detect.outputs.ref_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect release type from ref
+      id: detect
+      shell: python3 {0}
+      env:
+        INPUT_REF_NAME: ${{ inputs.ref_name || github.event.pull_request.head.ref || github.ref_name }}
+        INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        DEPLOYMENT_REGEX: ${{ inputs.deployment_regex }}
+        PRERELEASE_REGEX: ${{ inputs.prerelease_regex }}
+      run: |
+        import re
+        import os
+
+        ref_name = os.environ["INPUT_REF_NAME"]
+        deployment_regex = os.environ["DEPLOYMENT_REGEX"]
+        prerelease_regex = os.environ["PRERELEASE_REGEX"]
+        dry_run_input = os.environ["INPUT_DRY_RUN"]
+
+        print(f"Analyzing ref: {ref_name}")
+
+        if re.match(deployment_regex, ref_name):
+            print("Standard release detected")
+            is_dry_run = "false"
+            is_prerelease = "false"
+        elif re.match(prerelease_regex, ref_name):
+            print("Pre-release detected")
+            is_dry_run = "false"
+            is_prerelease = "true"
+        else:
+            print("Dry run detected")
+            is_dry_run = "true"
+            is_prerelease = "false"
+
+        if dry_run_input == "true":
+            print("Explicit dry_run input enabled - forcing dry run mode")
+            is_dry_run = "true"
+
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"ref_name={ref_name}\n")
+            f.write(f"is_dry_run={is_dry_run}\n")
+            f.write(f"is_prerelease={is_prerelease}\n")

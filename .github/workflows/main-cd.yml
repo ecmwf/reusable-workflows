@@ -77,7 +77,7 @@ jobs:
       release_enabled: ${{ steps.load-config.outputs.release_enabled }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Load and generate matrix
         id: load-config
@@ -90,12 +90,20 @@ jobs:
     if: ${{ fromJson(needs.load-config.outputs.build_matrix).include[0] != null }}
     needs: [detect-release-type, load-config]
     runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
+        password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+      options: '--user root'
+      volumes:
+        - '/var/run/docker.sock:/var/run/docker.sock'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.load-config.outputs.build_matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -192,6 +200,51 @@ jobs:
           confluence_space: ${{ matrix.confluence_space }}
           confluence_page_title: ${{ matrix.confluence_page_title }}
 
+      - name: Build System Package
+        if: ${{ matrix.type == 'system-package' }}
+        uses: ecmwf/reusable-workflows/cd-actions/system-package@v2
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          skip_version_check: ${{ matrix.skip_version_check }}
+          package_deps: ${{ matrix.package_deps }}
+          description: ${{ matrix.description }}
+          license: ${{ matrix.license }}
+          maintainer: ${{ matrix.maintainer }}
+          vendor: ${{ matrix.vendor }}
+          homepage_url: ${{ matrix.homepage_url }}
+          install_prefix: ${{ matrix.install_prefix }}
+          self_test: ${{ matrix.self_test }}
+          install_test: ${{ matrix.install_test }}
+          install_test_os_image: ${{ matrix.install_test_os_image }}
+          install_test_command: ${{ matrix.install_test_command }}
+          build_type: ${{ matrix.build_type }}
+          env: ${{ matrix.env }}
+          deb_section: ${{ matrix.deb_section }}
+          deb_priority: ${{ matrix.deb_priority }}
+          rpm_group: ${{ matrix.rpm_group }}
+          os: ${{ matrix.os }}
+          dependencies: ${{ matrix.dependencies }}
+          dependency_branch: ${{ matrix.dependency_branch }}
+          cmake_options: ${{ matrix.cmake_options }}
+          ctest_options: ${{ matrix.ctest_options }}
+          dependency_cmake_options: ${{ matrix.dependency_cmake_options }}
+          cmake: ${{ matrix.cmake }}
+          ecbundle: ${{ matrix.ecbundle }}
+          self_build: ${{ matrix.self_build }}
+          toolchain_file: ${{ matrix.toolchain_file }}
+          parallelism_factor: ${{ matrix.parallelism_factor }}
+          compiler_cc: ${{ matrix.compiler_cc }}
+          compiler_cxx: ${{ matrix.compiler_cxx }}
+          compiler_fc: ${{ matrix.compiler_fc }}
+          cache_suffix: ${{ matrix.cache_suffix }}
+          save_cache: ${{ matrix.save_cache }}
+          recreate_cache: ${{ matrix.recreate_cache }}
+          gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
+          nexus_token: ${{ secrets[matrix.nexus_token_secret] }}
+          nexus_url: ${{ secrets[matrix.nexus_url_secret] }}
+
   release:
     name: Create Release
     if: ${{ needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && needs.build.result == 'success' }}
@@ -201,7 +254,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Prepare release configuration
         id: prepare-config

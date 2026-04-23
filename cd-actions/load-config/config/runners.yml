@@ -5,3 +5,6 @@ hpc:
   - self-hosted
   - linux
   - hpc
+system-package:
+  - self-hosted
+  - platform-builder-docker-xl

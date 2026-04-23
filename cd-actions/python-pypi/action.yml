@@ -76,7 +76,7 @@ runs:
         uv publish --publish-url https://test.pypi.org/legacy/
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: ${{ github.run_id }}-${{ inputs.name }}
         path: ${{ inputs.working_directory }}/dist/*.whl

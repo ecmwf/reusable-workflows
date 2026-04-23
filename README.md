@@ -13,6 +13,7 @@ A collection of [reusable GitHub workflows] for ECMWF repositories.
 - [ci-python.yml](#ci-pythonyml): Continuous Integration and Continuous Deployment workflow for Python-based projects
 - [ci-node.yml](#ci-nodeyml): Continuous Integration workflow for NodeJS-based projects
 - [docs.yml](#docsyml): Workflow for testing Sphinx-based documentation
+- [build-and-push-image.yml](#build-and-push-imageyml): Build and optionally push a Docker image to a container registry
 - [qa-precommit-run.yml](#qa-precommit): Runs the pre-commit hooks on all files server-side as a QA drop-in.
 - [qa-pytest-pyproject.yml](#qa-pytest-pyproject): Runs pytest after a `pyproject.toml` install with a markdown report.
 - [publish-rust-crate.yml](#publish-rust-crateyml): Workflow for publishing Rust crates to crates.io
@@ -320,6 +321,49 @@ The source repository reference.
 
 Public URL of the Microsoft Teams incoming webhook. To get the value, make sure that channel in Teams has the appropriate connector set up. It will only be used if [notify_teams](#notify_teams-2) input is switched on.
 **Example:** `https://webhook.office.com/webhookb2/...`
+
+## build-and-push-image.yml
+
+### Build and Push Usage
+
+```yaml
+jobs:
+  build-image:
+    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v1
+    with:
+      registry: ghcr.io
+      image_repository: my-org/my-app
+      environment_file: environments/prod.env
+      build_args: |
+        environment=prod
+    secrets:
+      registry_username: ${{ secrets.REGISTRY_USERNAME }}
+      registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+```
+
+### Build and Push Inputs
+
+- **repository**: Source repository name. Default: `${{ github.repository }}`. Type: `string`.
+- **ref**: Source repository reference. Default: `${{ github.ref }}`. Type: `string`.
+- **registry**: Container registry hostname. Type: `string`.
+- **image_repository**: Image repository path relative to the registry, without the tag. Type: `string`.
+- **image_tag**: Image tag to publish. Defaults to the checked out commit SHA when unset. Default: `''`. Type: `string`.
+- **environment_file**: Optional path to a file containing environment variables to load during the build. Default: `''`. Type: `string`.
+- **context**: Docker build context. Default: `'.'`. Type: `string`.
+- **dockerfile**: Path to the Dockerfile, relative to the repository root. Default: `'./Dockerfile'`. Type: `string`.
+- **platforms**: Target platforms for the Docker build. Default: `'linux/amd64'`. Type: `string`.
+- **push**: Whether to push the built image to the registry. Default: `true`. Type: `boolean`.
+- **build_args**: Optional newline-separated Docker build arguments in `key=value` form. Default: `''`. Type: `string`.
+
+### Build and Push Outputs
+
+- **image**: Fully qualified image reference including tag.
+- **image_tag**: Image tag used for the build.
+
+### Build and Push Secrets
+
+- **registry_username**: Optional username for registry authentication.
+- **registry_password**: Optional password or token for registry authentication.
 
 ## docs.yml
 
@@ -646,6 +690,26 @@ npm install
 npm run lint
 ```
 
+## Action Pinning
+
+This repository uses [pinact] to pin GitHub Actions and reusable workflows to their commit SHA for security. Actions from the `ecmwf` organisation and files under `sync-files/` are excluded from pinning.
+
+### Running pinact
+
+To pin actions in workflow files and documentation:
+
+```
+pinact run
+```
+
+To update pinned actions to their latest versions (skipping versions released less than 7 days ago):
+
+```
+pinact run -u --min-age 7
+```
+
+For installation instructions, see the [pinact documentation][pinact-install].
+
 ## Licence
 
 This software is licensed under the terms of the Apache License Version 2.0 which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -655,5 +719,7 @@ In applying this licence, ECMWF does not waive the privileges and immunities gra
 [reusable GitHub workflows]: https://docs.github.com/en/actions/learn-github-actions/reusing-workflows
 [Samples]: https://github.com/ecmwf/reusable-workflows/tree/develop/samples
 [codecov service]: https://codecov.io
+[pinact]: https://github.com/suzuki-shunsuke/pinact
+[pinact-install]: https://github.com/suzuki-shunsuke/pinact/blob/main/INSTALL.md
 [inputs for the build-package]: https://github.com/ecmwf/build-package#inputs
 [inputs for the sync-repository]: https://github.com/ecmwf/sync-repository#inputs

@@ -61,7 +61,7 @@ jobs:
       LOCKED_FLAG: ${{ inputs.locked && '--locked' || '' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       # Using @master because @stable/@nightly are branch shortcuts that set
       # the default toolchain — redundant when the toolchain input is explicit.
@@ -72,7 +72,7 @@ jobs:
           components: ${{ inputs.run-checks && 'rustfmt, clippy' || '' }}
 
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
 
       - name: Read crate metadata
         id: crate

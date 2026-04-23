@@ -53,26 +53,38 @@ def bool_to_str(source, source_name):
     else:
         raise ValueError(f"{source_name} must be a bool, got {type(source)}")
 
-def dict_to_str_space_separated(source, source_name):
+def dict_to_str_line_separated(source, source_name):
     if isinstance(source, dict):
-        return " ".join([f"{k}={v}" for k, v in source.items()])
+        return "\n".join([f"{k}={v}" if v != '' else k for k, v in source.items()])
     elif isinstance(source, str):
         return source
     else:
         raise ValueError(f"{source_name} must be a dict, got {type(source)}")
 
-def dict_to_str_line_separated(source, source_name):
+def dict_to_cmake_args(source, source_name):
     if isinstance(source, dict):
-        return "\n".join([f"{k}={v}" for k, v in source.items()])
+        def format_cmake_option(k, v):
+            if isinstance(v, bool):
+                v = "ON" if v else "OFF"
+            if not k.startswith('-'):
+                k = f"-D{k}"
+            return f"{k}={v}" if v != '' else k
+        return "\n".join([format_cmake_option(k, v) for k, v in source.items()])
     elif isinstance(source, str):
         return source
     else:
         raise ValueError(f"{source_name} must be a dict, got {type(source)}")
 
 action_path = Path(os.environ["GITHUB_ACTION_PATH"])
+with open(action_path.parent / "defaults.yml") as f:
+    shared_defaults = yaml.safe_load(f)
+
 config_dir = action_path / "config"
 with open(config_dir / "runners.yml") as f:
     runners_config = yaml.safe_load(f)
+
+with open(config_dir / "platforms-system-package.yml") as f:
+    sp_platforms_config = yaml.safe_load(f)
 
 config_yaml = os.environ["STEP_LOAD_CONFIG"]
 config = yaml.safe_load(config_yaml)
@@ -91,31 +103,34 @@ for build in config.get("builds", []):
             "name": build["name"],
             "runner": runners_config.get(build_type, runners_config.get("default", ["self-hosted", "platform-builder"])),
             "type": build_type,
+            "container": "",
         }
 
+        d = shared_defaults.get(build_type, {})
+
         if build_type == "conda":
-            matrix_item["conda_dir"] = build_config.get("conda_dir", "./.cd/conda")
-            matrix_item["channels"] = list_to_str_line_separated(build_config.get("channels", ["conda-forge"]), "channels")
-            matrix_item["conda_build_args"] = list_to_str_line_separated(build_config.get("conda_build_args", ["--no-anaconda-upload"]), "conda_build_args")
-            matrix_item["skip_installation_test"] = bool_to_str(build_config.get("skip_installation_test", False), "skip_installation_test")
+            matrix_item["conda_dir"] = build_config.get("conda_dir", d.get("conda_dir", "./.cd/conda"))
+            matrix_item["channels"] = list_to_str_line_separated(build_config.get("channels", d.get("channels", ["conda-forge"])), "channels")
+            matrix_item["conda_build_args"] = list_to_str_line_separated(build_config.get("conda_build_args", d.get("conda_build_args", ["--no-anaconda-upload"])), "conda_build_args")
+            matrix_item["skip_installation_test"] = bool_to_str(build_config.get("skip_installation_test", d.get("skip_installation_test", False)), "skip_installation_test")
 
         elif build_type == "python-pypi":
-            matrix_item["working_directory"] = build_config.get("working_directory", "./")
+            matrix_item["working_directory"] = build_config.get("working_directory", d.get("working_directory", "./"))
             matrix_item["buildargs"] = build_config.get("buildargs", "")
             matrix_item["env_vars"] = dict_to_str_line_separated(build_config.get("env_vars", {}), "env_vars")
 
         elif build_type == "hpc":
             # Platform
-            matrix_item["platform"] = build_config.get("platform", "gnu-14.2.0")
+            matrix_item["platform"] = build_config.get("platform", d.get("platform", "gnu-14.2.0"))
 
             # Installation
             matrix_item["install_prefix"] = build_config.get("install_prefix", "")
-            matrix_item["prefix_compiler_specific"] = bool_to_str(build_config.get("prefix_compiler_specific", False), "prefix_compiler_specific")
+            matrix_item["prefix_compiler_specific"] = bool_to_str(build_config.get("prefix_compiler_specific", d.get("prefix_compiler_specific", False)), "prefix_compiler_specific")
 
             # Build Configuration
-            matrix_item["cmake_options"] = dict_to_str_line_separated(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
-            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", True), "self_test")
+            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", d.get("self_test", True)), "self_test")
             matrix_item["env_vars"] = dict_to_str_line_separated(build_config.get("env_vars", {}), "env_vars")
             matrix_item["parallel"] = str(build_config.get("parallel", ""))
             matrix_item["dependencies"] = list_to_str_line_separated(build_config.get("dependencies", []), "dependencies")
@@ -126,7 +141,7 @@ for build in config.get("builds", []):
                     dep_cmake_processed[repo] = ",".join(opts)
                 else:
                     dep_cmake_processed[repo] = opts
-            matrix_item["dependency_cmake_options"] = dict_to_str_line_separated(dep_cmake_processed, "dependency_cmake_options")
+            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(dep_cmake_processed, "dependency_cmake_options")
             matrix_item["python_dependencies"] = list_to_str_line_separated(build_config.get("python_dependencies", []), "python_dependencies")
             matrix_item["python_version"] = build_config.get("python_version", "")
             matrix_item["python_requirements"] = build_config.get("python_requirements", "")
@@ -135,22 +150,22 @@ for build in config.get("builds", []):
             matrix_item["stages"] = json.dumps(build_config.get("stages", []))
             matrix_item["modules"] = list_to_str_line_separated(build_config.get("modules", []), "modules")
             matrix_item["install_command"] = build_config.get("install_command", "")
-            matrix_item["lock_permissions"] = bool_to_str(build_config.get("lock_permissions", True), "lock_permissions")
+            matrix_item["lock_permissions"] = bool_to_str(build_config.get("lock_permissions", d.get("lock_permissions", True)), "lock_permissions")
             matrix_item["module_name"] = build_config.get("module_name", "")
             matrix_item["ntasks"] = str(build_config.get("ntasks", ""))
             matrix_item["gpus"] = str(build_config.get("gpus", ""))
             matrix_item["queue"] = build_config.get("queue", "")
             matrix_item["post_script"] = build_config.get("post_script", "")
-            matrix_item["clean_before_install"] = bool_to_str(build_config.get("clean_before_install", False), "clean_before_install")
-            matrix_item["dry_run_install"] = bool_to_str(build_config.get("dry_run_install", False), "dry_run_install")
+            matrix_item["clean_before_install"] = bool_to_str(build_config.get("clean_before_install", d.get("clean_before_install", False)), "clean_before_install")
+            matrix_item["dry_run_install"] = bool_to_str(build_config.get("dry_run_install", d.get("dry_run_install", False)), "dry_run_install")
             matrix_item["dry_run_install_prefix"] = build_config.get("dry_run_install_prefix", "")
-            matrix_item["site"] = build_config.get("site", "hpc-batch")
-            matrix_item["sync_module"] = bool_to_str(build_config.get("sync_module", True), "sync_module")
-            matrix_item["use_ninja"] = bool_to_str(build_config.get("use_ninja", True), "use_ninja")
-            matrix_item["force_build"] = bool_to_str(build_config.get("force_build", False), "force_build")
-            matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", False), "ecbundle")
+            matrix_item["site"] = build_config.get("site", d.get("site", "aa-batch"))
+            matrix_item["sync_module"] = bool_to_str(build_config.get("sync_module", d.get("sync_module", True)), "sync_module")
+            matrix_item["use_ninja"] = bool_to_str(build_config.get("use_ninja", d.get("use_ninja", True)), "use_ninja")
+            matrix_item["force_build"] = bool_to_str(build_config.get("force_build", d.get("force_build", False)), "force_build")
+            matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", d.get("ecbundle", False)), "ecbundle")
             matrix_item["bundle_yml"] = build_config.get("bundle_yml", "")
-            matrix_item["install_lib_dir"] = build_config.get("install_lib_dir", "lib")
+            matrix_item["install_lib_dir"] = build_config.get("install_lib_dir", d.get("install_lib_dir", "lib"))
             matrix_item["mkdir"] = list_to_str_line_separated(build_config.get("mkdir", []), "mkdir")
             matrix_item["pytest_cmd"] = build_config.get("pytest_cmd", "")
             matrix_item["workdir"] = build_config.get("workdir", "")
@@ -158,9 +173,61 @@ for build in config.get("builds", []):
 
         elif build_type == "tarball":
             matrix_item["ecbuild_version"] = build_config.get("ecbuild_version", "")
-            matrix_item["cmake_options"] = dict_to_str_space_separated(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
             matrix_item["confluence_space"] = build_config.get("confluence_space", "")
-            matrix_item["confluence_page_title"] = build_config.get("confluence_page_title", "Releases")
+            matrix_item["confluence_page_title"] = build_config.get("confluence_page_title", d.get("confluence_page_title", "Releases"))
+
+        elif build_type == "system-package":
+            platform_name = build_config.get("os", "")
+            if platform_name not in sp_platforms_config:
+                print(f"::error::Unknown platform: {platform_name}")
+                raise SystemExit(1)
+
+            platform_defaults = sp_platforms_config[platform_name]
+            os_id = platform_defaults["os"]
+            matrix_item["container"] = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
+            matrix_item["os"] = os_id
+            matrix_item["nexus_token_secret"] = platform_defaults["nexus_token_secret"]
+            matrix_item["nexus_url_secret"] = platform_defaults["nexus_url_secret"]
+
+            raw_deps = build_config.get("package_deps", [])
+            if isinstance(raw_deps, list):
+                matrix_item["package_deps"] = ", ".join(raw_deps)
+            else:
+                matrix_item["package_deps"] = str(raw_deps)
+
+            matrix_item["skip_version_check"] = bool_to_str(build_config.get("skip_version_check", d.get("skip_version_check", False)), "skip_version_check")
+            matrix_item["description"] = build_config.get("description", "")
+            matrix_item["license"] = build_config.get("license", "")
+            matrix_item["maintainer"] = build_config.get("maintainer", d.get("maintainer", "software@ecmwf.int"))
+            matrix_item["vendor"] = build_config.get("vendor", d.get("vendor", "ECMWF"))
+            matrix_item["homepage_url"] = build_config.get("homepage_url", "")
+            matrix_item["install_prefix"] = build_config.get("install_prefix", d.get("install_prefix", "/opt/ecmwf"))
+            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", d.get("self_test", True)), "self_test")
+            matrix_item["install_test"] = bool_to_str(build_config.get("install_test", d.get("install_test", False)), "install_test")
+            matrix_item["install_test_os_image"] = build_config.get("install_test_os_image", "")
+            matrix_item["install_test_command"] = build_config.get("install_test_command", "")
+            matrix_item["build_type"] = build_config.get("build_type", d.get("build_type", "Release"))
+            matrix_item["env"] = build_config.get("env", "")
+            matrix_item["deb_section"] = build_config.get("deb_section", "")
+            matrix_item["deb_priority"] = build_config.get("deb_priority", d.get("deb_priority", "optional"))
+            matrix_item["rpm_group"] = build_config.get("rpm_group", "")
+            matrix_item["dependencies"] = list_to_str_line_separated(build_config.get("dependencies", []), "dependencies")
+            matrix_item["dependency_branch"] = build_config.get("dependency_branch", "")
+            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
+            matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
+            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(build_config.get("dependency_cmake_options", {}), "dependency_cmake_options")
+            matrix_item["cmake"] = bool_to_str(build_config.get("cmake", d.get("cmake", False)), "cmake")
+            matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", d.get("ecbundle", False)), "ecbundle")
+            matrix_item["self_build"] = bool_to_str(build_config.get("self_build", d.get("self_build", True)), "self_build")
+            matrix_item["toolchain_file"] = build_config.get("toolchain_file", "")
+            matrix_item["parallelism_factor"] = str(build_config.get("parallelism_factor", d.get("parallelism_factor", "2")))
+            matrix_item["compiler_cc"] = build_config.get("compiler_cc", d.get("compiler_cc", "gcc"))
+            matrix_item["compiler_cxx"] = build_config.get("compiler_cxx", d.get("compiler_cxx", "g++"))
+            matrix_item["compiler_fc"] = build_config.get("compiler_fc", d.get("compiler_fc", "gfortran"))
+            matrix_item["cache_suffix"] = build_config.get("cache_suffix", "")
+            matrix_item["save_cache"] = bool_to_str(build_config.get("save_cache", d.get("save_cache", True)), "save_cache")
+            matrix_item["recreate_cache"] = bool_to_str(build_config.get("recreate_cache", d.get("recreate_cache", False)), "recreate_cache")
 
         matrix["include"].append(matrix_item)
 

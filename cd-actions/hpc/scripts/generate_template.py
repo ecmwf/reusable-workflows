@@ -23,12 +23,15 @@ def cache_key(name, ref, compiler, cmake_opts):
 
 
 def main():
-    # Load HPC defaults from config
+    # Load shared defaults and HPC config
     action_dir = Path(os.environ["GITHUB_ACTION_PATH"])
+    with open(action_dir.parent / "defaults.yml") as f:
+        shared_defaults = yaml.safe_load(f)
+    defaults = shared_defaults["hpc"]
+
     config_dir = action_dir / "config"
     with open(config_dir / "hpc.yml") as f:
         hpc_config = yaml.safe_load(f)
-    defaults = hpc_config["defaults"]
     sync_clusters_map = hpc_config["sync_clusters"]
 
     # Load Jinja templates
@@ -38,6 +41,8 @@ def main():
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    # ecbundle-build adds its own -D prefix, so we need to strip ours
+    jinja_env.filters["strip_d_prefix"] = lambda s: s[2:] if s.startswith("-D") else s
 
     # Check if staged build (parse JSON to check for actual stages)
     stages_input = os.environ.get("INPUT_STAGES", "").strip()
@@ -70,7 +75,7 @@ def main():
     ntasks = os.environ.get("INPUT_NTASKS", "").strip() or str(defaults["ntasks"])
     gpus = os.environ.get("INPUT_GPUS", "").strip()
     queue = os.environ.get("INPUT_QUEUE", "").strip() or defaults["queue"]
-    site = os.environ.get("INPUT_SITE", "hpc-batch")
+    site = os.environ.get("INPUT_SITE", defaults["site"])
     sync_clusters = sync_clusters_map.get(site, sync_clusters_map.get("aa-batch", []))
     do_sync = os.environ.get("STEP_CONFIG_DO_SYNC", "false") == "true"
     if not sync_clusters:
@@ -113,7 +118,7 @@ def main():
 
     # Add install lib dir if specified
     if install_lib_dir:
-        cmake_options.insert(0, f"INSTALL_LIB_DIR={install_lib_dir}")
+        cmake_options.insert(0, f"-DINSTALL_LIB_DIR={install_lib_dir}")
 
     # Parse dependency cmake options (line-separated repo=opts pairs)
     dep_cmake_map = {}
@@ -331,7 +336,7 @@ def main():
         stage.setdefault("modules", [])
         stage_cmake = stage.get("cmake_options", {})
         if isinstance(stage_cmake, dict):
-            stage["cmake_options"] = [f"{k}={cmake_value(v)}" for k, v in stage_cmake.items()]
+            stage["cmake_options"] = [f"{'' if k.startswith('-') else '-D'}{k}={cmake_value(v)}" for k, v in stage_cmake.items()]
         else:
             stage["cmake_options"] = []
         stage.setdefault("build_command", "")
@@ -369,6 +374,7 @@ def main():
         f.write(sbatch)
         f.write("\nSBATCH_EOF\n")
 
+    print(f"Site: {site}")
     print("Generated template:")
     print(rendered[:2000])
     if len(rendered) > 2000:
