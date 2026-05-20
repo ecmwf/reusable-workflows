@@ -187,8 +187,10 @@ for build in config.get("builds", []):
             os_id = platform_defaults["os"]
             matrix_item["container"] = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
             matrix_item["os"] = os_id
-            matrix_item["nexus_token_secret"] = platform_defaults["nexus_token_secret"]
-            matrix_item["nexus_url_secret"] = platform_defaults["nexus_url_secret"]
+            matrix_item["nexus_token_secret_prod"] = platform_defaults.get("nexus_token_secret_prod", "")
+            matrix_item["nexus_url_secret_prod"] = platform_defaults.get("nexus_url_secret_prod", "")
+            matrix_item["nexus_token_secret_test"] = platform_defaults["nexus_token_secret_test"]
+            matrix_item["nexus_url_secret_test"] = platform_defaults["nexus_url_secret_test"]
 
             raw_deps = build_config.get("package_deps", [])
             if isinstance(raw_deps, list):

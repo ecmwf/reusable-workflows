@@ -242,8 +242,8 @@ jobs:
           save_cache: ${{ matrix.save_cache }}
           recreate_cache: ${{ matrix.recreate_cache }}
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
-          nexus_token: ${{ secrets[matrix.nexus_token_secret] }}
-          nexus_url: ${{ secrets[matrix.nexus_url_secret] }}
+          nexus_token: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_token_secret_prod != '') && secrets[matrix.nexus_token_secret_prod] || secrets[matrix.nexus_token_secret_test] }}
+          nexus_url: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_url_secret_prod != '') && secrets[matrix.nexus_url_secret_prod] || secrets[matrix.nexus_url_secret_test] }}
 
   release:
     name: Create Release
