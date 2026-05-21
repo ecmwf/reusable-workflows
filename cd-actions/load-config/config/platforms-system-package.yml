@@ -24,6 +24,8 @@ debian-12:
 
 debian-13:
   os: debian-13
+  nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
+  nexus_url_secret_prod: NEXUS_REPO_URL_DEBIAN_13
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
   nexus_url_secret_test: NEXUS_TEST_REPO_URL_DEBIAN_13
 
@@ -50,11 +52,15 @@ rocky-8.10:
 
 rocky-9:
   os: rocky-9.7
+  nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
+  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_9
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
   nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_9
 
 rocky-9.7:
   os: rocky-9.7
+  nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
+  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_9
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
   nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_9
 
