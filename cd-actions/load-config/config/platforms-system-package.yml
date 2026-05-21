@@ -20,8 +20,8 @@ debian-12:
 
 debian-13:
   os: debian-13
-  nexus_token_secret: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret: NEXUS_TEST_REPO_URL_DEBIAN_13
+  nexus_token_secret: NEXUS_REPO_UPLOAD_TOKEN
+  nexus_url_secret: NEXUS_REPO_URL_DEBIAN_13
 
 rocky-8:
   os: rocky-8.10
