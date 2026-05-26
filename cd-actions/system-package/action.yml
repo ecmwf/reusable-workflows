@@ -286,7 +286,11 @@ runs:
 
         if install_prefix:
             lines.append(f'set(CPACK_PACKAGING_INSTALL_PREFIX "{cmake_escape(install_prefix)}" CACHE STRING "" FORCE)')
+            install_rpath = f"{install_prefix}/lib"
+            lines.append(f'set(CMAKE_INSTALL_RPATH "{cmake_escape(install_rpath)}" CACHE STRING "" FORCE)')
+            lines.append('set(CMAKE_INSTALL_RPATH_USE_LINK_PATH OFF CACHE BOOL "" FORCE)')
             print(f"Install Prefix: {install_prefix}")
+            print(f"Install RPATH: {install_rpath}")
 
         with open(overrides_file, 'w') as f:
             for line in lines:
