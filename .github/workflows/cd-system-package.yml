@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: false
+      nightly:
+        description: 'Nightly mode - build and upload to test Nexus, skip version check'
+        required: false
+        type: boolean
+        default: false
       os:
         description: 'Target OS (e.g., debian-12, ubuntu-24.04, rocky-9)'
         required: true
@@ -287,19 +292,43 @@ jobs:
           deployment_regex: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
           prerelease_regex: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
 
+      - name: Resolve build flags
+        id: flags
+        shell: bash
+        run: |
+          if [[ "${{ inputs.nightly }}" == "true" ]]; then
+            echo "is_dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "skip_version_check=true" >> "$GITHUB_OUTPUT"
+            echo "label=NIGHTLY" >> "$GITHUB_OUTPUT"
+          else
+            is_dry_run="${{ steps.detect-release-type.outputs.is_dry_run }}"
+            is_prerelease="${{ steps.detect-release-type.outputs.is_prerelease }}"
+            echo "is_dry_run=$is_dry_run" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+            echo "skip_version_check=${{ inputs.skip_version_check }}" >> "$GITHUB_OUTPUT"
+            if [[ "$is_dry_run" == "true" ]]; then
+              echo "label=DRY RUN" >> "$GITHUB_OUTPUT"
+            elif [[ "$is_prerelease" == "true" ]]; then
+              echo "label=PRERELEASE" >> "$GITHUB_OUTPUT"
+            else
+              echo "label=RELEASE" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Build System Package${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
+      - name: Build System Package [${{ steps.flags.outputs.label }}]
         uses: ecmwf/reusable-workflows/cd-actions/system-package@v2
         with:
           name: ${{ format('{0}-{1}', inputs.name, inputs.os) }}
           ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
-          dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
-          skip_version_check: ${{ inputs.skip_version_check }}
+          dry_run: ${{ steps.flags.outputs.is_dry_run }}
+          skip_version_check: ${{ steps.flags.outputs.skip_version_check }}
           package_deps: ${{ inputs.package_deps }}
           description: ${{ inputs.description }}
           license: ${{ inputs.license }}
@@ -334,5 +363,5 @@ jobs:
           save_cache: ${{ inputs.save_cache }}
           recreate_cache: ${{ inputs.recreate_cache }}
           gh_pat: ${{ inputs.gh_pat || secrets.GH_REPO_READ_TOKEN }}
-          nexus_token: ${{ inputs.nexus_token || ((steps.detect-release-type.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_token_secret_prod != '') && secrets[needs.setup.outputs.nexus_token_secret_prod] || secrets[needs.setup.outputs.nexus_token_secret_test]) }}
-          nexus_url: ${{ inputs.nexus_url || ((steps.detect-release-type.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_url_secret_prod != '') && secrets[needs.setup.outputs.nexus_url_secret_prod] || secrets[needs.setup.outputs.nexus_url_secret_test]) }}
+          nexus_token: ${{ inputs.nexus_token || ((steps.flags.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_token_secret_prod != '') && secrets[needs.setup.outputs.nexus_token_secret_prod] || secrets[needs.setup.outputs.nexus_token_secret_test]) }}
+          nexus_url: ${{ inputs.nexus_url || ((steps.flags.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_url_secret_prod != '') && secrets[needs.setup.outputs.nexus_url_secret_prod] || secrets[needs.setup.outputs.nexus_url_secret_test]) }}
