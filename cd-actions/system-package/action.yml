@@ -228,6 +228,14 @@ runs:
         overrides_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-overrides.cmake')
         lines = []
 
+        # Sanitize CPACK_PACKAGE_VERSION from VERSION file
+        if os.path.isfile('VERSION'):
+            with open('VERSION') as f:
+                version = f.read().strip()
+            if version:
+                lines.append(f'set(CPACK_PACKAGE_VERSION "{cmake_escape(version)}" CACHE STRING "" FORCE)')
+                print(f"Version (from VERSION file): {version}")
+
         if package_deps:
             lines.append(f'set({deps_var} "{cmake_escape(package_deps)}" CACHE STRING "" FORCE)')
             print(f"Package deps ({deps_var}): {package_deps}")
