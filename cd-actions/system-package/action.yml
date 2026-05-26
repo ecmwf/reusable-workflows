@@ -246,6 +246,7 @@ runs:
 
         # DEB-specific options
         if cpack_generator == 'DEB':
+            lines.append('set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT" CACHE STRING "" FORCE)')
             lines.append(f'set(CPACK_DEBIAN_PACKAGE_MAINTAINER "{cmake_escape(maintainer)}" CACHE STRING "" FORCE)')
             print(f"Maintainer: {maintainer}")
             if deb_section:
@@ -258,6 +259,7 @@ runs:
 
         # RPM-specific options
         if cpack_generator == 'RPM':
+            lines.append('set(CPACK_RPM_FILE_NAME "RPM-DEFAULT" CACHE STRING "" FORCE)')
             lines.append('set(CPACK_RPM_SPEC_MORE_DEFINE "%global __brp_check_rpaths %{nil}" CACHE STRING "" FORCE)')
             if rpm_group:
                 lines.append(f'set(CPACK_RPM_PACKAGE_GROUP "{cmake_escape(rpm_group)}" CACHE STRING "" FORCE)')
