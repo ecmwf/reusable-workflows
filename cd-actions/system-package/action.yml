@@ -286,7 +286,12 @@ runs:
 
         if install_prefix:
             lines.append(f'set(CPACK_PACKAGING_INSTALL_PREFIX "{cmake_escape(install_prefix)}" CACHE STRING "" FORCE)')
+            # GNUInstallDirs picks lib64 on RPM-based distros and lib elsewhere
+            install_rpath = ';'.join(cmake_escape(f"{install_prefix}/{d}") for d in ('lib', 'lib64'))
+            lines.append(f'set(CMAKE_INSTALL_RPATH "{install_rpath}" CACHE STRING "" FORCE)')
+            lines.append('set(CMAKE_INSTALL_RPATH_USE_LINK_PATH OFF CACHE BOOL "" FORCE)')
             print(f"Install Prefix: {install_prefix}")
+            print(f"Install RPATH: {install_rpath}")
 
         with open(overrides_file, 'w') as f:
             for line in lines:
