@@ -122,7 +122,7 @@ runs:
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
         echo "Built packages:"
-        find "$output_folder" -name "*.tar.bz2" -o -name "*.tar.bz2" | sort
+        find "$output_folder" \( -name "*.tar.bz2" -o -name "*.conda" \) -type f | sort
         
     - name: Verify artifacts
       shell: bash -el {0}
@@ -131,7 +131,7 @@ runs:
         echo "Checking for conda packages in: $output_folder"
 
         # Check if conda packages exist in output folder
-        if ! find "$output_folder" -name "*.tar.bz2" -type f | head -1 | grep -q .; then
+        if ! find "$output_folder" -type f \( -name "*.tar.bz2" -o -name "*.conda" \) | head -1 | grep -q .; then
             echo "No conda packages found in: $output_folder"
             echo "Available files:"
             find "$output_folder" -type f | head -20
@@ -180,7 +180,7 @@ runs:
         echo "Testing package installation from Nexus..."
 
         # Get package name and version from built packages
-        packages=$(find "$output_folder" -name "*.tar.bz2" -type f)
+        packages=$(find "$output_folder" -type f \( -name "*.tar.bz2" -o -name "*.conda" \))
 
         for package in $packages; do
             package_name=$(basename "$package")

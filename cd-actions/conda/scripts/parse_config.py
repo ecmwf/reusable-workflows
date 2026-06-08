@@ -36,13 +36,16 @@ def main():
 
     meta_file = f"{conda_dir}/meta.yaml"
     output_folder = f"{conda_dir}/build"
-    artifact_pattern = f"{output_folder}/**/*.tar.bz2"
+    artifact_patterns = [f"{output_folder}/**/*.tar.bz2", f"{output_folder}/**/*.conda"]
+    artifact_pattern = "\n".join(artifact_patterns)
 
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
         f.write(f"meta_file={meta_file}\n")
         f.write(f"channels={channels}\n")
         f.write(f"output_folder={output_folder}\n")
-        f.write(f"artifact_pattern={artifact_pattern}\n")
+        f.write("artifact_pattern<<ARTIFACT_PATTERN_EOF\n")
+        f.write(f"{artifact_pattern}\n")
+        f.write("ARTIFACT_PATTERN_EOF\n")
         f.write(f"conda_build_args={conda_build_args}\n")
         f.write(f"nexus_url={nexus_url}\n")
         f.write(f"nexus_token={nexus_token}\n")
