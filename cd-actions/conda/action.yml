@@ -38,7 +38,7 @@ inputs:
     required: false
     default: 'conda-forge'
   conda_build_args:
-    description: 'Additional arguments for conda mambabuild command as line-separated values'
+    description: 'Additional arguments for conda build command as line-separated values'
     required: false
     default: '--no-anaconda-upload'
 
@@ -90,7 +90,7 @@ runs:
       run: |
         eval "$(conda shell.bash hook)"
         conda activate "$BUILD_ENV"
-        mamba install -y conda conda-build boa conda-verify conda-index
+        mamba install -y conda conda-build conda-verify conda-index
         mamba info
         mamba list
         
@@ -114,7 +114,8 @@ runs:
 
         mkdir -p "$output_folder"
 
-        conda mambabuild "$meta_dir" -c $nexus_url $channels --output-folder "$output_folder" --no-anaconda-upload $build_args
+        export CONDA_SOLVER=libmamba
+        "$CONDA_PREFIX/bin/conda" build "$meta_dir" -c $nexus_url $channels --output-folder "$output_folder" --no-anaconda-upload $build_args
         
     - name: List built packages
       shell: bash -el {0}
