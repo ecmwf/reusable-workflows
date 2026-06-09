@@ -188,8 +188,11 @@ runs:
             echo "Testing installation of: $package_name"
 
             # Extract package name and version
-            pkg_base=$(echo "$package_name" | sed -E 's/-[0-9]+(\.[0-9]+)*-.*//')
-            pkg_version=$(echo "$package_name" | sed -E 's/^[^-]+-([0-9]+(\.[0-9]+)*).*/\1/')
+            pkg_stem="${package_name%.conda}"
+            pkg_stem="${pkg_stem%.tar.bz2}"
+            pkg_no_build="${pkg_stem%-*}"
+            pkg_base="${pkg_no_build%-*}"
+            pkg_version="${pkg_no_build##*-}"
 
             echo "Package: $pkg_base"
             echo "Version: $pkg_version"
