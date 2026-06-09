@@ -115,7 +115,7 @@ jobs:
           EOF
 
           echo "Downloaded packages:"
-          find ./packages -name "*.tar.bz2" | sort
+          find ./packages -type f \( -name "*.tar.bz2" -o -name "*.conda" \) | sort
 
       - name: Rebuild conda index
         shell: bash -el {0}

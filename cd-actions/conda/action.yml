@@ -38,7 +38,7 @@ inputs:
     required: false
     default: 'conda-forge'
   conda_build_args:
-    description: 'Additional arguments for conda mambabuild command as line-separated values'
+    description: 'Additional arguments for conda build command as line-separated values'
     required: false
     default: '--no-anaconda-upload'
 
@@ -90,7 +90,7 @@ runs:
       run: |
         eval "$(conda shell.bash hook)"
         conda activate "$BUILD_ENV"
-        mamba install -y conda conda-build boa conda-verify conda-index
+        mamba install -y conda conda-build conda-verify conda-index
         mamba info
         mamba list
         
@@ -114,14 +114,15 @@ runs:
 
         mkdir -p "$output_folder"
 
-        conda mambabuild "$meta_dir" -c $nexus_url $channels --output-folder "$output_folder" --no-anaconda-upload $build_args
+        export CONDA_SOLVER=libmamba
+        "$CONDA_PREFIX/bin/conda" build "$meta_dir" -c $nexus_url $channels --output-folder "$output_folder" --no-anaconda-upload $build_args
         
     - name: List built packages
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
         echo "Built packages:"
-        find "$output_folder" -name "*.tar.bz2" -o -name "*.tar.bz2" | sort
+        find "$output_folder" \( -name "*.tar.bz2" -o -name "*.conda" \) -type f | sort
         
     - name: Verify artifacts
       shell: bash -el {0}
@@ -130,7 +131,7 @@ runs:
         echo "Checking for conda packages in: $output_folder"
 
         # Check if conda packages exist in output folder
-        if ! find "$output_folder" -name "*.tar.bz2" -type f | head -1 | grep -q .; then
+        if ! find "$output_folder" -type f \( -name "*.tar.bz2" -o -name "*.conda" \) | head -1 | grep -q .; then
             echo "No conda packages found in: $output_folder"
             echo "Available files:"
             find "$output_folder" -type f | head -20
@@ -179,7 +180,7 @@ runs:
         echo "Testing package installation from Nexus..."
 
         # Get package name and version from built packages
-        packages=$(find "$output_folder" -name "*.tar.bz2" -type f)
+        packages=$(find "$output_folder" -type f \( -name "*.tar.bz2" -o -name "*.conda" \))
 
         for package in $packages; do
             package_name=$(basename "$package")
@@ -187,8 +188,11 @@ runs:
             echo "Testing installation of: $package_name"
 
             # Extract package name and version
-            pkg_base=$(echo "$package_name" | sed -E 's/-[0-9]+(\.[0-9]+)*-.*//')
-            pkg_version=$(echo "$package_name" | sed -E 's/^[^-]+-([0-9]+(\.[0-9]+)*).*/\1/')
+            pkg_stem="${package_name%.conda}"
+            pkg_stem="${pkg_stem%.tar.bz2}"
+            pkg_no_build="${pkg_stem%-*}"
+            pkg_base="${pkg_no_build%-*}"
+            pkg_version="${pkg_no_build##*-}"
 
             echo "Package: $pkg_base"
             echo "Version: $pkg_version"
