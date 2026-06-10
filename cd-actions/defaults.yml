@@ -8,6 +8,7 @@ hpc:
   self_test: true
   lock_permissions: true
   sync_module: true
+  tag_module: true
   use_ninja: true
   install_lib_dir: lib
   prefix_compiler_specific: false

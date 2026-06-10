@@ -178,6 +178,9 @@ jobs:
           dry_run_install: ${{ matrix.dry_run_install }}
           dry_run_install_prefix: ${{ matrix.dry_run_install_prefix }}
           site: ${{ matrix.site }}
+          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
+          tag_module: ${{ matrix.tag_module }}
+          module_tag_name: ${{ matrix.module_tag_name || vars.HPC_MODULE_TAG_NAME || 'new' }}
           use_ninja: ${{ matrix.use_ninja }}
           force_build: ${{ matrix.force_build }}
           ecbundle: ${{ matrix.ecbundle }}

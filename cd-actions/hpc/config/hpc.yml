@@ -5,3 +5,11 @@ sync_clusters:
   ad-batch: [aa, ab, ac]
   ag-batch: []
   lumi: []
+
+tag_clusters:
+  aa-batch: [aa, ab, ac, ad]
+  ab-batch: [aa, ab, ac, ad]
+  ac-batch: [aa, ab, ac, ad]
+  ad-batch: [aa, ab, ac, ad]
+  ag-batch: [ag]
+  lumi: []
