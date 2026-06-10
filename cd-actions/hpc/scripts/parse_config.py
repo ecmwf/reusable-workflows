@@ -46,6 +46,16 @@ def main():
 
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
     dry_run_install_prefix_input = os.environ.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
+    # Validate and normalize module_tag_name
+    raw_tag_name = os.environ.get("INPUT_MODULE_TAG_NAME", "new").strip()
+    if not raw_tag_name:
+        module_tag_name = "new"
+    elif re.match(r"^[A-Za-z0-9._-]+$", raw_tag_name):
+        module_tag_name = raw_tag_name
+    else:
+        print(f"::error::module_tag_name '{raw_tag_name}' contains invalid characters. Allowed: [A-Za-z0-9._-]")
+        sys.exit(1)
+
     repository = os.environ["GITHUB_REPOSITORY"]
     module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
     ref_name = os.environ["INPUT_REF_NAME"]
@@ -105,6 +115,7 @@ def main():
         f.write(f"do_sync={'true' if do_sync else 'false'}\n")
         f.write(f"install_prefix={install_prefix}\n")
         f.write(f"base_install_prefix={base_install_prefix}\n")
+        f.write(f"module_tag_name={module_tag_name}\n")
         for key, value in compiler_info.items():
             f.write(f"{key}={value}\n")
 
@@ -112,6 +123,7 @@ def main():
     print(f"Compiler: {compiler_info['compiler']}")
     print(f"Build mode: {'staged' if use_staged else 'standard'}")
     print(f"Install prefix: {install_prefix}")
+    print(f"Module tag name: {module_tag_name}")
     print(f"Do sync: {do_sync}")
 
 

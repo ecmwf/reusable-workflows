@@ -5,6 +5,8 @@ import contextlib
 import hashlib
 import json
 import os
+import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -80,6 +82,12 @@ def main():
     do_sync = os.environ.get("STEP_CONFIG_DO_SYNC", "false") == "true"
     if not sync_clusters:
         do_sync = False
+
+    # Module tag configuration
+    tag_module_input = os.environ.get("INPUT_TAG_MODULE", "true") == "true"
+    is_prerelease = os.environ.get("INPUT_IS_PRERELEASE", "false") == "true"
+    dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
+    tag_clusters = hpc_config.get("tag_clusters", {}).get(site, None)
     lock_permissions = os.environ.get("INPUT_LOCK_PERMISSIONS", "true") == "true"
     use_ninja = os.environ.get("INPUT_USE_NINJA", "true") == "true"
     self_test = os.environ.get("INPUT_SELF_TEST", "true") == "true"
@@ -278,10 +286,33 @@ def main():
                 }
             )
 
+    if tag_module_input and tag_clusters is None:
+        print(f"::error::Site '{site}' not found in tag_clusters in hpc.yml. Cannot tag.")
+        sys.exit(1)
+
+    if tag_clusters and not do_sync:
+        tag_clusters = [c for c in tag_clusters if c not in sync_clusters]
+
+    release_allowed = not dry_run and not is_prerelease
+    do_tag = tag_module_input and release_allowed and bool(tag_clusters)
+
+    module_tag_name = os.environ.get("INPUT_MODULE_TAG_NAME", "new").strip() or "new"
+
+    if do_tag:
+        ref_name_for_tag = ref_name
+        if "/" in ref_name_for_tag:
+            print(f"::error::ref_name '{ref_name_for_tag}' contains '/' which is not allowed for module tagging")
+            sys.exit(1)
+        if not re.match(r"^[A-Za-z0-9._-]+$", ref_name_for_tag):
+            print(f"::error::ref_name '{ref_name_for_tag}' contains invalid characters for module tagging. Allowed: [A-Za-z0-9._-]")
+            sys.exit(1)
+        if not re.match(r"^[A-Za-z0-9._+/-]+$", module_name):
+            print(f"::error::module_name '{module_name}' contains invalid characters for tagging. Allowed: [A-Za-z0-9._+/-]")
+            sys.exit(1)
+
     # Build name for logging
     build_name = os.environ.get("INPUT_NAME", "").strip()
 
-    dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
     dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
     # Build ci_options dict
     ci_options = {
@@ -314,6 +345,10 @@ def main():
         "base_install_prefix": base_install_prefix,
         "sync_clusters": sync_clusters,
         "sync_module": do_sync,
+        "do_tag": do_tag,
+        "tag_clusters": tag_clusters or [],
+        "ref_name": ref_name,
+        "module_tag_name": module_tag_name,
         "module_name": module_name,
         "queue": queue,
         "hpc": "lumi" if site == "lumi" else "atos",

@@ -161,6 +161,8 @@ for build in config.get("builds", []):
             matrix_item["dry_run_install_prefix"] = build_config.get("dry_run_install_prefix", "")
             matrix_item["site"] = build_config.get("site", d.get("site", "aa-batch"))
             matrix_item["sync_module"] = bool_to_str(build_config.get("sync_module", d.get("sync_module", True)), "sync_module")
+            matrix_item["tag_module"] = bool_to_str(build_config.get("tag_module", d.get("tag_module", True)), "tag_module")
+            matrix_item["module_tag_name"] = build_config.get("module_tag_name", d.get("module_tag_name", ""))
             matrix_item["use_ninja"] = bool_to_str(build_config.get("use_ninja", d.get("use_ninja", True)), "use_ninja")
             matrix_item["force_build"] = bool_to_str(build_config.get("force_build", d.get("force_build", False)), "force_build")
             matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", d.get("ecbundle", False)), "ecbundle")

@@ -153,6 +153,18 @@ inputs:
     description: 'Sync module to other clusters after build'
     required: false
     default: 'true'
+  is_prerelease:
+    description: 'Whether this deployment is a prerelease (suppresses tagging)'
+    required: false
+    default: 'false'
+  tag_module:
+    description: 'Tag module after sync'
+    required: false
+    default: 'true'
+  module_tag_name:
+    description: 'Module tag name (e.g., new). Defaults to new, overridable via vars.HPC_MODULE_TAG_NAME'
+    required: false
+    default: 'new'
   module_name:
     description: 'Module name for sync (if different from repo name)'
     required: false
@@ -224,6 +236,9 @@ runs:
         INPUT_MODULE_NAME: ${{ inputs.module_name }}
         INPUT_REF_NAME: ${{ inputs.ref_name }}
         INPUT_PREFIX_COMPILER_SPECIFIC: ${{ inputs.prefix_compiler_specific }}
+        INPUT_IS_PRERELEASE: ${{ inputs.is_prerelease }}
+        INPUT_TAG_MODULE: ${{ inputs.tag_module }}
+        INPUT_MODULE_TAG_NAME: ${{ inputs.module_tag_name }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}
       run: python3 "${{ github.action_path }}/scripts/parse_config.py"
 
@@ -245,6 +260,9 @@ runs:
         INPUT_REF_NAME: ${{ inputs.ref_name }}
         INPUT_SHA: ${{ inputs.sha }}
         INPUT_MODULE_NAME: ${{ inputs.module_name }}
+        INPUT_IS_PRERELEASE: ${{ inputs.is_prerelease }}
+        INPUT_TAG_MODULE: ${{ inputs.tag_module }}
+        INPUT_MODULE_TAG_NAME: ${{ steps.config.outputs.module_tag_name }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
         INPUT_NTASKS: ${{ inputs.ntasks }}
         INPUT_GPUS: ${{ inputs.gpus }}

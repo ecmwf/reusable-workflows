@@ -136,6 +136,16 @@ on:
         required: false
         type: string
         default: 'true'
+      tag_module:
+        description: 'Tag module after sync'
+        required: false
+        type: string
+        default: 'true'
+      module_tag_name:
+        description: 'Module tag name (defaults to vars.HPC_MODULE_TAG_NAME or new)'
+        required: false
+        type: string
+        default: ''
       module_name:
         description: 'Module name for sync (if different from repo name)'
         required: false
@@ -276,6 +286,9 @@ jobs:
           install_command: ${{ inputs.install_command }}
           lock_permissions: ${{ inputs.lock_permissions }}
           sync_module: ${{ inputs.sync_module }}
+          tag_module: ${{ inputs.tag_module }}
+          is_prerelease: ${{ steps.detect-release-type.outputs.is_prerelease }}
+          module_tag_name: ${{ inputs.module_tag_name || vars.HPC_MODULE_TAG_NAME || 'new' }}
           module_name: ${{ inputs.module_name }}
           ntasks: ${{ inputs.ntasks }}
           gpus: ${{ inputs.gpus }}
