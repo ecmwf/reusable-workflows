@@ -1,0 +1,29 @@
+name: build-image
+
+# Controls when the workflow will run
+on:
+  # Trigger the workflow on pushes to the main branch and on version tags
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
+  # Allow workflow to be dispatched on demand
+  workflow_dispatch: ~
+
+jobs:
+  # Calls a reusable workflow to build the Docker image and push it to the ECMWF container registry.
+  #   Images are tagged with the branch name or release tag, plus the short commit SHA.
+  build:
+    name: build
+    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v2
+    with:
+      registry: eccr.ecmwf.int
+      image_repository: my-project/my-app
+      environment_file: environments/actions.env.prod
+      environment_variables: |
+        app_version=${{ github.ref_name }}
+    secrets:
+      registry_username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
+      registry_password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}

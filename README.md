@@ -324,46 +324,62 @@ Public URL of the Microsoft Teams incoming webhook. To get the value, make sure 
 
 ## build-and-push-image.yml
 
+Builds a Docker image and optionally pushes it to a container registry. Images are tagged with the
+triggering branch, tag or PR number plus the short commit SHA, or explicitly via `image_tag`. Testing
+and deployment are left to the calling workflow, which can consume the `image` output in downstream
+jobs (see [samples](samples/build-and-push-image)).
+
 ### Build and Push Usage
 
 ```yaml
 jobs:
   build-image:
-    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v1
+    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v2
     with:
-      registry: ghcr.io
-      image_repository: my-org/my-app
+      registry: eccr.ecmwf.int
+      image_repository: my-project/my-app
       environment_file: environments/prod.env
       build_args: |
         environment=prod
     secrets:
-      registry_username: ${{ secrets.REGISTRY_USERNAME }}
-      registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+      registry_username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
+      registry_password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+      build_secrets: |
+        nexus_username=${{ secrets.ECMWF_NEXUS_USERNAME }}
+        nexus_password=${{ secrets.ECMWF_NEXUS_PASSWORD }}
 ```
 
 ### Build and Push Inputs
 
 - **repository**: Source repository name. Default: `${{ github.repository }}`. Type: `string`.
 - **ref**: Source repository reference. Default: `${{ github.ref }}`. Type: `string`.
-- **registry**: Container registry hostname. Type: `string`.
+- **registry**: Container registry hostname, e.g. `eccr.ecmwf.int` or `ghcr.io`. Type: `string`.
 - **image_repository**: Image repository path relative to the registry, without the tag. Type: `string`.
-- **image_tag**: Image tag to publish. Defaults to the checked out commit SHA when unset. Default: `''`. Type: `string`.
-- **environment_file**: Optional path to a file containing environment variables to load during the build. Default: `''`. Type: `string`.
+- **image_tag**: Primary image tag. Derived from the triggering branch, tag or PR number when unset. Default: `''`. Type: `string`.
+- **additional_tags**: Extra tags to apply, newline- or comma-separated, e.g. `latest`. Default: `''`. Type: `string`.
+- **environment_file**: Path to a file with `key=value` lines, exported to the environment and passed to the build as build arguments. Default: `''`. Type: `string`.
+- **environment_variables**: Newline-separated `key=value` pairs, exported to the environment and passed to the build as build arguments. Overrides `environment_file` entries. Default: `''`. Type: `string`.
 - **context**: Docker build context. Default: `'.'`. Type: `string`.
-- **dockerfile**: Path to the Dockerfile, relative to the repository root. Default: `'./Dockerfile'`. Type: `string`.
-- **platforms**: Target platforms for the Docker build. Default: `'linux/amd64'`. Type: `string`.
+- **dockerfile**: Path to the Dockerfile. Defaults to `Dockerfile` inside the build context. Default: `''`. Type: `string`.
+- **platforms**: Comma-separated target platforms. QEMU is set up automatically for non-amd64 targets. Default: `'linux/amd64'`. Type: `string`.
 - **push**: Whether to push the built image to the registry. Default: `true`. Type: `boolean`.
-- **build_args**: Optional newline-separated Docker build arguments in `key=value` form. Default: `''`. Type: `string`.
+- **build_args**: Newline-separated Docker build arguments in `key=value` form. Default: `''`. Type: `string`.
+- **runs_on**: Runner labels, as a JSON array string. Default: `'["ubuntu-latest"]'`. Type: `string`.
+- **use_cache**: Whether to cache build layers in the GitHub Actions cache. Default: `true`. Type: `boolean`.
+- **provenance**: Whether to attach provenance attestations. Off by default for Harbor compatibility. Default: `false`. Type: `boolean`.
 
 ### Build and Push Outputs
 
-- **image**: Fully qualified image reference including tag.
-- **image_tag**: Image tag used for the build.
+- **image**: Fully qualified image reference including the primary tag.
+- **image_tag**: Primary image tag used for the build.
+- **tags**: Newline-separated list of all generated image references.
+- **digest**: Content digest of the built image.
 
 ### Build and Push Secrets
 
-- **registry_username**: Optional username for registry authentication.
-- **registry_password**: Optional password or token for registry authentication.
+- **registry_username**: Username for registry authentication. Login is skipped unless both registry secrets are set.
+- **registry_password**: Password or token for registry authentication.
+- **build_secrets**: Newline-separated BuildKit secrets in `id=value` form, for `RUN --mount=type=secret,id=<id>`. Quote multi-line values.
 
 ## docs.yml
 

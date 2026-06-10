@@ -24,12 +24,26 @@ on:
         required: true
         type: string
       image_tag:
-        description: Image tag. Defaults to the checked out commit SHA when unset.
+        description: Primary image tag. Derived from the triggering branch, tag or PR number when unset.
+        required: false
+        default: ''
+        type: string
+      additional_tags:
+        description: Extra tags to apply, newline- or comma-separated, e.g. `latest`.
         required: false
         default: ''
         type: string
       environment_file:
-        description: Optional path to a file containing environment variables to load into the build.
+        description:
+          Path to a file with `key=value` lines, exported to the environment and passed to the build
+          as build arguments.
+        required: false
+        default: ''
+        type: string
+      environment_variables:
+        description:
+          Newline-separated `key=value` pairs, exported to the environment and passed to the build
+          as build arguments. Overrides `environment_file` entries.
         required: false
         default: ''
         type: string
@@ -39,12 +53,12 @@ on:
         default: '.'
         type: string
       dockerfile:
-        description: Path to the Dockerfile, relative to the repository root.
+        description: Path to the Dockerfile. Defaults to `Dockerfile` inside the build context.
         required: false
-        default: './Dockerfile'
+        default: ''
         type: string
       platforms:
-        description: Target platforms for the Docker build.
+        description: Comma-separated target platforms.
         required: false
         default: 'linux/amd64'
         type: string
@@ -54,31 +68,57 @@ on:
         default: true
         type: boolean
       build_args:
-        description: Optional newline-separated Docker build arguments in `key=value` form.
+        description: Newline-separated Docker build arguments in `key=value` form.
         required: false
         default: ''
         type: string
+      runs_on:
+        description: Runner labels, as a JSON array string.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
+      use_cache:
+        description: Whether to cache build layers in the GitHub Actions cache.
+        required: false
+        default: true
+        type: boolean
+      provenance:
+        description: Whether to attach provenance attestations. Off by default for Harbor compatibility.
+        required: false
+        default: false
+        type: boolean
     secrets:
       registry_username:
-        description: Optional username for registry authentication.
+        description: Username for registry authentication. Login is skipped unless both registry secrets are set.
         required: false
       registry_password:
-        description: Optional password or token for registry authentication.
+        description: Password or token for registry authentication.
+        required: false
+      build_secrets:
+        description: Newline-separated BuildKit secrets in `id=value` form, for `RUN --mount=type=secret,id=<id>`.
         required: false
     outputs:
       image:
-        description: Fully qualified image reference including tag.
+        description: Fully qualified image reference including the primary tag.
         value: ${{ jobs.build_and_push.outputs.image }}
       image_tag:
-        description: Image tag used for the build.
+        description: Primary image tag used for the build.
         value: ${{ jobs.build_and_push.outputs.image_tag }}
+      tags:
+        description: Newline-separated list of all generated image references.
+        value: ${{ jobs.build_and_push.outputs.tags }}
+      digest:
+        description: Content digest of the built image.
+        value: ${{ jobs.build_and_push.outputs.digest }}
 
 jobs:
   build_and_push:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs_on) }}
     outputs:
-      image: ${{ steps.prepare.outputs.image }}
-      image_tag: ${{ steps.prepare.outputs.image_tag }}
+      image: ${{ format('{0}/{1}:{2}', inputs.registry, inputs.image_repository, steps.meta.outputs.version) }}
+      image_tag: ${{ steps.meta.outputs.version }}
+      tags: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -86,57 +126,109 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
 
-      - name: Prepare Image Metadata
+      - name: Load Environment Variables
+        if: ${{ inputs.environment_file != '' || inputs.environment_variables != '' }}
+        shell: bash
+        env:
+          ENVIRONMENT_FILE: ${{ inputs.environment_file }}
+          ENVIRONMENT_VARIABLES: ${{ inputs.environment_variables }}
+        run: |
+          if [[ -n "$ENVIRONMENT_FILE" ]]; then
+            if [[ ! -f "$ENVIRONMENT_FILE" ]]; then
+              echo "::error::Environment file not found: $ENVIRONMENT_FILE"
+              exit 1
+            fi
+            grep -vE '^[[:space:]]*(#|$)' "$ENVIRONMENT_FILE" >> "$GITHUB_ENV" || true
+          fi
+          if [[ -n "$ENVIRONMENT_VARIABLES" ]]; then
+            echo "$ENVIRONMENT_VARIABLES" >> "$GITHUB_ENV"
+          fi
+
+      - name: Prepare Build Configuration
         id: prepare
         shell: bash
         env:
           REGISTRY_USERNAME: ${{ secrets.registry_username }}
           REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+          BUILD_ARGS: ${{ inputs.build_args }}
+          ENVIRONMENT_FILE: ${{ inputs.environment_file }}
+          ENVIRONMENT_VARIABLES: ${{ inputs.environment_variables }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ADDITIONAL_TAGS: ${{ inputs.additional_tags }}
         run: |
-          if [[ -n "${{ inputs.image_tag }}" ]]; then
-            image_tag="${{ inputs.image_tag }}"
-          else
-            image_tag="${GITHUB_SHA}"
-          fi
-
-          image="${{ inputs.registry }}/${{ inputs.image_repository }}:${image_tag}"
-
-          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
-          echo "image=${image}" >> "$GITHUB_OUTPUT"
-
           if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
             echo "login=true" >> "$GITHUB_OUTPUT"
           else
             echo "login=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Load Environment Variables
-        if: ${{ inputs.environment_file != '' }}
-        shell: bash
-        run: |
-          if [[ ! -f "${{ inputs.environment_file }}" ]]; then
-            echo "::error::Environment file not found: ${{ inputs.environment_file }}"
-            exit 1
-          fi
-          cat "${{ inputs.environment_file }}" >> "$GITHUB_ENV"
+          # Translate the tag inputs into a `docker/metadata-action` tags specification.
+          {
+            echo "tag_spec<<TAG_SPEC_EOF"
+            if [[ -n "$IMAGE_TAG" ]]; then
+              echo "type=raw,value=${IMAGE_TAG}"
+            else
+              echo "type=ref,event=branch"
+              echo "type=ref,event=tag"
+              echo "type=ref,event=pr"
+              echo "type=sha"
+            fi
+            if [[ -n "$ADDITIONAL_TAGS" ]]; then
+              tr ',' '\n' <<< "$ADDITIONAL_TAGS" \
+                | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' -e 's/^/type=raw,value=/'
+            fi
+            echo "TAG_SPEC_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          # Later build arguments take precedence.
+          {
+            echo "build_args<<BUILD_ARGS_EOF"
+            if [[ -n "$ENVIRONMENT_FILE" ]]; then
+              grep -vE '^[[:space:]]*(#|$)' "$ENVIRONMENT_FILE" || true
+            fi
+            if [[ -n "$ENVIRONMENT_VARIABLES" ]]; then
+              echo "$ENVIRONMENT_VARIABLES"
+            fi
+            if [[ -n "$BUILD_ARGS" ]]; then
+              echo "$BUILD_ARGS"
+            fi
+            echo "BUILD_ARGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Extract Image Metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ inputs.registry }}/${{ inputs.image_repository }}
+          tags: ${{ steps.prepare.outputs.tag_spec }}
 
       - name: Log in to Registry
         if: steps.prepare.outputs.login == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ${{ inputs.registry }}
           username: ${{ secrets.registry_username }}
           password: ${{ secrets.registry_password }}
 
+      - name: Set up QEMU
+        if: inputs.platforms != 'linux/amd64'
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Build and Push Image
-        uses: docker/build-push-action@v5
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           platforms: ${{ inputs.platforms }}
           push: ${{ inputs.push }}
-          build-args: ${{ inputs.build_args }}
-          tags: ${{ steps.prepare.outputs.image }}
+          provenance: ${{ inputs.provenance }}
+          build-args: ${{ steps.prepare.outputs.build_args }}
+          secrets: ${{ secrets.build_secrets }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: ${{ inputs.use_cache && 'type=gha' || '' }}
+          cache-to: ${{ inputs.use_cache && 'type=gha,mode=max' || '' }}

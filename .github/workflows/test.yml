@@ -58,6 +58,19 @@ jobs:
       target_username: ${{ secrets.BITBUCKET_USERNAME }}
       target_token: ${{ secrets.BITBUCKET_PAT }}
 
+  # Calls a reusable workflow to smoke-test the Docker image build against another repository.
+  #   The image is built without registry credentials and never pushed.
+  build-image:
+    name: build-image
+    needs: qa
+    uses: ./.github/workflows/build-and-push-image.yml
+    with:
+      repository: ecmwf/skinnywms
+      ref: master
+      registry: ghcr.io
+      image_repository: ecmwf/build-image-smoke-test
+      push: false
+
   # Calls a reusable CI workflow to build & check the documentation in another repository.
   #   It will install required system dependencies and test Read the Docs build process.
   docs:

@@ -1,0 +1,58 @@
+name: test-build-deploy
+
+# Controls when the workflow will run
+on:
+  # Trigger the workflow on pushes to the main branch
+  push:
+    branches:
+      - main
+
+  # Trigger the workflow on all pull requests
+  pull_request: ~
+
+jobs:
+  # Runs the repository test suite before any image is built.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Run Tests
+        run: make ci
+
+  # Calls a reusable workflow to build the Docker image from a subdirectory context.
+  #   Dependency credentials are exposed to the build as BuildKit secrets, available in the
+  #   Dockerfile via `RUN --mount=type=secret,id=nexus_username` etc. The image is only pushed
+  #   (and tagged as `latest`) on the main branch.
+  build:
+    name: build
+    needs: test
+    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v2
+    with:
+      registry: eccr.ecmwf.int
+      image_repository: my-project/my-backend
+      context: ./backend
+      push: ${{ github.ref == 'refs/heads/main' }}
+      additional_tags: ${{ github.ref == 'refs/heads/main' && 'latest' || '' }}
+    secrets:
+      registry_username: ${{ secrets.ECMWF_DOCKER_REGISTRY_USERNAME }}
+      registry_password: ${{ secrets.ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN }}
+      build_secrets: |
+        nexus_username=${{ secrets.ECMWF_NEXUS_USERNAME }}
+        nexus_password=${{ secrets.ECMWF_NEXUS_PASSWORD }}
+
+  # Triggers the deployment of the pushed image, using the image reference output by the build job.
+  deploy:
+    name: deploy
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Deployment
+        uses: ecmwf/nexhub-deployment@main
+        with:
+          deployment_event_type: deploy-backend
+          docker_image_name: ${{ needs.build.outputs.image }}
+          github_token: ${{ secrets.GH_REPO_READ_TOKEN }}
