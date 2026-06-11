@@ -1,0 +1,197 @@
+name: ci-rust
+description: A composite action to format-check, lint, test and document Rust crates and workspaces.
+inputs:
+  manifest-path:
+    description: Path to Cargo.toml for the crate or workspace to operate on.
+    required: false
+    default: Cargo.toml
+  working-directory:
+    description: Working directory for all cargo invocations. Useful for multi-workspace repositories.
+    required: false
+    default: '.'
+  toolchain:
+    description: Rust toolchain to install (e.g. stable, nightly, 1.75.0).
+    required: false
+    default: stable
+  components:
+    description: Comma-separated rustup components. When empty, derived from run-fmt and run-clippy.
+    required: false
+    default: ''
+  targets:
+    description: Optional rustup target triple(s) to install, comma-separated.
+    required: false
+    default: ''
+  features:
+    description: Feature selection expression passed to clippy and test (e.g. --all-features, --no-default-features --features foo).
+    required: false
+    default: '--all-features'
+  locked:
+    description: Add --locked to cargo clippy and cargo test to enforce Cargo.lock.
+    required: false
+    default: 'true'
+  run-fmt:
+    description: Run cargo fmt --all --check.
+    required: false
+    default: 'true'
+  run-clippy:
+    description: Run cargo clippy.
+    required: false
+    default: 'true'
+  run-test:
+    description: Run cargo test.
+    required: false
+    default: 'true'
+  run-doc:
+    description: Run cargo doc --no-deps with RUSTDOCFLAGS=-D warnings.
+    required: false
+    default: 'true'
+  clippy-args:
+    description: |
+      Arguments appended after the cargo clippy command. Default is the ECMWF Rust enforcement set:
+      `-W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::unwrap_used
+       -A clippy::module_name_repetitions -A clippy::missing_errors_doc -D warnings`.
+      Override with an empty string to drop the set, or a different `-- ...` block to swap it.
+    required: false
+    default: '-- -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::unwrap_used -A clippy::module_name_repetitions -A clippy::missing_errors_doc -D warnings'
+  test-args:
+    description: Extra args appended to cargo test (e.g. --workspace, --test foo -- --ignored).
+    required: false
+    default: '--workspace'
+  doc-args:
+    description: Extra args appended to cargo doc (e.g. --workspace).
+    required: false
+    default: '--workspace'
+  rustdocflags:
+    description: Value exported as RUSTDOCFLAGS during cargo doc.
+    required: false
+    default: '-D warnings'
+  system-dependencies:
+    description: Space-separated apt packages installed before cargo runs (Linux runners only).
+    required: false
+    default: ''
+  cache:
+    description: Use Swatinem/rust-cache to cache cargo artifacts.
+    required: false
+    default: 'true'
+  cache-workspaces:
+    description: Workspaces argument forwarded to Swatinem/rust-cache (newline-separated). Defaults to working-directory.
+    required: false
+    default: ''
+  private-repos-token:
+    description: GitHub token used to rewrite ssh://git@github.com URLs to HTTPS for private repository dependencies. Also exports CARGO_NET_GIT_FETCH_WITH_CLI=true.
+    required: false
+    default: ''
+  checkout:
+    description: Whether to check out the repository before running. Set to false when the calling workflow already checked out.
+    required: false
+    default: 'false'
+  repository:
+    description: Repository name in owner/name format. Used only when checkout=true.
+    required: false
+    default: ${{ github.repository }}
+  ref:
+    description: Repository reference for checkout.
+    required: false
+    default: ${{ github.ref }}
+  github_token:
+    description: GitHub token used for checkout.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      if: ${{ inputs.checkout == 'true' }}
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        token: ${{ inputs.github_token }}
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Configure git for private repository dependencies
+      if: ${{ inputs.private-repos-token != '' }}
+      shell: bash
+      env:
+        PRIVATE_TOKEN: ${{ inputs.private-repos-token }}
+      run: |
+        git config --global url."https://x-access-token:${PRIVATE_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
+
+    - name: Install system dependencies
+      if: ${{ inputs.system-dependencies != '' && runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ${{ inputs.system-dependencies }}
+
+    - name: Compute toolchain components
+      id: components
+      shell: bash
+      env:
+        OVERRIDE: ${{ inputs.components }}
+        RUN_FMT: ${{ inputs.run-fmt }}
+        RUN_CLIPPY: ${{ inputs.run-clippy }}
+      run: |
+        if [ -n "${OVERRIDE}" ]; then
+          echo "value=${OVERRIDE}" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        parts=()
+        [ "${RUN_FMT}" = "true" ] && parts+=("rustfmt")
+        [ "${RUN_CLIPPY}" = "true" ] && parts+=("clippy")
+        if [ ${#parts[@]} -eq 0 ]; then
+          echo "value=" >> "$GITHUB_OUTPUT"
+        else
+          (IFS=','; echo "value=${parts[*]}") >> "$GITHUB_OUTPUT"
+        fi
+
+    # Using @master because @stable/@nightly are branch shortcuts that override
+    # the toolchain input — see publish-rust-crate.yml for the same rationale.
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ steps.components.outputs.value }}
+        targets: ${{ inputs.targets }}
+
+    - name: Cache cargo artifacts
+      if: ${{ inputs.cache == 'true' }}
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      with:
+        workspaces: ${{ inputs.cache-workspaces != '' && inputs.cache-workspaces || inputs.working-directory }}
+
+    - name: Run cargo fmt --check
+      if: ${{ inputs.run-fmt == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: cargo fmt --all --check --manifest-path "${{ inputs.manifest-path }}"
+
+    - name: Run cargo clippy
+      if: ${{ inputs.run-clippy == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        LOCKED_FLAG: ${{ inputs.locked == 'true' && '--locked' || '' }}
+      run: |
+        cargo clippy --all-targets ${{ inputs.features }} ${LOCKED_FLAG} --manifest-path "${{ inputs.manifest-path }}" ${{ inputs.clippy-args }}
+
+    - name: Run cargo test
+      if: ${{ inputs.run-test == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        LOCKED_FLAG: ${{ inputs.locked == 'true' && '--locked' || '' }}
+      run: |
+        cargo test ${{ inputs.features }} ${LOCKED_FLAG} --manifest-path "${{ inputs.manifest-path }}" ${{ inputs.test-args }}
+
+    - name: Run cargo doc
+      if: ${{ inputs.run-doc == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        RUSTDOCFLAGS: ${{ inputs.rustdocflags }}
+        DOCS_RS: '1'
+      run: cargo doc --no-deps --manifest-path "${{ inputs.manifest-path }}" ${{ inputs.doc-args }}
