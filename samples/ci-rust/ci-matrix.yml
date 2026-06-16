@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Multi-workspace repo: fmt/clippy/doc run once on the root, then tests run
+  # in each listed workspace. Add toolchains/os-list lines to fan out further.
+  ci:
+    uses: ecmwf/reusable-workflows/.github/workflows/ci-rust.yml@v2
+    with:
+      system-dependencies: cmake
+      workspaces: |
+        .
+        crates/subcrate
+    secrets:
+      private_repos_token: ${{ secrets.GH_REPO_READ_TOKEN }}
