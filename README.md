@@ -400,8 +400,8 @@ Feature selection expression passed to clippy and test.
 
 #### `locked`
 
-Add `--locked` to `cargo clippy` and `cargo test` to enforce `Cargo.lock`.
-**Default:** `true`
+Add `--locked` to `cargo clippy` and `cargo test` to enforce `Cargo.lock`. Default is `false` because library crates (the dominant consumer pattern) typically do not commit `Cargo.lock`; set `true` for binary/app crates that do.
+**Default:** `false`
 **Type:** `boolean`
 
 #### `system-dependencies`

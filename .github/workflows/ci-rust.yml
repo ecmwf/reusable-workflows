@@ -320,7 +320,7 @@ jobs:
   integration:
     name: integration
     if: ${{ inputs.run-integration && github.ref == 'refs/heads/main' }}
-    needs: [fmt, clippy, doc, setup, test]
+    needs: [fmt, clippy, doc, test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -364,7 +364,7 @@ jobs:
   notify:
     name: notify
     if: ${{ always() && inputs.notify_teams && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop') }}
-    needs: [fmt, clippy, doc, setup, test, integration]
+    needs: [fmt, clippy, doc, test, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Notify Teams
