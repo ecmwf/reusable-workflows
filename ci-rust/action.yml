@@ -26,9 +26,9 @@ inputs:
     required: false
     default: '--all-features'
   locked:
-    description: Add --locked to cargo clippy and cargo test to enforce Cargo.lock.
+    description: Add --locked to cargo clippy and cargo test to enforce Cargo.lock. Default false because library crates typically do not commit Cargo.lock; set 'true' for binary/app crates that do.
     required: false
-    default: 'true'
+    default: 'false'
   run-fmt:
     description: Run cargo fmt --all --check.
     required: false
