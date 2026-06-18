@@ -270,7 +270,7 @@ jobs:
 
   test:
     name: test (${{ matrix.name }})
-    needs: [fmt, clippy, doc, setup]
+    needs: [fmt, clippy, setup]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
@@ -320,7 +320,7 @@ jobs:
   integration:
     name: integration
     if: ${{ inputs.run-integration && github.ref == 'refs/heads/main' }}
-    needs: [fmt, clippy, doc, test]
+    needs: [fmt, clippy, test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
