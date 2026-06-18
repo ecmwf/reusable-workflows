@@ -16,6 +16,7 @@ A collection of [reusable GitHub workflows] for ECMWF repositories.
 - [build-and-push-image.yml](#build-and-push-imageyml): Build and optionally push a Docker image to a container registry
 - [qa-precommit-run.yml](#qa-precommit): Runs the pre-commit hooks on all files server-side as a QA drop-in.
 - [qa-pytest-pyproject.yml](#qa-pytest-pyproject): Runs pytest after a `pyproject.toml` install with a markdown report.
+- [ci-rust.yml](#ci-rustyml): Continuous Integration workflow for Rust crates and workspaces
 - [publish-rust-crate.yml](#publish-rust-crateyml): Workflow for publishing Rust crates to crates.io
 - [sync.yml](#syncyml): Workflow for syncing a Git repository
 
@@ -321,6 +322,186 @@ The source repository reference.
 
 Public URL of the Microsoft Teams incoming webhook. To get the value, make sure that channel in Teams has the appropriate connector set up. It will only be used if [notify_teams](#notify_teams-2) input is switched on.
 **Example:** `https://webhook.office.com/webhookb2/...`
+
+## ci-rust.yml
+
+Continuous Integration workflow for Rust crates and Cargo workspaces. Runs `cargo fmt --check`, `cargo clippy`, `cargo doc` and `cargo test` against a configurable matrix of toolchains, runner images and workspace directories. Default clippy invocation enforces the ECMWF Rust lint set: `-W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::unwrap_used -A clippy::module_name_repetitions -A clippy::missing_errors_doc -D warnings`.
+
+### Usage
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    uses: ecmwf/reusable-workflows/.github/workflows/ci-rust.yml@v2
+    with:
+      system-dependencies: cmake
+```
+
+Multi-axis matrix example:
+
+```yaml
+jobs:
+  ci:
+    uses: ecmwf/reusable-workflows/.github/workflows/ci-rust.yml@v2
+    with:
+      system-dependencies: cmake
+      toolchains: |
+        stable
+        1.90.0
+      workspaces: |
+        .
+        crates/subcrate
+    secrets:
+      private_repos_token: ${{ secrets.GH_REPO_READ_TOKEN }}
+```
+
+### Inputs
+
+#### `skip_matrix_jobs`
+
+Newline-separated list of matrix cells to skip. Names follow `<toolchain>@<os>@<workspace>`.
+**Default:** `''`
+**Type:** `string`
+
+#### `toolchains`
+
+Newline-separated list of Rust toolchains for the test matrix.
+**Default:** `stable`
+**Type:** `string`
+
+#### `os-list`
+
+Newline-separated list of runner images for the test matrix.
+**Default:** `ubuntu-latest`
+**Type:** `string`
+
+#### `workspaces`
+
+Newline-separated list of working directories to test. Use `.` for a single-workspace repo.
+**Default:** `.`
+**Type:** `string`
+
+#### `manifest-path`
+
+Path to `Cargo.toml` (relative to each workspace).
+**Default:** `Cargo.toml`
+**Type:** `string`
+
+#### `features`
+
+Feature selection expression passed to clippy and test.
+**Default:** `--all-features`
+**Type:** `string`
+
+#### `locked`
+
+Add `--locked` to `cargo clippy` and `cargo test` to enforce `Cargo.lock`. Default is `false` because library crates (the dominant consumer pattern) typically do not commit `Cargo.lock`; set `true` for binary/app crates that do.
+**Default:** `false`
+**Type:** `boolean`
+
+#### `system-dependencies`
+
+Space-separated apt packages installed before cargo runs (Linux runners only).
+**Default:** `''`
+**Type:** `string`
+
+#### `clippy-args`
+
+Arguments appended to `cargo clippy`. Default is the ECMWF Rust enforcement set (see above). Pass an empty string to drop denials.
+**Default:** `'-- -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::unwrap_used -A clippy::module_name_repetitions -A clippy::missing_errors_doc -D warnings'`
+**Type:** `string`
+
+#### `test-args`
+
+Extra args appended to `cargo test`.
+**Default:** `--workspace`
+**Type:** `string`
+
+#### `doc-args`
+
+Extra args appended to `cargo doc`.
+**Default:** `--workspace`
+**Type:** `string`
+
+#### `rustdocflags`
+
+Value exported as `RUSTDOCFLAGS` during `cargo doc`.
+**Default:** `-D warnings`
+**Type:** `string`
+
+#### `run-doc`
+
+Run `cargo doc` as part of the qa job.
+**Default:** `true`
+**Type:** `boolean`
+
+#### `run-integration`
+
+Run a separate integration test job on the `main` branch only.
+**Default:** `false`
+**Type:** `boolean`
+
+#### `integration-test-args`
+
+Args passed to `cargo test` in the integration job (e.g. `--test foo -- --ignored --test-threads=1`).
+**Default:** `''`
+**Type:** `string`
+
+#### `integration-workspace`
+
+Working directory for the integration job.
+**Default:** `.`
+**Type:** `string`
+
+#### `repository`
+
+The source repository name, in case it differs from the current one.
+**Default:** `${{ github.repository }}`
+**Type:** `string`
+
+#### `ref`
+
+The source repository reference.
+**Default:** `${{ github.ref }}`
+**Type:** `string`
+
+#### `notify_teams`
+
+Notify a Microsoft Teams channel of the workflow status.
+**Default:** `false`
+**Type:** `boolean`
+
+### Secrets
+
+#### `private_repos_token`
+
+GitHub token used to rewrite `ssh://git@github.com` URLs to HTTPS for private repository dependencies. Also exports `CARGO_NET_GIT_FETCH_WITH_CLI=true`.
+**Example:** `${{ secrets.GH_REPO_READ_TOKEN }}`
+
+#### `incoming_webhook`
+
+Microsoft Teams incoming webhook URL. Only used if `notify_teams` is true.
+
+### Composite action
+
+The same fmt/clippy/test/doc pipeline is also exposed as a composite action at `ecmwf/reusable-workflows/ci-rust@v2` for use inside custom workflows:
+
+```yaml
+jobs:
+  custom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ecmwf/reusable-workflows/ci-rust@v2
+        with:
+          manifest-path: crates/foo/Cargo.toml
+          run-doc: 'false'
+```
 
 ## build-and-push-image.yml
 

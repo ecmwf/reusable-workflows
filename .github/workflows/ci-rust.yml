@@ -1,0 +1,374 @@
+---
+name: ci-rust
+
+on:
+  workflow_call:
+    inputs:
+      skip_matrix_jobs:
+        description: Newline-separated list of matrix jobs to skip. Names follow `<toolchain>@<os>@<workspace>`.
+        required: false
+        default: ''
+        type: string
+      toolchains:
+        description: Newline-separated list of Rust toolchains to test against.
+        required: false
+        default: stable
+        type: string
+      os-list:
+        description: Newline-separated list of runner images for the test matrix.
+        required: false
+        default: ubuntu-latest
+        type: string
+      workspaces:
+        description: Newline-separated list of working directories to test. Use `.` for a single-workspace repo.
+        required: false
+        default: '.'
+        type: string
+      manifest-path:
+        description: Path to Cargo.toml (relative to each workspace).
+        required: false
+        default: Cargo.toml
+        type: string
+      features:
+        description: Feature selection expression passed to cargo (e.g. --all-features).
+        required: false
+        default: '--all-features'
+        type: string
+      locked:
+        description: Add --locked to cargo clippy/test to enforce Cargo.lock. Default is false because library crates (the dominant consumer pattern) typically do not commit Cargo.lock; set true for binary/app crates that do.
+        required: false
+        default: false
+        type: boolean
+      system-dependencies:
+        description: Space-separated apt packages installed before cargo runs (Linux runners only).
+        required: false
+        default: ''
+        type: string
+      clippy-args:
+        description: |
+          Arguments appended after `cargo clippy --all-targets <features> --manifest-path ...`. Default is the
+          ECMWF Rust enforcement set (-W clippy::all/pedantic/nursery/unwrap_used,
+          -A clippy::module_name_repetitions/missing_errors_doc, -D warnings).
+        required: false
+        default: '-- -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::unwrap_used -A clippy::module_name_repetitions -A clippy::missing_errors_doc -D warnings'
+        type: string
+      test-args:
+        description: Extra args appended to cargo test.
+        required: false
+        default: '--workspace'
+        type: string
+      doc-args:
+        description: Extra args appended to cargo doc.
+        required: false
+        default: '--workspace'
+        type: string
+      rustdocflags:
+        description: Value exported as RUSTDOCFLAGS during cargo doc.
+        required: false
+        default: '-D warnings'
+        type: string
+      run-doc:
+        description: Run cargo doc as part of the qa job.
+        required: false
+        default: true
+        type: boolean
+      run-integration:
+        description: Run a separate integration test job. Only fires on the main branch.
+        required: false
+        default: false
+        type: boolean
+      integration-test-args:
+        description: Args passed to cargo test in the integration job (e.g. "--test foo -- --ignored --test-threads=1").
+        required: false
+        default: ''
+        type: string
+      integration-workspace:
+        description: Working directory for the integration job.
+        required: false
+        default: '.'
+        type: string
+      repository:
+        description: The source repository name, in case it differs from the current one.
+        required: false
+        default: ${{ github.repository }}
+        type: string
+      ref:
+        description: The source repository reference, in case it differs from the current one.
+        required: false
+        default: ${{ github.ref }}
+        type: string
+      notify_teams:
+        description: Notify a Microsoft Teams channel of the workflow status.
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      private_repos_token:
+        description: Token used to rewrite ssh://git@github.com URLs to HTTPS for private repository dependencies.
+        required: false
+      incoming_webhook:
+        description: Microsoft Teams incoming webhook URL. Only used if `notify_teams` is true.
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Run cargo fmt --check
+        shell: bash
+        run: cargo fmt --all --check --manifest-path "${{ inputs.manifest-path }}"
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Configure git for private repository dependencies
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.private_repos_token }}
+        run: |
+          if [ -n "${TOKEN}" ]; then
+            git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+            echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Install system dependencies
+        if: ${{ inputs.system-dependencies != '' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.system-dependencies }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Run cargo clippy
+        shell: bash
+        env:
+          LOCKED_FLAG: ${{ inputs.locked && '--locked' || '' }}
+        run: |
+          cargo clippy --all-targets ${{ inputs.features }} ${LOCKED_FLAG} --manifest-path "${{ inputs.manifest-path }}" ${{ inputs.clippy-args }}
+
+  doc:
+    name: doc
+    if: ${{ inputs.run-doc }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Configure git for private repository dependencies
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.private_repos_token }}
+        run: |
+          if [ -n "${TOKEN}" ]; then
+            git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+            echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Install system dependencies
+        if: ${{ inputs.system-dependencies != '' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.system-dependencies }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Run cargo doc
+        shell: bash
+        env:
+          RUSTDOCFLAGS: ${{ inputs.rustdocflags }}
+          DOCS_RS: '1'
+        run: cargo doc --no-deps --manifest-path "${{ inputs.manifest-path }}" ${{ inputs.doc-args }}
+
+  setup:
+    name: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Build test matrix
+        id: matrix
+        shell: bash
+        env:
+          TOOLCHAINS: ${{ inputs.toolchains }}
+          OS_LIST: ${{ inputs.os-list }}
+          WORKSPACES: ${{ inputs.workspaces }}
+          SKIP: ${{ inputs.skip_matrix_jobs }}
+        run: |
+          # Build the include array from the three newline-separated input axes,
+          # skipping any name that appears in skip_matrix_jobs.
+          mapfile -t skip_list < <(printf '%s\n' "${SKIP}" | sed '/^$/d')
+
+          include='[]'
+          while IFS= read -r toolchain; do
+            [ -z "${toolchain}" ] && continue
+            while IFS= read -r os; do
+              [ -z "${os}" ] && continue
+              while IFS= read -r workspace; do
+                [ -z "${workspace}" ] && continue
+                name="${toolchain}@${os}@${workspace}"
+                skipped=false
+                for entry in "${skip_list[@]}"; do
+                  if [ "${entry}" = "${name}" ]; then skipped=true; break; fi
+                done
+                [ "${skipped}" = "true" ] && continue
+                include=$(jq -c \
+                  --arg n "${name}" --arg t "${toolchain}" \
+                  --arg o "${os}" --arg w "${workspace}" \
+                  '. + [{name: $n, toolchain: $t, os: $o, workspace: $w}]' \
+                  <<<"${include}")
+              done <<<"${WORKSPACES}"
+            done <<<"${OS_LIST}"
+          done <<<"${TOOLCHAINS}"
+
+          matrix=$(jq -c -n --argjson include "${include}" '{include: $include}')
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
+  test:
+    name: test (${{ matrix.name }})
+    needs: [fmt, clippy, setup]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Configure git for private repository dependencies
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.private_repos_token }}
+        run: |
+          if [ -n "${TOKEN}" ]; then
+            git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+            echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Install system dependencies
+        if: ${{ inputs.system-dependencies != '' && runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.system-dependencies }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: ${{ matrix.workspace }}
+
+      - name: Run cargo test
+        shell: bash
+        working-directory: ${{ matrix.workspace }}
+        env:
+          LOCKED_FLAG: ${{ inputs.locked && '--locked' || '' }}
+        run: |
+          cargo test ${{ inputs.features }} ${LOCKED_FLAG} --manifest-path "${{ inputs.manifest-path }}" ${{ inputs.test-args }}
+
+  integration:
+    name: integration
+    if: ${{ inputs.run-integration && github.ref == 'refs/heads/main' }}
+    needs: [fmt, clippy, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Configure git for private repository dependencies
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.private_repos_token }}
+        run: |
+          if [ -n "${TOKEN}" ]; then
+            git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+            echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Install system dependencies
+        if: ${{ inputs.system-dependencies != '' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.system-dependencies }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: ${{ inputs.integration-workspace }}
+
+      - name: Run integration tests
+        shell: bash
+        working-directory: ${{ inputs.integration-workspace }}
+        run: cargo test ${{ inputs.integration-test-args }}
+
+  notify:
+    name: notify
+    if: ${{ always() && inputs.notify_teams && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop') }}
+    needs: [fmt, clippy, doc, test, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Teams
+        uses: ecmwf/notify-teams@v1
+        with:
+          incoming_webhook: ${{ secrets.incoming_webhook }}
+          needs_context: ${{ toJSON(needs) }}
