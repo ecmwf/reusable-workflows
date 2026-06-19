@@ -20,6 +20,10 @@ A collection of [reusable GitHub workflows] for ECMWF repositories.
 - [publish-rust-crate.yml](#publish-rust-crateyml): Workflow for publishing Rust crates to crates.io
 - [sync.yml](#syncyml): Workflow for syncing a Git repository
 
+## Composite Actions
+
+- [configure-git-auth](#configure-git-auth): Configure git to use a PAT for accessing private GitHub repositories
+
 [Samples]
 
 ## Supported Operating Systems
@@ -510,7 +514,7 @@ jobs:
 ```yaml
 jobs:
   build-image:
-    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v1
+    uses: ecmwf/reusable-workflows/.github/workflows/build-and-push-image.yml@v2
     with:
       registry: ghcr.io
       image_repository: my-org/my-app
@@ -856,6 +860,28 @@ jobs:
   label:
     uses: ecmwf/reusable-workflows/.github/workflows/pr-label.yml@v2
 ```
+
+## configure-git-auth
+
+A composite action that configures git to authenticate with GitHub using a Personal Access Token (PAT). It rewrites both HTTPS and SSH `github.com` URLs so that all subsequent git operations in the same job use token-based HTTPS authentication. This is useful when jobs need to install dependencies from private GitHub repositories.
+
+### Usage
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: ecmwf/reusable-workflows/configure-git-auth@v2
+    with:
+      token: ${{ secrets.MY_GITHUB_PAT }}
+  # subsequent steps can now access private GitHub repos
+```
+
+### Inputs
+
+#### `token`
+
+GitHub PAT or token for private repository access.
+**Required:** `true`
 
 ## Development
 

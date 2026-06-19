@@ -1,0 +1,18 @@
+name: Configure git authentication
+description: Configure git to use a PAT for accessing private GitHub repositories over HTTPS and SSH.
+
+inputs:
+  token:
+    description: GitHub PAT or token for private repository access.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure git authentication
+      shell: bash
+      env:
+        GIT_AUTH_TOKEN: ${{ inputs.token }}
+      run: |
+        git config --global url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "https://github.com/"
+        git config --global url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
