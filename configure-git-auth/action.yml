@@ -14,5 +14,5 @@ runs:
       env:
         GIT_AUTH_TOKEN: ${{ inputs.token }}
       run: |
-        git config --global url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "https://github.com/"
-        git config --global url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        git config --global --add url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "https://github.com/"
+        git config --global --add url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
