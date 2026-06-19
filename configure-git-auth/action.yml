@@ -14,5 +14,18 @@ runs:
       env:
         GIT_AUTH_TOKEN: ${{ inputs.token }}
       run: |
-        git config --global --add url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "https://github.com/"
-        git config --global --add url."https://x-access-token:${GIT_AUTH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        # Write config to $RUNNER_TEMP instead of ~/.gitconfig. The runner cleans
+        # $RUNNER_TEMP after every job, so this is ephemeral on persistent runners.
+        # GIT_CONFIG_GLOBAL (git >= 2.32) redirects all global config reads/writes
+        # to this file for the remainder of the job.
+        TMPCONFIG="${RUNNER_TEMP}/.gitconfig"
+        if [ -f "${GIT_CONFIG_GLOBAL:-${HOME}/.gitconfig}" ]; then
+          cp "${GIT_CONFIG_GLOBAL:-${HOME}/.gitconfig}" "${TMPCONFIG}"
+        fi
+        git config --file "${TMPCONFIG}" --add \
+          "url.https://x-access-token:${GIT_AUTH_TOKEN}@github.com/.insteadOf" \
+          "https://github.com/"
+        git config --file "${TMPCONFIG}" --add \
+          "url.https://x-access-token:${GIT_AUTH_TOKEN}@github.com/.insteadOf" \
+          "ssh://git@github.com/"
+        echo "GIT_CONFIG_GLOBAL=${TMPCONFIG}" >> "$GITHUB_ENV"
