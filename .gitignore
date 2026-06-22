@@ -1,2 +1,4 @@
 node_modules
 *swp
+__pycache__/
+.venv/

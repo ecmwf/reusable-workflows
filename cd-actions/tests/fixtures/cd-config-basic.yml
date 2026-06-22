@@ -1,0 +1,55 @@
+common_config:
+  conda:
+    channels:
+      - ecmwf
+  hpc:
+    platform: gnu-12.2.0
+    self_test: false
+  system-package:
+    build_type: Debug
+
+builds:
+  - name: conda-build
+    type: conda
+    config:
+      conda_dir: ./conda
+      skip_installation_test: true
+
+  - name: python-pypi-build
+    type: python-pypi
+    config:
+      working_directory: ./python
+      env_vars:
+        CTEST_PARALLEL_LEVEL: "8"
+        FOO: bar
+
+  - name: hpc-build
+    type: hpc
+    config:
+      platform: intel-2025.0.1
+      cmake_options:
+        ENABLE_TESTS: true
+        CMAKE_BUILD_TYPE: Release
+      dependency_cmake_options:
+        ecmwf/eckit:
+          - -DENABLE_TESTS=ON
+          - -DENABLE_BUILD_TOOLS=OFF
+      stages:
+        - name: py312
+          modules:
+            - python3/3.12
+
+  - name: tarball-build
+    type: tarball
+    config:
+      confluence_space: MAGP
+
+  - name: debian-system-package
+    type: system-package
+    config:
+      os: debian-12
+      package_deps:
+        - libfoo
+        - libbar
+      cmake_options:
+        ENABLE_TESTS: false

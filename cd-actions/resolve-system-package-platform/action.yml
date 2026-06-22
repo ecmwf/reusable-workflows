@@ -1,0 +1,38 @@
+name: Resolve System Package Platform
+description: Resolve a system-package OS alias to container image and Nexus secret names
+
+inputs:
+  os:
+    description: 'Target OS alias (e.g., debian-12, ubuntu-24.04, rocky-9)'
+    required: true
+
+outputs:
+  os:
+    description: 'Resolved OS identifier'
+    value: ${{ steps.resolve.outputs.os }}
+  container:
+    description: 'Container image for the resolved OS'
+    value: ${{ steps.resolve.outputs.container }}
+  nexus_token_secret_prod:
+    description: 'Production Nexus upload token secret name'
+    value: ${{ steps.resolve.outputs.nexus_token_secret_prod }}
+  nexus_url_secret_prod:
+    description: 'Production Nexus repository URL secret name'
+    value: ${{ steps.resolve.outputs.nexus_url_secret_prod }}
+  nexus_token_secret_test:
+    description: 'Test Nexus upload token secret name'
+    value: ${{ steps.resolve.outputs.nexus_token_secret_test }}
+  nexus_url_secret_test:
+    description: 'Test Nexus repository URL secret name'
+    value: ${{ steps.resolve.outputs.nexus_url_secret_test }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve platform
+      id: resolve
+      shell: bash
+      env:
+        INPUT_OS: ${{ inputs.os }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "${{ github.action_path }}/scripts/resolve.py"

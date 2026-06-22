@@ -1,0 +1,15 @@
+builds:
+  - name: debian-11-build
+    type: system-package
+    config:
+      os: debian-11
+
+  - name: ubuntu-2204-build
+    type: system-package
+    config:
+      os: ubuntu-22.04
+
+  - name: rocky-9-build
+    type: system-package
+    config:
+      os: rocky-9

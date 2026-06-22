@@ -52,7 +52,8 @@ runs:
         INPUT_CONDA_DIR: ${{ inputs.conda_dir }}
         INPUT_CHANNELS: ${{ inputs.channels }}
         INPUT_CONDA_BUILD_ARGS: ${{ inputs.conda_build_args }}
-        INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        # INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        INPUT_TEST_NEXUS: 'true'
         INPUT_NEXUS_TOKEN: ${{ inputs.nexus_token }}
         INPUT_NEXUS_TEST_TOKEN: ${{ inputs.nexus_test_token }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}

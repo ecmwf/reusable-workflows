@@ -3,6 +3,7 @@ name: CD Python PyPI
 on:
   workflow_call:
     inputs:
+      # Standard
       name:
         description: 'Build name for artifacts'
         required: false
@@ -17,6 +18,8 @@ on:
         required: false
         type: boolean
         default: false
+
+      # Build configuration
       working_directory:
         description: 'Working directory for build (for monorepos)'
         required: false
@@ -32,6 +35,8 @@ on:
         required: false
         type: string
         default: ''
+
+      # Authentication
       pypi_token:
         description: 'PyPI API token (defaults to PYPI_API_TOKEN secret)'
         required: false
