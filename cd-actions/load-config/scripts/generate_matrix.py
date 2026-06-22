@@ -1,15 +1,42 @@
+#!/usr/bin/env python3
+"""Generate a GitHub Actions matrix from cd-config.yml."""
+
+from __future__ import annotations
+
 import json
 import os
-import yaml
-
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
-def deep_merge(common, specific, overrides=None, path=""):
+
+ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
+sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
+
+import yaml  # noqa: E402
+
+from cd_helpers import (  # noqa: E402
+    bool_to_str,
+    dict_to_cmake_args,
+    dict_to_env_lines,
+    list_to_comma_separated,
+    list_to_line_separated,
+)
+
+
+def deep_merge(
+    common: dict[str, Any],
+    specific: dict[str, Any],
+    overrides: list[str] | None = None,
+    path: str = "",
+) -> dict[str, Any]:
+    """Merge two dictionaries with optional override paths."""
     if overrides is None:
         overrides = []
     if "*" in overrides:
         return specific.copy()
-    result = {}
+    result: dict[str, Any] = {}
     all_keys = set(common.keys()) | set(specific.keys())
     for key in all_keys:
         common_val = common.get(key)
@@ -21,219 +48,387 @@ def deep_merge(common, specific, overrides=None, path=""):
         elif common_val is None or is_override:
             result[key] = specific_val
         elif isinstance(common_val, dict) and isinstance(specific_val, dict):
-            nested_overrides = [o for o in overrides if o.startswith(f"{key}.") or o.startswith(f"{current_path}.")]
-            result[key] = deep_merge(common_val, specific_val, nested_overrides, current_path)
+            nested_overrides = [
+                o
+                for o in overrides
+                if o.startswith(f"{key}.") or o.startswith(f"{current_path}.")
+            ]
+            result[key] = deep_merge(
+                common_val, specific_val, nested_overrides, current_path
+            )
         elif isinstance(common_val, list) and isinstance(specific_val, list):
             result[key] = common_val + specific_val
         else:
             result[key] = specific_val
     return result
 
-def list_to_str_comma_separated(source, source_name):
-    if isinstance(source, list):
-        return ",".join(source)
-    elif isinstance(source, str):
-        return source
+
+def _json_dumps(value: Any, _name: str) -> str:
+    return json.dumps(value)
+
+
+def _str(value: Any, _name: str) -> str:
+    return str(value)
+
+
+def _hpc_dependency_cmake_options(value: Any, name: str) -> str:
+    """Normalize dependency CMake options (lists become comma-separated) then format."""
+    if not isinstance(value, dict):
+        return dict_to_cmake_args(value, name)
+    processed = {}
+    for repo, opts in value.items():
+        if isinstance(opts, list):
+            processed[repo] = ",".join(str(o) for o in opts)
+        else:
+            processed[repo] = opts
+    return dict_to_cmake_args(processed, name)
+
+
+def _system_package_package_deps(value: Any, _name: str) -> str:
+    """Convert package_deps list to comma-separated string."""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    return str(value)
+
+
+@dataclass(frozen=True)
+class Field:
+    """Specification for a matrix field derived from build config."""
+
+    name: str
+    default_key: str | None = None
+    fallback: Any = ""
+    transform: Callable[[Any, str], str] | None = None
+
+
+def _resolve_field(
+    build_config: dict[str, Any],
+    type_defaults: dict[str, Any],
+    field_spec: Field,
+) -> tuple[str, str]:
+    """Return (field_name, rendered_value) for a single Field specification."""
+    value = build_config.get(field_spec.name)
+    if value is None and field_spec.default_key is not None:
+        value = type_defaults.get(field_spec.default_key)
+    if value is None:
+        value = field_spec.fallback
+
+    if field_spec.transform is not None:
+        rendered = field_spec.transform(value, field_spec.name)
     else:
-        raise ValueError(f"{source_name} must be a list, got {type(source)}")
+        rendered = str(value)
 
-def list_to_str_line_separated(source, source_name):
-    if isinstance(source, list):
-        return "\n".join(source)
-    elif isinstance(source, str):
-        return source
-    else:
-        raise ValueError(f"{source_name} must be a list, got {type(source)}")
+    return field_spec.name, rendered
 
-def bool_to_str(source, source_name):
-    if isinstance(source, bool):
-        return str(source).lower()
-    elif isinstance(source, str):
-        return "true" if source.lower() in ("true", "1", "yes") else "false"
-    else:
-        raise ValueError(f"{source_name} must be a bool, got {type(source)}")
 
-def dict_to_str_line_separated(source, source_name):
-    if isinstance(source, dict):
-        return "\n".join([f"{k}={v}" if v != '' else k for k, v in source.items()])
-    elif isinstance(source, str):
-        return source
-    else:
-        raise ValueError(f"{source_name} must be a dict, got {type(source)}")
+# Field tables per build type. Defaults are read from cd-actions/defaults.yml
+CONDA_FIELDS = [
+    Field("conda_dir", default_key="conda_dir", fallback="./.cd/conda"),
+    Field(
+        "channels",
+        default_key="channels",
+        fallback=["conda-forge"],
+        transform=list_to_line_separated,
+    ),
+    Field(
+        "conda_build_args",
+        default_key="conda_build_args",
+        fallback=["--no-anaconda-upload"],
+        transform=list_to_line_separated,
+    ),
+    Field(
+        "skip_installation_test",
+        default_key="skip_installation_test",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+]
 
-def dict_to_cmake_args(source, source_name):
-    if isinstance(source, dict):
-        def format_cmake_option(k, v):
-            if isinstance(v, bool):
-                v = "ON" if v else "OFF"
-            if not k.startswith('-'):
-                k = f"-D{k}"
-            return f"{k}={v}" if v != '' else k
-        return "\n".join([format_cmake_option(k, v) for k, v in source.items()])
-    elif isinstance(source, str):
-        return source
-    else:
-        raise ValueError(f"{source_name} must be a dict, got {type(source)}")
+PYTHON_PYPI_FIELDS = [
+    Field("working_directory", default_key="working_directory", fallback="./"),
+    Field("buildargs", fallback=""),
+    Field("env_vars", fallback={}, transform=dict_to_env_lines),
+]
 
-action_path = Path(os.environ["GITHUB_ACTION_PATH"])
-with open(action_path.parent / "defaults.yml") as f:
-    shared_defaults = yaml.safe_load(f)
+HPC_FIELDS = [
+    Field("platform", default_key="platform", fallback="gnu-14.2.0"),
+    Field("install_prefix", fallback=""),
+    Field(
+        "prefix_compiler_specific",
+        default_key="prefix_compiler_specific",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+    Field("cmake_options", fallback={}, transform=dict_to_cmake_args),
+    Field("ctest_options", fallback=[], transform=list_to_line_separated),
+    Field("self_test", default_key="self_test", fallback=True, transform=bool_to_str),
+    Field("env_vars", fallback={}, transform=dict_to_env_lines),
+    Field("parallel", fallback=""),
+    Field("dependencies", fallback=[], transform=list_to_line_separated),
+    Field(
+        "dependency_cmake_options",
+        fallback={},
+        transform=_hpc_dependency_cmake_options,
+    ),
+    Field("python_dependencies", fallback=[], transform=list_to_line_separated),
+    Field("python_version", fallback=""),
+    Field("python_requirements", fallback=""),
+    Field(
+        "python_toml_opt_dep_sections",
+        fallback=[],
+        transform=list_to_line_separated,
+    ),
+    Field("conda_deps", fallback=[], transform=list_to_line_separated),
+    Field("stages", fallback=[], transform=_json_dumps),
+    Field("modules", fallback=[], transform=list_to_line_separated),
+    Field("install_command", fallback=""),
+    Field(
+        "lock_permissions",
+        default_key="lock_permissions",
+        fallback=True,
+        transform=bool_to_str,
+    ),
+    Field("module_name", fallback=""),
+    Field("ntasks", fallback=""),
+    Field("gpus", fallback=""),
+    Field("queue", fallback=""),
+    Field("post_script", fallback=""),
+    Field(
+        "clean_before_install",
+        default_key="clean_before_install",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+    Field(
+        "dry_run_install",
+        default_key="dry_run_install",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+    Field("dry_run_install_prefix", fallback=""),
+    Field("site", default_key="site", fallback="aa-batch"),
+    Field(
+        "sync_module", default_key="sync_module", fallback=True, transform=bool_to_str
+    ),
+    Field(
+        "tag_module", default_key="tag_module", fallback=True, transform=bool_to_str
+    ),
+    Field("module_tag_name", default_key="module_tag_name", fallback=""),
+    Field("use_ninja", default_key="use_ninja", fallback=True, transform=bool_to_str),
+    Field(
+        "force_build", default_key="force_build", fallback=False, transform=bool_to_str
+    ),
+    Field(
+        "ecbundle", default_key="ecbundle", fallback=False, transform=bool_to_str
+    ),
+    Field("bundle_yml", fallback=""),
+    Field("install_lib_dir", default_key="install_lib_dir", fallback="lib"),
+    Field("mkdir", fallback=[], transform=list_to_line_separated),
+    Field("pytest_cmd", fallback=""),
+    Field("workdir", fallback=""),
+    Field("output_dir", fallback=""),
+]
 
-config_dir = action_path / "config"
-with open(config_dir / "runners.yml") as f:
-    runners_config = yaml.safe_load(f)
+TARBALL_FIELDS = [
+    Field("ecbuild_version", fallback=""),
+    Field("cmake_options", fallback={}, transform=dict_to_cmake_args),
+    Field("confluence_space", fallback=""),
+    Field(
+        "confluence_page_title",
+        default_key="confluence_page_title",
+        fallback="Releases",
+    ),
+]
 
-with open(config_dir / "platforms-system-package.yml") as f:
-    sp_platforms_config = yaml.safe_load(f)
+SYSTEM_PACKAGE_FIELDS = [
+    Field(
+        "skip_version_check",
+        default_key="skip_version_check",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+    Field("description", fallback=""),
+    Field("license", fallback=""),
+    Field(
+        "maintainer", default_key="maintainer", fallback="software@ecmwf.int"
+    ),
+    Field("vendor", default_key="vendor", fallback="ECMWF"),
+    Field("homepage_url", fallback=""),
+    Field(
+        "install_prefix", default_key="install_prefix", fallback="/opt/ecmwf"
+    ),
+    Field(
+        "self_test", default_key="self_test", fallback=True, transform=bool_to_str
+    ),
+    Field(
+        "install_test",
+        default_key="install_test",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+    Field("install_test_os_image", fallback=""),
+    Field("install_test_command", fallback=""),
+    Field("build_type", default_key="build_type", fallback="Release"),
+    Field("env", fallback=""),
+    Field("deb_section", fallback=""),
+    Field("deb_priority", default_key="deb_priority", fallback="optional"),
+    Field("rpm_group", fallback=""),
+    Field("dependencies", fallback=[], transform=list_to_line_separated),
+    Field("dependency_branch", fallback=""),
+    Field("cmake_options", fallback={}, transform=dict_to_cmake_args),
+    Field("ctest_options", fallback=[], transform=list_to_line_separated),
+    Field(
+        "dependency_cmake_options", fallback={}, transform=dict_to_cmake_args
+    ),
+    Field("cmake", default_key="cmake", fallback=False, transform=bool_to_str),
+    Field(
+        "ecbundle", default_key="ecbundle", fallback=False, transform=bool_to_str
+    ),
+    Field(
+        "self_build", default_key="self_build", fallback=True, transform=bool_to_str
+    ),
+    Field("toolchain_file", fallback=""),
+    Field(
+        "parallelism_factor",
+        default_key="parallelism_factor",
+        fallback="2",
+        transform=_str,
+    ),
+    Field("compiler_cc", default_key="compiler_cc", fallback="gcc"),
+    Field("compiler_cxx", default_key="compiler_cxx", fallback="g++"),
+    Field("compiler_fc", default_key="compiler_fc", fallback="gfortran"),
+    Field("cache_suffix", fallback=""),
+    Field(
+        "save_cache", default_key="save_cache", fallback=True, transform=bool_to_str
+    ),
+    Field(
+        "recreate_cache",
+        default_key="recreate_cache",
+        fallback=False,
+        transform=bool_to_str,
+    ),
+]
 
-config_yaml = os.environ["STEP_LOAD_CONFIG"]
-config = yaml.safe_load(config_yaml)
-common_config = config.get("common_config", {})
-matrix = {"include": []}
+TYPE_FIELDS: dict[str, list[Field]] = {
+    "conda": CONDA_FIELDS,
+    "python-pypi": PYTHON_PYPI_FIELDS,
+    "hpc": HPC_FIELDS,
+    "tarball": TARBALL_FIELDS,
+    "system-package": SYSTEM_PACKAGE_FIELDS,
+}
 
-for build in config.get("builds", []):
-    if build.get("enabled", True):
-        build_type = build["type"]
-        build_config_raw = build.get("config", {})
-        overrides = build.get("common_config_overrides", [])
-        type_common = common_config.get(build_type, {})
-        build_config = deep_merge(type_common, build_config_raw, overrides)
 
-        matrix_item = {
-            "name": build["name"],
-            "runner": runners_config.get(build_type, runners_config.get("default", ["self-hosted", "platform-builder"])),
-            "type": build_type,
-            "container": "",
-        }
+def _resolve_system_package_platform(
+    build_config: dict[str, Any],
+    sp_platforms_config: dict[str, Any],
+) -> dict[str, str]:
+    """Resolve system-package platform metadata from the shared YAML map."""
+    platform_name = build_config.get("os", "")
+    if platform_name not in sp_platforms_config:
+        supported = ", ".join(sorted(sp_platforms_config.keys()))
+        print(f"::error::Unknown platform: {platform_name}. Supported: {supported}")
+        raise SystemExit(1)
 
-        d = shared_defaults.get(build_type, {})
+    platform_defaults = sp_platforms_config[platform_name]
+    os_id = platform_defaults["os"]
+    container = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
+    return {
+        "container": container,
+        "os": os_id,
+        "nexus_token_secret_prod": platform_defaults.get("nexus_token_secret_prod", ""),
+        "nexus_url_secret_prod": platform_defaults.get("nexus_url_secret_prod", ""),
+        "nexus_token_secret_test": platform_defaults["nexus_token_secret_test"],
+        "nexus_url_secret_test": platform_defaults["nexus_url_secret_test"],
+    }
 
-        if build_type == "conda":
-            matrix_item["conda_dir"] = build_config.get("conda_dir", d.get("conda_dir", "./.cd/conda"))
-            matrix_item["channels"] = list_to_str_line_separated(build_config.get("channels", d.get("channels", ["conda-forge"])), "channels")
-            matrix_item["conda_build_args"] = list_to_str_line_separated(build_config.get("conda_build_args", d.get("conda_build_args", ["--no-anaconda-upload"])), "conda_build_args")
-            matrix_item["skip_installation_test"] = bool_to_str(build_config.get("skip_installation_test", d.get("skip_installation_test", False)), "skip_installation_test")
 
-        elif build_type == "python-pypi":
-            matrix_item["working_directory"] = build_config.get("working_directory", d.get("working_directory", "./"))
-            matrix_item["buildargs"] = build_config.get("buildargs", "")
-            matrix_item["env_vars"] = dict_to_str_line_separated(build_config.get("env_vars", {}), "env_vars")
+def _build_matrix_item(
+    build: dict[str, Any],
+    common_config: dict[str, Any],
+    runners_config: dict[str, Any],
+    shared_defaults: dict[str, Any],
+    sp_platforms_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Generate a single matrix item from a build definition."""
+    build_type = build["type"]
+    if build_type not in TYPE_FIELDS:
+        supported = ", ".join(sorted(TYPE_FIELDS.keys()))
+        print(f"::error::Unsupported build type: {build_type}. Supported: {supported}")
+        raise SystemExit(1)
 
-        elif build_type == "hpc":
-            # Platform
-            matrix_item["platform"] = build_config.get("platform", d.get("platform", "gnu-14.2.0"))
+    build_config_raw = build.get("config", {})
+    overrides = build.get("common_config_overrides", [])
+    type_common = common_config.get(build_type, {})
+    build_config = deep_merge(type_common, build_config_raw, overrides)
 
-            # Installation
-            matrix_item["install_prefix"] = build_config.get("install_prefix", "")
-            matrix_item["prefix_compiler_specific"] = bool_to_str(build_config.get("prefix_compiler_specific", d.get("prefix_compiler_specific", False)), "prefix_compiler_specific")
+    matrix_item: dict[str, Any] = {
+        "name": build["name"],
+        "runner": runners_config.get(
+            build_type, runners_config.get("default", ["self-hosted", "platform-builder"])
+        ),
+        "type": build_type,
+        "container": "",
+    }
 
-            # Build Configuration
-            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
-            matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
-            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", d.get("self_test", True)), "self_test")
-            matrix_item["env_vars"] = dict_to_str_line_separated(build_config.get("env_vars", {}), "env_vars")
-            matrix_item["parallel"] = str(build_config.get("parallel", ""))
-            matrix_item["dependencies"] = list_to_str_line_separated(build_config.get("dependencies", []), "dependencies")
-            dep_cmake_raw = build_config.get("dependency_cmake_options", {})
-            dep_cmake_processed = {}
-            for repo, opts in dep_cmake_raw.items():
-                if isinstance(opts, list):
-                    dep_cmake_processed[repo] = ",".join(opts)
-                else:
-                    dep_cmake_processed[repo] = opts
-            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(dep_cmake_processed, "dependency_cmake_options")
-            matrix_item["python_dependencies"] = list_to_str_line_separated(build_config.get("python_dependencies", []), "python_dependencies")
-            matrix_item["python_version"] = build_config.get("python_version", "")
-            matrix_item["python_requirements"] = build_config.get("python_requirements", "")
-            matrix_item["python_toml_opt_dep_sections"] = list_to_str_line_separated(build_config.get("python_toml_opt_dep_sections", []), "python_toml_opt_dep_sections")
-            matrix_item["conda_deps"] = list_to_str_line_separated(build_config.get("conda_deps", []), "conda_deps")
-            matrix_item["stages"] = json.dumps(build_config.get("stages", []))
-            matrix_item["modules"] = list_to_str_line_separated(build_config.get("modules", []), "modules")
-            matrix_item["install_command"] = build_config.get("install_command", "")
-            matrix_item["lock_permissions"] = bool_to_str(build_config.get("lock_permissions", d.get("lock_permissions", True)), "lock_permissions")
-            matrix_item["module_name"] = build_config.get("module_name", "")
-            matrix_item["ntasks"] = str(build_config.get("ntasks", ""))
-            matrix_item["gpus"] = str(build_config.get("gpus", ""))
-            matrix_item["queue"] = build_config.get("queue", "")
-            matrix_item["post_script"] = build_config.get("post_script", "")
-            matrix_item["clean_before_install"] = bool_to_str(build_config.get("clean_before_install", d.get("clean_before_install", False)), "clean_before_install")
-            matrix_item["dry_run_install"] = bool_to_str(build_config.get("dry_run_install", d.get("dry_run_install", False)), "dry_run_install")
-            matrix_item["dry_run_install_prefix"] = build_config.get("dry_run_install_prefix", "")
-            matrix_item["site"] = build_config.get("site", d.get("site", "aa-batch"))
-            matrix_item["sync_module"] = bool_to_str(build_config.get("sync_module", d.get("sync_module", True)), "sync_module")
-            matrix_item["tag_module"] = bool_to_str(build_config.get("tag_module", d.get("tag_module", True)), "tag_module")
-            matrix_item["module_tag_name"] = build_config.get("module_tag_name", d.get("module_tag_name", ""))
-            matrix_item["use_ninja"] = bool_to_str(build_config.get("use_ninja", d.get("use_ninja", True)), "use_ninja")
-            matrix_item["force_build"] = bool_to_str(build_config.get("force_build", d.get("force_build", False)), "force_build")
-            matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", d.get("ecbundle", False)), "ecbundle")
-            matrix_item["bundle_yml"] = build_config.get("bundle_yml", "")
-            matrix_item["install_lib_dir"] = build_config.get("install_lib_dir", d.get("install_lib_dir", "lib"))
-            matrix_item["mkdir"] = list_to_str_line_separated(build_config.get("mkdir", []), "mkdir")
-            matrix_item["pytest_cmd"] = build_config.get("pytest_cmd", "")
-            matrix_item["workdir"] = build_config.get("workdir", "")
-            matrix_item["output_dir"] = build_config.get("output_dir", "")
+    type_defaults = shared_defaults.get(build_type, {})
 
-        elif build_type == "tarball":
-            matrix_item["ecbuild_version"] = build_config.get("ecbuild_version", "")
-            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
-            matrix_item["confluence_space"] = build_config.get("confluence_space", "")
-            matrix_item["confluence_page_title"] = build_config.get("confluence_page_title", d.get("confluence_page_title", "Releases"))
+    if build_type == "system-package":
+        platform_fields = _resolve_system_package_platform(
+            build_config, sp_platforms_config
+        )
+        matrix_item.update(platform_fields)
+        package_deps_value = build_config.get("package_deps", [])
+        matrix_item["package_deps"] = _system_package_package_deps(
+            package_deps_value, "package_deps"
+        )
 
-        elif build_type == "system-package":
-            platform_name = build_config.get("os", "")
-            if platform_name not in sp_platforms_config:
-                print(f"::error::Unknown platform: {platform_name}")
-                raise SystemExit(1)
+    for field_spec in TYPE_FIELDS[build_type]:
+        name, rendered = _resolve_field(build_config, type_defaults, field_spec)
+        matrix_item[name] = rendered
 
-            platform_defaults = sp_platforms_config[platform_name]
-            os_id = platform_defaults["os"]
-            matrix_item["container"] = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
-            matrix_item["os"] = os_id
-            matrix_item["nexus_token_secret_prod"] = platform_defaults.get("nexus_token_secret_prod", "")
-            matrix_item["nexus_url_secret_prod"] = platform_defaults.get("nexus_url_secret_prod", "")
-            matrix_item["nexus_token_secret_test"] = platform_defaults["nexus_token_secret_test"]
-            matrix_item["nexus_url_secret_test"] = platform_defaults["nexus_url_secret_test"]
+    return matrix_item
 
-            raw_deps = build_config.get("package_deps", [])
-            if isinstance(raw_deps, list):
-                matrix_item["package_deps"] = ", ".join(raw_deps)
-            else:
-                matrix_item["package_deps"] = str(raw_deps)
 
-            matrix_item["skip_version_check"] = bool_to_str(build_config.get("skip_version_check", d.get("skip_version_check", False)), "skip_version_check")
-            matrix_item["description"] = build_config.get("description", "")
-            matrix_item["license"] = build_config.get("license", "")
-            matrix_item["maintainer"] = build_config.get("maintainer", d.get("maintainer", "software@ecmwf.int"))
-            matrix_item["vendor"] = build_config.get("vendor", d.get("vendor", "ECMWF"))
-            matrix_item["homepage_url"] = build_config.get("homepage_url", "")
-            matrix_item["install_prefix"] = build_config.get("install_prefix", d.get("install_prefix", "/opt/ecmwf"))
-            matrix_item["self_test"] = bool_to_str(build_config.get("self_test", d.get("self_test", True)), "self_test")
-            matrix_item["install_test"] = bool_to_str(build_config.get("install_test", d.get("install_test", False)), "install_test")
-            matrix_item["install_test_os_image"] = build_config.get("install_test_os_image", "")
-            matrix_item["install_test_command"] = build_config.get("install_test_command", "")
-            matrix_item["build_type"] = build_config.get("build_type", d.get("build_type", "Release"))
-            matrix_item["env"] = build_config.get("env", "")
-            matrix_item["deb_section"] = build_config.get("deb_section", "")
-            matrix_item["deb_priority"] = build_config.get("deb_priority", d.get("deb_priority", "optional"))
-            matrix_item["rpm_group"] = build_config.get("rpm_group", "")
-            matrix_item["dependencies"] = list_to_str_line_separated(build_config.get("dependencies", []), "dependencies")
-            matrix_item["dependency_branch"] = build_config.get("dependency_branch", "")
-            matrix_item["cmake_options"] = dict_to_cmake_args(build_config.get("cmake_options", {}), "cmake_options")
-            matrix_item["ctest_options"] = list_to_str_line_separated(build_config.get("ctest_options", []), "ctest_options")
-            matrix_item["dependency_cmake_options"] = dict_to_cmake_args(build_config.get("dependency_cmake_options", {}), "dependency_cmake_options")
-            matrix_item["cmake"] = bool_to_str(build_config.get("cmake", d.get("cmake", False)), "cmake")
-            matrix_item["ecbundle"] = bool_to_str(build_config.get("ecbundle", d.get("ecbundle", False)), "ecbundle")
-            matrix_item["self_build"] = bool_to_str(build_config.get("self_build", d.get("self_build", True)), "self_build")
-            matrix_item["toolchain_file"] = build_config.get("toolchain_file", "")
-            matrix_item["parallelism_factor"] = str(build_config.get("parallelism_factor", d.get("parallelism_factor", "2")))
-            matrix_item["compiler_cc"] = build_config.get("compiler_cc", d.get("compiler_cc", "gcc"))
-            matrix_item["compiler_cxx"] = build_config.get("compiler_cxx", d.get("compiler_cxx", "g++"))
-            matrix_item["compiler_fc"] = build_config.get("compiler_fc", d.get("compiler_fc", "gfortran"))
-            matrix_item["cache_suffix"] = build_config.get("cache_suffix", "")
-            matrix_item["save_cache"] = bool_to_str(build_config.get("save_cache", d.get("save_cache", True)), "save_cache")
-            matrix_item["recreate_cache"] = bool_to_str(build_config.get("recreate_cache", d.get("recreate_cache", False)), "recreate_cache")
+def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
+    """Generate the build matrix dictionary from the parsed cd-config."""
+    action_path = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 
+    with open(action_path.parent / "defaults.yml") as f:
+        shared_defaults = yaml.safe_load(f)
+
+    config_dir = action_path / "config"
+    with open(config_dir / "runners.yml") as f:
+        runners_config = yaml.safe_load(f)
+
+    with open(config_dir / "platforms-system-package.yml") as f:
+        sp_platforms_config = yaml.safe_load(f)
+
+    common_config = config.get("common_config", {})
+    matrix: dict[str, Any] = {"include": []}
+
+    for build in config.get("builds", []):
+        if not build.get("enabled", True):
+            continue
+        matrix_item = _build_matrix_item(
+            build,
+            common_config,
+            runners_config,
+            shared_defaults,
+            sp_platforms_config,
+        )
         matrix["include"].append(matrix_item)
 
-with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-    f.write(f"matrix={json.dumps(matrix)}\n")
+    return matrix
+
+
+def main() -> None:
+    config_yaml = os.environ["STEP_LOAD_CONFIG"]
+    config = yaml.safe_load(config_yaml)
+    matrix = generate_matrix(config)
+
+    with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+        f.write(f"matrix={json.dumps(matrix)}\n")
+
+
+if __name__ == "__main__":
+    main()
