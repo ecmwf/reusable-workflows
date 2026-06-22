@@ -3,6 +3,7 @@ name: CD System Package
 on:
   workflow_call:
     inputs:
+      # Standard
       name:
         description: 'Build name for artifacts'
         required: false
@@ -17,105 +18,29 @@ on:
         required: false
         type: boolean
         default: false
+
+      # Platform / runner / container
       os:
         description: 'Target OS (e.g., debian-12, ubuntu-24.04, rocky-9)'
         required: true
         type: string
-      skip_version_check:
-        description: 'Skip tag-vs-VERSION validation'
-        required: false
-        type: string
-        default: 'false'
-      package_deps:
-        description: 'Package dependencies as comma-separated values'
+      docker_registry_username:
+        description: 'Docker registry username (defaults to ECMWF_DOCKER_REGISTRY_USERNAME secret)'
         required: false
         type: string
         default: ''
-      description:
-        description: 'Package description'
+      docker_registry_password:
+        description: 'Docker registry password (defaults to ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN secret)'
         required: false
         type: string
         default: ''
-      license:
-        description: 'Package license'
-        required: false
-        type: string
-        default: ''
-      maintainer:
-        description: 'Package maintainer'
-        required: false
-        type: string
-        default: 'software@ecmwf.int'
-      vendor:
-        description: 'Package vendor'
-        required: false
-        type: string
-        default: 'ECMWF'
-      homepage_url:
-        description: 'Package homepage URL'
-        required: false
-        type: string
-        default: ''
-      install_prefix:
-        description: 'Installation prefix'
-        required: false
-        type: string
-        default: '/opt/ecmwf'
-      self_test:
-        description: 'Run tests after building'
-        required: false
-        type: string
-        default: 'true'
-      install_test:
-        description: 'Run installation test'
-        required: false
-        type: string
-        default: 'false'
-      install_test_os_image:
-        description: 'OS image for installation test'
-        required: false
-        type: string
-        default: ''
-      install_test_command:
-        description: 'Command to run for installation test'
-        required: false
-        type: string
-        default: ''
+
+      # Build configuration
       build_type:
         description: 'CMake build type'
         required: false
         type: string
         default: 'Release'
-      env:
-        description: 'Environment variables'
-        required: false
-        type: string
-        default: ''
-      deb_section:
-        description: 'Debian package section'
-        required: false
-        type: string
-        default: ''
-      deb_priority:
-        description: 'Debian package priority'
-        required: false
-        type: string
-        default: 'optional'
-      rpm_group:
-        description: 'RPM package group'
-        required: false
-        type: string
-        default: ''
-      dependencies:
-        description: 'Build dependencies as line-separated values (e.g., "owner/repo@ref")'
-        required: false
-        type: string
-        default: ''
-      dependency_branch:
-        description: 'Default branch/tag for dependency repositories'
-        required: false
-        type: string
-        default: ''
       cmake_options:
         description: 'CMake options as line-separated values'
         required: false
@@ -123,11 +48,6 @@ on:
         default: ''
       ctest_options:
         description: 'CTest options as line-separated values'
-        required: false
-        type: string
-        default: ''
-      dependency_cmake_options:
-        description: 'CMake options for dependencies as line-separated values'
         required: false
         type: string
         default: ''
@@ -171,6 +91,11 @@ on:
         required: false
         type: string
         default: 'gfortran'
+      env:
+        description: 'Environment variables'
+        required: false
+        type: string
+        default: ''
       cache_suffix:
         description: 'Cache key suffix'
         required: false
@@ -186,6 +111,104 @@ on:
         required: false
         type: string
         default: 'false'
+
+      # Dependencies
+      dependencies:
+        description: 'Build dependencies as line-separated values (e.g., "owner/repo@ref")'
+        required: false
+        type: string
+        default: ''
+      dependency_branch:
+        description: 'Default branch/tag for dependency repositories'
+        required: false
+        type: string
+        default: ''
+      dependency_cmake_options:
+        description: 'CMake options for dependencies as line-separated values'
+        required: false
+        type: string
+        default: ''
+
+      # Installation / packaging
+      install_prefix:
+        description: 'Installation prefix'
+        required: false
+        type: string
+        default: '/opt/ecmwf'
+      self_test:
+        description: 'Run tests after building'
+        required: false
+        type: string
+        default: 'true'
+      install_test:
+        description: 'Run installation test'
+        required: false
+        type: string
+        default: 'false'
+      install_test_os_image:
+        description: 'OS image for installation test'
+        required: false
+        type: string
+        default: ''
+      install_test_command:
+        description: 'Command to run for installation test'
+        required: false
+        type: string
+        default: ''
+      skip_version_check:
+        description: 'Skip tag-vs-VERSION validation'
+        required: false
+        type: string
+        default: 'false'
+
+      # Package metadata
+      package_deps:
+        description: 'Package dependencies as comma-separated values'
+        required: false
+        type: string
+        default: ''
+      description:
+        description: 'Package description'
+        required: false
+        type: string
+        default: ''
+      license:
+        description: 'Package license'
+        required: false
+        type: string
+        default: ''
+      maintainer:
+        description: 'Package maintainer'
+        required: false
+        type: string
+        default: 'software@ecmwf.int'
+      vendor:
+        description: 'Package vendor'
+        required: false
+        type: string
+        default: 'ECMWF'
+      homepage_url:
+        description: 'Package homepage URL'
+        required: false
+        type: string
+        default: ''
+      deb_section:
+        description: 'Debian package section'
+        required: false
+        type: string
+        default: ''
+      deb_priority:
+        description: 'Debian package priority'
+        required: false
+        type: string
+        default: 'optional'
+      rpm_group:
+        description: 'RPM package group'
+        required: false
+        type: string
+        default: ''
+
+      # Authentication
       gh_pat:
         description: 'GitHub PAT token (defaults to GH_REPO_READ_TOKEN secret)'
         required: false
@@ -198,16 +221,6 @@ on:
         default: ''
       nexus_url:
         description: 'Nexus repository URL (defaults to platform-specific secret)'
-        required: false
-        type: string
-        default: ''
-      docker_registry_username:
-        description: 'Docker registry username (defaults to ECMWF_DOCKER_REGISTRY_USERNAME secret)'
-        required: false
-        type: string
-        default: ''
-      docker_registry_password:
-        description: 'Docker registry password (defaults to ECMWF_DOCKER_REGISTRY_ACCESS_TOKEN secret)'
         required: false
         type: string
         default: ''

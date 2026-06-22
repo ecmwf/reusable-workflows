@@ -56,7 +56,7 @@ runs:
         ls -lh dist/
 
     - name: Publish to PyPI
-      if: ${{ false && inputs.dry_run != 'true' && inputs.testpypi != 'true' }} # Enable when ready
+      if: ${{ inputs.dry_run != 'true' && inputs.testpypi != 'true' }}
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:

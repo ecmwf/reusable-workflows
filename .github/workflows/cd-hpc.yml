@@ -3,6 +3,7 @@ name: CD HPC
 on:
   workflow_call:
     inputs:
+      # Standard
       name:
         description: 'Build name for identification'
         required: false
@@ -17,10 +18,56 @@ on:
         required: false
         type: boolean
         default: false
+      dry_run_install:
+        description: 'Install module during dry runs'
+        required: false
+        type: string
+        default: 'false'
+      dry_run_install_prefix:
+        description: 'Custom install prefix for dry_run_install'
+        required: false
+        type: string
+        default: ''
+
+      # Authentication
+      github_user:
+        description: 'GitHub user for authentication (defaults to BUILD_PACKAGE_HPC_GITHUB_USER secret)'
+        required: false
+        type: string
+        default: ''
+      github_token:
+        description: 'GitHub PAT for repository access (defaults to GH_REPO_READ_TOKEN secret)'
+        required: false
+        type: string
+        default: ''
+      troika_user:
+        description: 'HPC submission user (defaults to HPC_CI_SSH_USER secret)'
+        required: false
+        type: string
+        default: ''
+
+      # Platform / runner
       platform:
         description: 'Compiler platform (e.g., gnu-14.2.0, intel-2025.0.1)'
         required: true
         type: string
+      site:
+        description: 'HPC site name'
+        required: false
+        type: string
+        default: 'aa-batch'
+      workdir:
+        description: 'Work directory on HPC'
+        required: false
+        type: string
+        default: ''
+      output_dir:
+        description: 'Output directory on HPC'
+        required: false
+        type: string
+        default: ''
+
+      # Installation
       install_prefix:
         description: 'Custom install prefix (defaults to /usr/local/apps/<module>/<ref>)'
         required: false
@@ -31,6 +78,28 @@ on:
         required: false
         type: string
         default: 'false'
+      install_lib_dir:
+        description: 'CMake INSTALL_LIB_DIR value (lib or lib64)'
+        required: false
+        type: string
+        default: 'lib'
+      install_command:
+        description: 'Custom install command (use $INSTALL_PREFIX for install path)'
+        required: false
+        type: string
+        default: ''
+      clean_before_install:
+        description: 'Remove existing install directory before install'
+        required: false
+        type: string
+        default: 'false'
+      lock_permissions:
+        description: 'Lock install directory permissions after build'
+        required: false
+        type: string
+        default: 'true'
+
+      # Build configuration
       cmake_options:
         description: 'CMake options as line-separated values'
         required: false
@@ -76,6 +145,23 @@ on:
         required: false
         type: string
         default: ''
+      mkdir:
+        description: 'Directories to create in workdir before build as line-separated values'
+        required: false
+        type: string
+        default: ''
+      pytest_cmd:
+        description: 'Custom pytest command for Python package testing'
+        required: false
+        type: string
+        default: ''
+      post_script:
+        description: 'Bash script to run after build (path relative to repo root)'
+        required: false
+        type: string
+        default: ''
+
+      # Dependencies
       dependencies:
         description: 'Build dependencies as line-separated values (e.g., "owner/repo@ref")'
         required: false
@@ -111,26 +197,18 @@ on:
         required: false
         type: string
         default: ''
-      stages:
-        description: 'JSON array of build stages for multi-config builds'
-        required: false
-        type: string
-        default: ''
       modules:
         description: 'Modules to load as line-separated values'
         required: false
         type: string
         default: ''
-      install_command:
-        description: 'Custom install command (use $INSTALL_PREFIX for install path)'
+      stages:
+        description: 'JSON array of build stages for multi-config builds'
         required: false
         type: string
         default: ''
-      lock_permissions:
-        description: 'Lock install directory permissions after build'
-        required: false
-        type: string
-        default: 'true'
+
+      # Finalization
       sync_module:
         description: 'Sync module to other clusters after build'
         required: false
@@ -151,6 +229,8 @@ on:
         required: false
         type: string
         default: ''
+
+      # Resource options
       ntasks:
         description: 'Number of tasks for the job'
         required: false
@@ -163,71 +243,6 @@ on:
         default: ''
       queue:
         description: 'HPC queue (nf, ng, deploy)'
-        required: false
-        type: string
-        default: ''
-      site:
-        description: 'HPC site name'
-        required: false
-        type: string
-        default: 'aa-batch'
-      workdir:
-        description: 'Work directory on HPC'
-        required: false
-        type: string
-        default: ''
-      output_dir:
-        description: 'Output directory on HPC'
-        required: false
-        type: string
-        default: ''
-      post_script:
-        description: 'Bash script to run after build (path relative to repo root)'
-        required: false
-        type: string
-        default: ''
-      clean_before_install:
-        description: 'Remove existing install directory before install'
-        required: false
-        type: string
-        default: 'false'
-      install_lib_dir:
-        description: 'CMake INSTALL_LIB_DIR value (lib or lib64)'
-        required: false
-        type: string
-        default: 'lib'
-      mkdir:
-        description: 'Directories to create in workdir before build as line-separated values'
-        required: false
-        type: string
-        default: ''
-      pytest_cmd:
-        description: 'Custom pytest command for Python package testing'
-        required: false
-        type: string
-        default: ''
-      dry_run_install:
-        description: 'Install module during dry runs'
-        required: false
-        type: string
-        default: 'false'
-      dry_run_install_prefix:
-        description: 'Custom install prefix for dry_run_install'
-        required: false
-        type: string
-        default: ''
-      github_user:
-        description: 'GitHub user for authentication (defaults to BUILD_PACKAGE_HPC_GITHUB_USER secret)'
-        required: false
-        type: string
-        default: ''
-      github_token:
-        description: 'GitHub PAT for repository access (defaults to GH_REPO_READ_TOKEN secret)'
-        required: false
-        type: string
-        default: ''
-      troika_user:
-        description: 'HPC submission user (defaults to HPC_CI_SSH_USER secret)'
         required: false
         type: string
         default: ''

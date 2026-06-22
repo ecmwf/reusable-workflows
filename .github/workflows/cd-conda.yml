@@ -3,6 +3,7 @@ name: CD Conda
 on:
   workflow_call:
     inputs:
+      # Standard
       name:
         description: 'Build name for artifacts'
         required: false
@@ -17,11 +18,8 @@ on:
         required: false
         type: boolean
         default: false
-      test_nexus:
-        description: 'Use test Nexus repository'
-        required: false
-        type: string
-        default: 'true'
+
+      # Build configuration
       conda_dir:
         description: 'Directory containing conda recipe (meta.yaml)'
         required: false
@@ -42,6 +40,8 @@ on:
         required: false
         type: string
         default: 'false'
+
+      # Authentication
       gh_pat:
         description: 'GitHub PAT token (defaults to GH_REPO_READ_TOKEN secret)'
         required: false
@@ -54,6 +54,13 @@ on:
         default: ''
       nexus_test_token:
         description: 'Nexus test upload token as user:token (defaults to NEXUS_TEST_CONDA_UPLOAD secrets)'
+        required: false
+        type: string
+        default: ''
+
+      # Publishing
+      test_nexus:
+        description: 'Use test Nexus repository. Empty means derive from release detection (prerelease uses test Nexus, release uses production).'
         required: false
         type: string
         default: ''
@@ -84,7 +91,7 @@ jobs:
           name: ${{ inputs.name }}
           ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
           dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
-          test_nexus: ${{ inputs.test_nexus }}
+          test_nexus: ${{ inputs.test_nexus != '' && inputs.test_nexus || steps.detect-release-type.outputs.is_prerelease }}
           gh_pat: ${{ inputs.gh_pat || secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ inputs.nexus_token || (secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN)) || '' }}
           nexus_test_token: ${{ inputs.nexus_test_token || (secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN)) || '' }}

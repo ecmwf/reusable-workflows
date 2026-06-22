@@ -3,6 +3,7 @@ name: Reusable CD Pipeline
 on:
   workflow_call:
     inputs:
+      # Standard
       config_file:
         description: 'Path to build configuration file'
         required: false

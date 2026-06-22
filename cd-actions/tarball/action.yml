@@ -10,6 +10,14 @@ inputs:
     description: 'Git ref name for artifacts (defaults to github.ref_name)'
     required: false
     default: ''
+  dry_run:
+    description: 'Dry run mode - build only, no Confluence upload'
+    required: false
+    default: 'false'
+  is_prerelease:
+    description: 'Prerelease mode - build only, no Confluence upload'
+    required: false
+    default: 'false'
   ecbuild_version:
     description: 'ecbuild version/tag to checkout (defaults to latest release)'
     required: false
@@ -148,7 +156,7 @@ runs:
         retention-days: 90
 
     - name: Upload to Confluence
-      if: ${{ inputs.confluence_token != '' && inputs.confluence_space != '' }}
+      if: ${{ inputs.dry_run != 'true' && inputs.is_prerelease != 'true' && inputs.confluence_token != '' && inputs.confluence_space != '' }}
       uses: ecmwf/reusable-workflows/cd-actions/confluence-upload@v2
       with:
         token: ${{ inputs.confluence_token }}
