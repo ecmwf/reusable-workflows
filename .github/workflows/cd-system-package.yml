@@ -217,53 +217,18 @@ jobs:
     name: Setup Platform
     runs-on: ubuntu-latest
     outputs:
-      os: ${{ steps.map.outputs.os }}
-      container: ${{ steps.map.outputs.container }}
-      nexus_token_secret_prod: ${{ steps.map.outputs.nexus_token_secret_prod }}
-      nexus_url_secret_prod: ${{ steps.map.outputs.nexus_url_secret_prod }}
-      nexus_token_secret_test: ${{ steps.map.outputs.nexus_token_secret_test }}
-      nexus_url_secret_test: ${{ steps.map.outputs.nexus_url_secret_test }}
+      os: ${{ steps.resolve.outputs.os }}
+      container: ${{ steps.resolve.outputs.container }}
+      nexus_token_secret_prod: ${{ steps.resolve.outputs.nexus_token_secret_prod }}
+      nexus_url_secret_prod: ${{ steps.resolve.outputs.nexus_url_secret_prod }}
+      nexus_token_secret_test: ${{ steps.resolve.outputs.nexus_token_secret_test }}
+      nexus_url_secret_test: ${{ steps.resolve.outputs.nexus_url_secret_test }}
     steps:
-      - name: Map OS to platform config
-        id: map
-        shell: python3 {0}
-        # Mapping kept in sync with cd-actions/load-config/config/platforms-system-package.yml
-        run: |
-          import os
-
-          platforms = {
-              "ubuntu-22.04": {"os": "ubuntu-22.04", "nexus_token_secret_prod": "", "nexus_url_secret_prod": "", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_UBUNTU_2204"},
-              "ubuntu-24.04": {"os": "ubuntu-24.04", "nexus_token_secret_prod": "", "nexus_url_secret_prod": "", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_UBUNTU_2404"},
-              "debian-11": {"os": "debian-11", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_DEBIAN_11", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_DEBIAN_11"},
-              "debian-12": {"os": "debian-12", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_DEBIAN_12", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_DEBIAN_12"},
-              "debian-13": {"os": "debian-13", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_DEBIAN_13", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_DEBIAN_13"},
-              "rocky-8": {"os": "rocky-8.10", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_ROCKY_8", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_8"},
-              "rocky-8.7": {"os": "rocky-8.7", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_ROCKY_8", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_8"},
-              "rocky-8.10": {"os": "rocky-8.10", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_ROCKY_8", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_8"},
-              "rocky-9": {"os": "rocky-9.7", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_ROCKY_9", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_9"},
-              "rocky-9.7": {"os": "rocky-9.7", "nexus_token_secret_prod": "NEXUS_REPO_UPLOAD_TOKEN", "nexus_url_secret_prod": "NEXUS_REPO_URL_ROCKY_9", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_9"},
-              "rocky-10": {"os": "rocky-10.1", "nexus_token_secret_prod": "", "nexus_url_secret_prod": "", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_10"},
-              "rocky-10.1": {"os": "rocky-10.1", "nexus_token_secret_prod": "", "nexus_url_secret_prod": "", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_ROCKY_10"},
-              "fedora-43": {"os": "fedora-43", "nexus_token_secret_prod": "", "nexus_url_secret_prod": "", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_FEDORA_43"},
-              "centos-7": {"os": "centos-7", "nexus_token_secret_prod": "", "nexus_url_secret_prod": "", "nexus_token_secret_test": "NEXUS_TEST_REPO_UPLOAD_TOKEN", "nexus_url_secret_test": "NEXUS_TEST_REPO_URL_CENTOS_7"},
-          }
-
-          os_input = "${{ inputs.os }}"
-          if os_input not in platforms:
-              supported = ", ".join(sorted(platforms.keys()))
-              print(f"::error::Unknown OS: {os_input}. Supported: {supported}")
-              raise SystemExit(1)
-
-          p = platforms[os_input]
-          container = f"eccr.ecmwf.int/platform-builder/platform-builder:{p['os']}"
-
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"os={p['os']}\n")
-              f.write(f"container={container}\n")
-              f.write(f"nexus_token_secret_prod={p['nexus_token_secret_prod']}\n")
-              f.write(f"nexus_url_secret_prod={p['nexus_url_secret_prod']}\n")
-              f.write(f"nexus_token_secret_test={p['nexus_token_secret_test']}\n")
-              f.write(f"nexus_url_secret_test={p['nexus_url_secret_test']}\n")
+      - name: Resolve system package platform
+        id: resolve
+        uses: ecmwf/reusable-workflows/cd-actions/resolve-system-package-platform@v2
+        with:
+          os: ${{ inputs.os }}
 
   build:
     name: Build System Package
