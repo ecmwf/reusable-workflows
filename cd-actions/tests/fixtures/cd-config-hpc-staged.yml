@@ -1,0 +1,15 @@
+builds:
+  - name: hpc-staged-build
+    type: hpc
+    config:
+      platform: gnu-14.2.0
+      stages:
+        - name: py312
+          modules:
+            - python3/3.12
+            - boost/1.87
+          cmake_options:
+            Python3_ROOT: /path/to/python
+        - name: py313
+          modules:
+            - python3/3.13
