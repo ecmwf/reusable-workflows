@@ -42,6 +42,10 @@ else
     {{ load_modules(generic_modules, package.modules) }}
     {{ set_env(env) }}
 
+    {% if package.type == "main" and ci_options.ecbundle %}
+    {{ clean_install_dir(package) }}
+    {% endif %}
+
     {{ start_group( "Building " + package.name) }}
     {% if package.name == "ecbuild" %}
     {{ cd_pkg_subdir(package) }}
@@ -68,7 +72,7 @@ else
     {% endif %}
     {{ end_group() }}
 
-    {% if package.type == "main" %}
+    {% if package.type == "main" and not ci_options.ecbundle %}
     {{ clean_install_dir(package) }}
     {% endif %}
 
