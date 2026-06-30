@@ -182,6 +182,47 @@ def test_explicit_cleanup_canonicalizes_environment_roots(tmp_path, root_variabl
     assert list(prefix.iterdir()) == []
 
 
+@pytest.mark.parametrize(
+    ("available_root", "unresolvable_root"),
+    [("tmpdir", "scratch"), ("scratch", "tmpdir")],
+)
+def test_explicit_cleanup_ignores_unresolvable_optional_root(
+    tmp_path, available_root, unresolvable_root
+):
+    root = tmp_path / available_root
+    root.mkdir()
+    prefix = root / "install"
+    _populate_install(prefix)
+    kwargs = {
+        available_root: root,
+        unresolvable_root: tmp_path / f"missing-{unresolvable_root}",
+    }
+
+    result = _run_cleanup(prefix, explicit=True, **kwargs)
+
+    assert result.returncode == 0, result.stderr
+    assert prefix.is_dir()
+    assert list(prefix.iterdir()) == []
+
+
+def test_explicit_cleanup_rejects_target_outside_available_roots(tmp_path):
+    prefix = tmp_path / "outside" / "install"
+    _populate_install(prefix)
+
+    result = _run_cleanup(
+        prefix,
+        explicit=True,
+        tmpdir=tmp_path / "missing-tmpdir",
+        scratch=tmp_path / "missing-scratch",
+    )
+
+    assert result.returncode != 0
+    assert "not under /usr/local/apps" in result.stdout
+    assert (prefix / "regular-file").is_file()
+    assert (prefix / ".hidden-file").is_file()
+    assert (prefix / ".hidden-directory").is_dir()
+
+
 def test_cleanup_rejects_unresolvable_required_root(tmp_path):
     prefix = tmp_path / "install"
     _populate_install(prefix)

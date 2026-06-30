@@ -75,14 +75,12 @@ if cd {{ package.prefix }} 2>/dev/null; then
   fi
 {% if ci_options.clean_before_install %}
   TMPDIR_PATH=""
-  if [[ -n "${TMPDIR:-}" ]] && ! TMPDIR_PATH="$(realpath -e "$TMPDIR")"; then
-      echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - could not resolve \$TMPDIR"
-      exit 1
+  if [[ -n "${TMPDIR:-}" ]]; then
+      TMPDIR_PATH="$(realpath -e "$TMPDIR" 2>/dev/null)" || TMPDIR_PATH=""
   fi
   SCRATCH_PATH=""
-  if [[ -n "${SCRATCH:-}" ]] && ! SCRATCH_PATH="$(realpath -e "$SCRATCH")"; then
-      echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - could not resolve \$SCRATCH"
-      exit 1
+  if [[ -n "${SCRATCH:-}" ]]; then
+      SCRATCH_PATH="$(realpath -e "$SCRATCH" 2>/dev/null)" || SCRATCH_PATH=""
   fi
   if [[ "$CLEAN_PATH" == /usr/local/apps/* ]]; then
       if [[ ! "$CLEAN_PATH" =~ ^/usr/local/apps/[^/]+/.+ ]]; then
