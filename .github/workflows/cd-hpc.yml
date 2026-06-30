@@ -89,7 +89,7 @@ on:
         type: string
         default: ''
       clean_before_install:
-        description: 'Remove existing install directory before install'
+        description: 'Remove existing install directory before install. Dry-run installs into $SCRATCH are always cleaned automatically.'
         required: false
         type: string
         default: 'false'

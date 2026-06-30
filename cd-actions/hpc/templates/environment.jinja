@@ -63,29 +63,58 @@ echo "Repository: {{ ci_options.main_package_name }}"
 {# === Clean Install Directory === #}
 {% macro clean_install_dir(package) -%}
 {% set is_main = package.type in ["main", "main-python", "ecbundle"] %}
+{% set auto_dry_run_clean = ci_options.dry_run and ci_options.dry_run_install %}
 {% if is_main and ci_options.skip_install %}
-{% elif ci_options.clean_before_install %}
+{% elif ci_options.clean_before_install or auto_dry_run_clean %}
 {{ start_group("Cleaning before install: " + package.name) }}
 if cd {{ package.prefix }} 2>/dev/null; then
   # Resolve symlinks and '..' then validate the path is safe to clean.
-  # Allowed: /usr/local/apps/<app>/<version-or-deeper>, or any path under $TMPDIR / $SCRATCH.
-  CLEAN_PATH="$(realpath "{{ package.prefix }}")"
+  if ! CLEAN_PATH="$(realpath -e "{{ package.prefix }}")"; then
+      echo "SAFETY ERROR: Refusing to clean {{ package.prefix }} - could not resolve target path"
+      exit 1
+  fi
+{% if ci_options.clean_before_install %}
+  TMPDIR_PATH=""
+  if [[ -n "${TMPDIR:-}" ]] && ! TMPDIR_PATH="$(realpath -e "$TMPDIR")"; then
+      echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - could not resolve \$TMPDIR"
+      exit 1
+  fi
+  SCRATCH_PATH=""
+  if [[ -n "${SCRATCH:-}" ]] && ! SCRATCH_PATH="$(realpath -e "$SCRATCH")"; then
+      echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - could not resolve \$SCRATCH"
+      exit 1
+  fi
   if [[ "$CLEAN_PATH" == /usr/local/apps/* ]]; then
       if [[ ! "$CLEAN_PATH" =~ ^/usr/local/apps/[^/]+/.+ ]]; then
           echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - path must be at least /usr/local/apps/<app>/<version>"
           exit 1
       fi
-  elif [[ -n "${TMPDIR:-}" && "$CLEAN_PATH" == "${TMPDIR}"/* ]]; then
+  elif [[ -n "$TMPDIR_PATH" && "$CLEAN_PATH" == "$TMPDIR_PATH"/* ]]; then
     :
-  elif [[ -n "${SCRATCH:-}" && "$CLEAN_PATH" == "${SCRATCH}"/* ]]; then
+  elif [[ -n "$SCRATCH_PATH" && "$CLEAN_PATH" == "$SCRATCH_PATH"/* ]]; then
     :
   else
       echo "SAFETY ERROR: Refusing to clean $CLEAN_PATH - not under /usr/local/apps/<app>/<version>, \$TMPDIR, or \$SCRATCH"
       exit 1
   fi
+{% else %}
+  # Automatic dry-run cleaning: only ever permitted under $SCRATCH.
+  if [[ -z "${SCRATCH:-}" ]]; then
+      echo "SAFETY ERROR: Refusing automatic dry-run clean of $CLEAN_PATH - \$SCRATCH is not set. Set clean_before_install: true to clean other locations."
+      exit 1
+  fi
+  if ! SCRATCH_PATH="$(realpath -e "$SCRATCH")"; then
+      echo "SAFETY ERROR: Refusing automatic dry-run clean of $CLEAN_PATH - could not resolve \$SCRATCH"
+      exit 1
+  fi
+  if [[ "$CLEAN_PATH" != "$SCRATCH_PATH"/* ]]; then
+      echo "SAFETY ERROR: Refusing automatic dry-run clean of $CLEAN_PATH - not under \$SCRATCH. Set clean_before_install: true to clean other locations."
+      exit 1
+  fi
+{% endif %}
   echo "Removing the previous install: {{ package.prefix }}"
   find . -type f -or -type d -exec chmod u+w {} \;
-  rm -rfv ./*
+  find . -mindepth 1 -maxdepth 1 -exec rm -rfv -- {} +
   cd -
 else
   echo "Nothing to clean up."
