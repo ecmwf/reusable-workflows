@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -59,8 +60,13 @@ def main():
     print(f"Nexus: {args.nexus_url}")
     print()
 
+    dispatch_id = f"{args.caller_repo.replace('/', '-')}-{args.caller_run_id}-{args.artifact_name}-{uuid.uuid4().hex[:12]}"
+    expected_title_fragment = f"{args.artifact_name} from {args.caller_repo}#{args.caller_run_id} ({dispatch_id})"
+
     # Dispatch workflow
     print("Dispatching lock workflow...")
+    print(f"Dispatch ID: {dispatch_id}")
+    start_time = datetime.now(timezone.utc).timestamp()
     gh_api_request(
         f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/dispatches",
         method="POST",
@@ -72,6 +78,7 @@ def main():
                 "package_artifact_name": args.artifact_name,
                 "caller_run_id": args.caller_run_id,
                 "caller_repo": args.caller_repo,
+                "dispatch_id": dispatch_id,
             },
         },
         token=args.gh_pat,
@@ -79,27 +86,30 @@ def main():
 
     time.sleep(5)  # Wait for workflow to appear
 
-    # Find the workflow run
-    start_time = datetime.now(timezone.utc).timestamp()
+    # Find the exact workflow run for this dispatch. Matrix cells can dispatch this
+    # workflow concurrently, so creation time alone is not a safe discriminator.
     run_id = None
 
-    for _ in range(30):
+    for _ in range(60):
         runs = gh_api_request(
-            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs?per_page=5", token=args.gh_pat
+            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs?per_page=20",
+            token=args.gh_pat,
         )
 
         for run in runs.get("workflow_runs", []):
+            title = run.get("display_title") or run.get("name") or ""
             created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00")).timestamp()
-            if created >= start_time - 30:
+            if dispatch_id in title and created >= start_time - 30:
                 run_id = run["id"]
                 break
 
         if run_id:
             break
-        time.sleep(1)
+        time.sleep(2)
 
     if not run_id:
-        print("Error: Could not find dispatched workflow run")
+        print(f"Error: Could not find dispatched workflow run for dispatch ID {dispatch_id}")
+        print(f"Expected run name to contain: {expected_title_fragment}")
         sys.exit(1)
 
     print(f"Found workflow run: {run_id}")

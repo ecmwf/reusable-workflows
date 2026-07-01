@@ -2,9 +2,17 @@
 """Parse conda build configuration."""
 
 import os
+import shlex
 from pathlib import Path
 
 import yaml
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None or value.strip() == "":
+        return default
+    return value.strip().lower() == "true"
 
 
 def main():
@@ -15,16 +23,28 @@ def main():
         nexus_config = yaml.safe_load(f)
 
     conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
-    channels_input = os.environ.get("INPUT_CHANNELS", "conda-forge")
+    channels_input = os.environ.get(
+        "INPUT_CHANNELS",
+        "conda-forge\nhttps://nexus.ecmwf.int/repository/conda-ecmwf-public",
+    )
+    platform = os.environ.get("INPUT_PLATFORM", "linux-64") or "linux-64"
     conda_build_args_input = os.environ.get("INPUT_CONDA_BUILD_ARGS", "")
-    conda_build_args = " ".join(a.strip() for a in conda_build_args_input.splitlines() if a.strip())
+    conda_build_args_list: list[str] = []
+    for line in conda_build_args_input.splitlines():
+        stripped = line.strip()
+        if stripped:
+            conda_build_args_list.extend(shlex.split(stripped))
+    conda_build_args_list = [a for a in conda_build_args_list if a != "--no-anaconda-upload"]
+    conda_build_args_list.append("--no-anaconda-upload")
+    conda_build_args = " ".join(conda_build_args_list)
 
     # Parse line-separated channels
     channels_list = [c.strip() for c in channels_input.splitlines() if c.strip()]
     channels = f"-c {' -c '.join(channels_list)}" if channels_list else ""
+    channels_csv = ",".join(channels_list)
 
     # Determine Nexus URL based on prerelease flag
-    test_nexus = os.environ.get("INPUT_TEST_NEXUS", "false") == "true"
+    test_nexus = _bool_env("INPUT_TEST_NEXUS")
     if test_nexus:
         nexus_url = nexus_config["test"]["url"]
         nexus_token = os.environ.get("INPUT_NEXUS_TEST_TOKEN", "")
@@ -42,11 +62,13 @@ def main():
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
         f.write(f"meta_file={meta_file}\n")
         f.write(f"channels={channels}\n")
+        f.write(f"channels_csv={channels_csv}\n")
         f.write(f"output_folder={output_folder}\n")
         f.write("artifact_pattern<<ARTIFACT_PATTERN_EOF\n")
         f.write(f"{artifact_pattern}\n")
         f.write("ARTIFACT_PATTERN_EOF\n")
         f.write(f"conda_build_args={conda_build_args}\n")
+        f.write(f"platform={platform}\n")
         f.write(f"nexus_url={nexus_url}\n")
         f.write(f"nexus_token={nexus_token}\n")
 
@@ -56,6 +78,7 @@ def main():
     print(f"Output folder: {output_folder}")
     print(f"Artifact pattern: {artifact_pattern}")
     print(f"Conda build args: {conda_build_args}")
+    print(f"Target platform: {platform}")
     print(f"Nexus URL: {nexus_url}")
 
 

@@ -16,6 +16,10 @@ inputs:
     description: 'Use test Nexus repository'
     required: false
     default: 'false'
+  platform:
+    description: 'Conda target platform/subdir, e.g. linux-64, linux-aarch64, osx-arm64'
+    required: false
+    default: 'linux-64'
   gh_pat:
     description: 'GitHub PAT token'
     required: false
@@ -29,14 +33,20 @@ inputs:
     description: 'Skip testing package installation from Nexus'
     required: false
     default: 'false'
+  setup_conda:
+    description: 'Install Miniconda+mamba on the runner; set false to use a pre-installed conda (e.g. self-hosted platform-builder)'
+    required: false
+    default: 'true'
   conda_dir:
     description: 'Directory containing conda recipe (meta.yaml)'
     required: false
     default: './.cd/conda'
   channels:
-    description: 'Conda channels to use as line-separated values (appended to internal ECMWF nexus channels)'
+    description: 'Conda channels to use as line-separated values'
     required: false
-    default: 'conda-forge'
+    default: |
+      conda-forge
+      https://nexus.ecmwf.int/repository/conda-ecmwf-public
   conda_build_args:
     description: 'Additional arguments for conda build command as line-separated values'
     required: false
@@ -52,8 +62,8 @@ runs:
         INPUT_CONDA_DIR: ${{ inputs.conda_dir }}
         INPUT_CHANNELS: ${{ inputs.channels }}
         INPUT_CONDA_BUILD_ARGS: ${{ inputs.conda_build_args }}
-        # INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
-        INPUT_TEST_NEXUS: 'true'
+        INPUT_PLATFORM: ${{ inputs.platform }}
+        INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
         INPUT_NEXUS_TOKEN: ${{ inputs.nexus_token }}
         INPUT_NEXUS_TEST_TOKEN: ${{ inputs.nexus_test_token }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}
@@ -64,14 +74,27 @@ runs:
       shell: bash -el {0}
       run: |
         meta_file="${{ steps.config.outputs.meta_file }}"
-        
+
         if [[ ! -f "$meta_file" ]]; then
             echo "Meta file not found: $meta_file"
             exit 1
         fi
-        
+
         echo "meta_dir=$(dirname $meta_file)" >> $GITHUB_OUTPUT
         echo "Configuration files validated successfully"
+
+    - name: Install Miniconda + mamba
+      if: ${{ inputs.setup_conda == 'true' }}
+      uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
+      with:
+        miniforge-version: latest
+        mamba-version: "*"
+        python-version: "3"
+        auto-update-conda: false
+        auto-activate: true
+        activate-environment: base
+        channels: ${{ steps.config.outputs.channels_csv }}
+        conda-remove-defaults: true
 
     - name: Setup conda env dir
       shell: bash -el {0}
@@ -82,10 +105,11 @@ runs:
     - name: Create conda environment
       shell: bash -el {0}
       run: |
-        BUILD_ENV="build-env-${GITHUB_RUN_ID}"
+        safe_platform="$(echo '${{ inputs.platform }}' | tr -c 'A-Za-z0-9_.-' '-')"
+        BUILD_ENV="build-env-${GITHUB_RUN_ID}-${safe_platform}"
         echo "BUILD_ENV=$BUILD_ENV" >> "$GITHUB_ENV"
         mamba env create -n "$BUILD_ENV"
-          
+
     - name: Install build dependencies
       shell: bash -el {0}
       run: |
@@ -94,50 +118,73 @@ runs:
         mamba install -y conda conda-build conda-verify conda-index
         mamba info
         mamba list
-        
+
     - name: Build conda package
       shell: bash -el {0}
       run: |
         eval "$(conda shell.bash hook)"
         conda activate "$BUILD_ENV"
         meta_dir="${{ steps.validate.outputs.meta_dir }}"
-        nexus_url="${{ steps.config.outputs.nexus_url }}"
         channels="${{ steps.config.outputs.channels }}"
         output_folder="${{ steps.config.outputs.output_folder }}"
         build_args="${{ steps.config.outputs.conda_build_args }}"
-        if [[ ! $build_args == *"--no-anaconda-upload"* ]]; then
-          build_args="${build_args} --no-anaconda-upload"
-        fi
+        platform="${{ steps.config.outputs.platform }}"
+        variant_file="$RUNNER_TEMP/conda-variant-${platform}.yml"
+
+        cat > "$variant_file" <<EOF
+        target_platform:
+          - $platform
+        EOF
 
         echo "Building conda package from: $meta_dir"
+        echo "Target platform: $platform"
+        echo "Variant file: $variant_file"
         echo "Output folder: $output_folder"
+        echo "Channels: $channels"
         echo "Build args: $build_args"
 
         mkdir -p "$output_folder"
 
         export CONDA_SOLVER=libmamba
-        "$CONDA_PREFIX/bin/conda" build "$meta_dir" -c $nexus_url $channels --output-folder "$output_folder" --no-anaconda-upload $build_args
-        
+        "$CONDA_PREFIX/bin/conda" build "$meta_dir" \
+          $channels \
+          --variant-config-files "$variant_file" \
+          --output-folder "$output_folder" \
+          $build_args
+
     - name: List built packages
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
         echo "Built packages:"
         find "$output_folder" \( -name "*.tar.bz2" -o -name "*.conda" \) -type f | sort
-        
+
     - name: Verify artifacts
       shell: bash -el {0}
       run: |
         output_folder="${{ steps.config.outputs.output_folder }}"
+        platform="${{ steps.config.outputs.platform }}"
         echo "Checking for conda packages in: $output_folder"
 
-        # Check if conda packages exist in output folder
-        if ! find "$output_folder" -type f \( -name "*.tar.bz2" -o -name "*.conda" \) | head -1 | grep -q .; then
+        packages=()
+        while IFS= read -r pkg; do
+            packages+=("$pkg")
+        done < <(find "$output_folder" -type f \( -name "*.tar.bz2" -o -name "*.conda" \) | sort)
+        if [[ ${#packages[@]} -eq 0 ]]; then
             echo "No conda packages found in: $output_folder"
             echo "Available files:"
             find "$output_folder" -type f | head -20
             exit 1
         fi
+
+        for package in "${packages[@]}"; do
+            subdir="$(basename "$(dirname "$package")")"
+            if [[ "$subdir" != "$platform" && "$subdir" != "noarch" ]]; then
+                echo "Package $(basename "$package") is under unexpected Conda subdir '$subdir' (expected '$platform' or 'noarch')"
+                exit 1
+            fi
+            echo "Verified package subdir: $package -> $subdir"
+        done
 
     - name: Upload artifacts
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -205,7 +252,8 @@ runs:
             eval "$(conda shell.bash hook)"
 
             # Create environment and install the EXACT version from Nexus
-            if mamba create -n "$test_env" -c "$nexus_url" -c conda-forge "${pkg_base}=${pkg_version}" -y; then
+            channels="${{ steps.config.outputs.channels }}"
+            if mamba create -n "$test_env" -c "$nexus_url" $channels "${pkg_base}=${pkg_version}" -y; then
                 echo "Successfully installed ${pkg_base}=${pkg_version} from Nexus"
 
                 # Verify the exact version is installed
