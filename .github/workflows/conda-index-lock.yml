@@ -1,4 +1,5 @@
 name: Conda Index Lock
+run-name: Conda index ${{ inputs.package_artifact_name }} from ${{ inputs.caller_repo }}#${{ inputs.caller_run_id }} (${{ inputs.dispatch_id }})
 
 on:
   workflow_dispatch:
@@ -21,6 +22,10 @@ on:
         type: string
       caller_repo:
         description: 'Repository that called this lock (owner/repo)'
+        required: true
+        type: string
+      dispatch_id:
+        description: 'Unique lock dispatch identifier'
         required: true
         type: string
 
