@@ -33,6 +33,7 @@ on:
 concurrency:
   group: conda-index-lock
   cancel-in-progress: false
+  queue: max
 
 jobs:
   index:
