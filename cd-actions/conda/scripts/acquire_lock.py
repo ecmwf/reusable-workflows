@@ -16,6 +16,7 @@ LOCK_WORKFLOW = "conda-index-lock.yml"
 MAX_WAIT = 1800  # 30 minutes
 POLL_INTERVAL = 10  # seconds
 GITHUB_API = "https://api.github.com"
+RUNS_PER_PAGE = 100
 
 
 def gh_api_request(endpoint, method="GET", data=None, token=None):
@@ -40,6 +41,38 @@ def gh_api_request(endpoint, method="GET", data=None, token=None):
     except HTTPError as e:
         error_body = e.read().decode("utf-8")
         raise Exception(f"GitHub API error {e.code}: {error_body}") from e
+
+
+def find_dispatched_run(dispatch_id, start_time, token):
+    """Find a dispatched workflow run, paging back through its creation window."""
+    earliest_created = start_time - 30
+    page = 1
+
+    while True:
+        runs = gh_api_request(
+            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs"
+            f"?event=workflow_dispatch&per_page={RUNS_PER_PAGE}&page={page}",
+            token=token,
+        ).get("workflow_runs", [])
+
+        if not runs:
+            return None
+
+        for run in runs:
+            created = datetime.fromisoformat(
+                run["created_at"].replace("Z", "+00:00")
+            ).timestamp()
+            if created < earliest_created:
+                return None
+
+            title = run.get("display_title") or run.get("name") or ""
+            if dispatch_id in title:
+                return run["id"]
+
+        if len(runs) < RUNS_PER_PAGE:
+            return None
+
+        page += 1
 
 
 def main():
@@ -91,18 +124,7 @@ def main():
     run_id = None
 
     for _ in range(60):
-        runs = gh_api_request(
-            f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/runs?per_page=20",
-            token=args.gh_pat,
-        )
-
-        for run in runs.get("workflow_runs", []):
-            title = run.get("display_title") or run.get("name") or ""
-            created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00")).timestamp()
-            if dispatch_id in title and created >= start_time - 30:
-                run_id = run["id"]
-                break
-
+        run_id = find_dispatched_run(dispatch_id, start_time, args.gh_pat)
         if run_id:
             break
         time.sleep(2)
