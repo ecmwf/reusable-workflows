@@ -104,7 +104,7 @@ def main():
         f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/dispatches",
         method="POST",
         data={
-            "ref": "v2",
+            "ref": "cd-conda-multi-platform",
             "inputs": {
                 "nexus_url": args.nexus_url,
                 "nexus_token": args.nexus_token,

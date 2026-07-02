@@ -82,7 +82,7 @@ jobs:
     steps:
       - name: Resolve Conda platform matrix
         id: plan
-        uses: ecmwf/reusable-workflows/cd-actions/resolve-conda-platforms@v2
+        uses: ecmwf/reusable-workflows/cd-actions/resolve-conda-platforms@cd-conda-multi-platform
         with:
           name: ${{ inputs.name }}
           platforms: ${{ inputs.platforms }}
@@ -97,7 +97,7 @@ jobs:
     steps:
       - name: Detect release type
         id: detect-release-type
-        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@cd-conda-multi-platform
         with:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ inputs.dry_run }}
@@ -111,7 +111,7 @@ jobs:
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build with Conda${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@cd-conda-multi-platform
         with:
           name: ${{ matrix.name }}
           platform: ${{ matrix.conda_platform }}
