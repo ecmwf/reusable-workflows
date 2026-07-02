@@ -3,25 +3,22 @@
 from __future__ import annotations
 
 import json
-import os
-import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
-# Make the script importable and ensure it can find cd-actions/lib.
-SCRIPT_DIR = Path(__file__).parent.parent / "load-config" / "scripts"
-LIB_DIR = Path(__file__).parent.parent / "lib"
-sys.path.insert(0, str(SCRIPT_DIR))
-sys.path.insert(0, str(LIB_DIR))
+from conftest import import_script
 
-os.environ.setdefault("GITHUB_ACTION_PATH", str(Path(__file__).parent.parent / "load-config"))
-
-from generate_matrix import generate_matrix  # noqa: E402
+generate_matrix = import_script("load-config", "generate_matrix", "generate_matrix_script").generate_matrix
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def _action_env(action_env):
+    action_env("load-config")
 
 
 def _load_config(name: str) -> dict:
