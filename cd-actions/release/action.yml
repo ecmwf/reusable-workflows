@@ -18,37 +18,12 @@ runs:
   steps:
     - name: Parse release configuration
       id: config
-      shell: python3 {0}
-      run: |
-        import yaml
-        import os
+      shell: bash
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_REF_NAME: ${{ inputs.ref_name }}
+      run: python3 "${{ github.action_path }}/scripts/parse_release_config.py"
 
-        config_yaml = '''${{ inputs.config }}'''
-        config = yaml.safe_load(config_yaml)
-
-        release_config = config.get('release', {}).get('config', {})
-
-        release_name = release_config.get('name', 'Release ${{ inputs.ref_name }}')
-        release_body = release_config.get('body', '## Changes\nSee the changelog for details.')
-        prerelease = str(release_config.get('prerelease', False)).lower()
-        draft = str(release_config.get('draft', False)).lower()
-        make_latest = release_config.get('make_latest', 'true')
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write(f"release_name={release_name}\n")
-            f.write(f"prerelease={prerelease}\n")
-            f.write(f"draft={draft}\n")
-            f.write(f"make_latest={make_latest}\n")
-            # Handle multiline body
-            f.write("release_body<<EOF\n")
-            f.write(f"{release_body}\n")
-            f.write("EOF\n")
-
-        print(f"Release name: {release_name}")
-        print(f"Prerelease: {prerelease}")
-        print(f"Draft: {draft}")
-        print(f"Make latest: {make_latest}")
-        
     - name: Download all artifacts
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       continue-on-error: true
@@ -56,7 +31,7 @@ runs:
         pattern: ${{ github.run_id }}-*
         merge-multiple: true
         path: ${{ inputs.artifacts_dir }}
-        
+
     - name: List downloaded artifacts
       shell: bash
       run: |
