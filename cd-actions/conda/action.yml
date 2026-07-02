@@ -44,9 +44,10 @@ inputs:
   channels:
     description: 'Conda channels to use as line-separated values'
     required: false
+    # TEMPORARY: forward prod nexus -> test nexus (revert me)
     default: |
       conda-forge
-      https://nexus.ecmwf.int/repository/conda-ecmwf-public
+      https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
   conda_build_args:
     description: 'Additional arguments for conda build command as line-separated values'
     required: false
@@ -63,7 +64,9 @@ runs:
         INPUT_CHANNELS: ${{ inputs.channels }}
         INPUT_CONDA_BUILD_ARGS: ${{ inputs.conda_build_args }}
         INPUT_PLATFORM: ${{ inputs.platform }}
-        INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        # INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        INPUT_TEST_NEXUS: 'true'
         INPUT_NEXUS_TOKEN: ${{ inputs.nexus_token }}
         INPUT_NEXUS_TEST_TOKEN: ${{ inputs.nexus_test_token }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}

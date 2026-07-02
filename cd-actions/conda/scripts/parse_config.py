@@ -25,7 +25,8 @@ def main():
     conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
     channels_input = os.environ.get(
         "INPUT_CHANNELS",
-        "conda-forge\nhttps://nexus.ecmwf.int/repository/conda-ecmwf-public",
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public",
     )
     platform = os.environ.get("INPUT_PLATFORM", "linux-64") or "linux-64"
     conda_build_args_input = os.environ.get("INPUT_CONDA_BUILD_ARGS", "")

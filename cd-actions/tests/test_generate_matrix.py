@@ -18,7 +18,7 @@ sys.path.insert(0, str(LIB_DIR))
 
 os.environ.setdefault("GITHUB_ACTION_PATH", str(Path(__file__).parent.parent / "load-config"))
 
-from generate_matrix import generate_matrix, split_matrix_by_execution_environment  # noqa: E402
+from generate_matrix import generate_matrix  # noqa: E402
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -91,9 +91,10 @@ class TestGenerateMatrixBasic:
             ]
         }
         matrix = generate_matrix(config)
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
         assert (
             matrix["include"][0]["channels"]
-            == "conda-forge\nhttps://nexus.ecmwf.int/repository/conda-ecmwf-public"
+            == "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public"
         )
 
     def test_conda_platform_alias_can_override_conda_target(self):
@@ -160,21 +161,6 @@ class TestGenerateMatrixBasic:
         }
         with pytest.raises(SystemExit):
             generate_matrix(config)
-
-    def test_execution_environment_split(self):
-        config = _load_config("cd-config-basic.yml")
-        matrix = generate_matrix(config)
-        native, containerized = split_matrix_by_execution_environment(matrix)
-
-        assert [item["name"] for item in native["include"]] == [
-            "conda-build",
-            "python-pypi-build",
-            "hpc-build",
-            "tarball-build",
-        ]
-        assert [item["name"] for item in containerized["include"]] == [
-            "debian-system-package"
-        ]
 
     def test_python_pypi(self):
         config = _load_config("cd-config-basic.yml")

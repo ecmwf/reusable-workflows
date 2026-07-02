@@ -23,7 +23,8 @@ conda:
   conda_dir: ./.cd/conda
   channels:
     - conda-forge
-    - https://nexus.ecmwf.int/repository/conda-ecmwf-public
+    # TEMPORARY: forward prod nexus -> test nexus (revert me)
+    - https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
   conda_build_args:
     - --no-anaconda-upload
   skip_installation_test: false

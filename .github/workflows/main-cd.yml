@@ -44,10 +44,6 @@ jobs:
     outputs:
       config: ${{ steps.load-config.outputs.config }}
       build_matrix: ${{ steps.load-config.outputs.build_matrix }}
-      native_build_matrix: ${{ steps.load-config.outputs.native_build_matrix }}
-      containerized_build_matrix: ${{ steps.load-config.outputs.containerized_build_matrix }}
-      has_native_builds: ${{ steps.load-config.outputs.has_native_builds }}
-      has_containerized_builds: ${{ steps.load-config.outputs.has_containerized_builds }}
       release_enabled: ${{ steps.load-config.outputs.release_enabled }}
     steps:
       - name: Checkout repository

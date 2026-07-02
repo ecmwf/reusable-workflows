@@ -29,9 +29,10 @@ on:
         description: 'Conda channels as line-separated values'
         required: false
         type: string
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
         default: |
           conda-forge
-          https://nexus.ecmwf.int/repository/conda-ecmwf-public
+          https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
       conda_build_args:
         description: 'Additional arguments for conda mambabuild as line-separated values'
         required: false

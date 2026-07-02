@@ -14,18 +14,6 @@ outputs:
   build_matrix:
     description: 'JSON build matrix for strategy.matrix'
     value: ${{ steps.generate-matrix.outputs.matrix }}
-  native_build_matrix:
-    description: 'JSON build matrix for native runner jobs'
-    value: ${{ steps.generate-matrix.outputs.native_matrix }}
-  containerized_build_matrix:
-    description: 'JSON build matrix for containerized jobs'
-    value: ${{ steps.generate-matrix.outputs.containerized_matrix }}
-  has_native_builds:
-    description: 'Whether the native runner matrix has entries'
-    value: ${{ steps.generate-matrix.outputs.has_native_builds }}
-  has_containerized_builds:
-    description: 'Whether the containerized matrix has entries'
-    value: ${{ steps.generate-matrix.outputs.has_containerized_builds }}
   release_enabled:
     description: 'Whether release is enabled in config'
     value: ${{ steps.parse-release.outputs.enabled }}

@@ -131,7 +131,8 @@ CONDA_FIELDS = [
     Field(
         "channels",
         default_key="channels",
-        fallback=["conda-forge", "https://nexus.ecmwf.int/repository/conda-ecmwf-public"],
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        fallback=["conda-forge", "https://nexus-test.ecmwf.int/repository/conda-ecmwf-public"],
         transform=list_to_line_separated,
     ),
     Field(
@@ -445,43 +446,12 @@ def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
     return matrix
 
 
-NATIVE_BUILD_TYPES = {"conda", "python-pypi", "hpc", "tarball"}
-CONTAINERIZED_BUILD_TYPES = {"system-package"}
-
-
-def split_matrix_by_execution_environment(
-    matrix: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Split matrix entries by whether they require a job-level container."""
-    native: dict[str, Any] = {"include": []}
-    containerized: dict[str, Any] = {"include": []}
-
-    for item in matrix.get("include", []):
-        build_type = item.get("type")
-        if build_type in CONTAINERIZED_BUILD_TYPES or item.get("container"):
-            containerized["include"].append(item)
-        elif build_type in NATIVE_BUILD_TYPES:
-            native["include"].append(item)
-        else:
-            native["include"].append(item)
-
-    return native, containerized
-
-
 def main() -> None:
     config_yaml = os.environ["STEP_LOAD_CONFIG"]
     config = yaml.safe_load(config_yaml)
     matrix = generate_matrix(config)
-    native_matrix, containerized_matrix = split_matrix_by_execution_environment(matrix)
-
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
         f.write(f"matrix={json.dumps(matrix)}\n")
-        f.write(f"native_matrix={json.dumps(native_matrix)}\n")
-        f.write(f"containerized_matrix={json.dumps(containerized_matrix)}\n")
-        f.write(f"has_native_builds={str(bool(native_matrix['include'])).lower()}\n")
-        f.write(
-            f"has_containerized_builds={str(bool(containerized_matrix['include'])).lower()}\n"
-        )
 
 
 if __name__ == "__main__":
