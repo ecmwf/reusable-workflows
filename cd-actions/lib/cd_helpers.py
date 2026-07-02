@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
 
@@ -13,8 +13,14 @@ def load_yaml(path: str | os.PathLike[str]) -> Any:
         return yaml.safe_load(f)
 
 
-def env_bool(name: str, default: bool = False, *, empty_is_default: bool = False) -> bool:
-    """Parse a boolean environment variable.
+def env_bool(
+    name: str,
+    default: bool = False,
+    *,
+    empty_is_default: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    """Parse a boolean environment variable (or any string mapping via ``env``).
 
     Default (strict) semantics match ``os.environ.get(name, ...) == "true"``:
     a set-but-blank or non-lowercase value is false. With ``empty_is_default``
@@ -23,7 +29,8 @@ def env_bool(name: str, default: bool = False, *, empty_is_default: bool = False
     workflows can pass empty inputs, and call sites rely on their historical
     behavior.
     """
-    value = os.environ.get(name)
+    source = os.environ if env is None else env
+    value = source.get(name)
     if value is None:
         return default
     if empty_is_default:

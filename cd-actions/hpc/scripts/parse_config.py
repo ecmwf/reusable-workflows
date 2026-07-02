@@ -1,28 +1,31 @@
 #!/usr/bin/env python3
 """Parse HPC build configuration and resolve platform/compiler settings."""
 
-import contextlib
-import json
+from __future__ import annotations
+
 import os
 import re
 import sys
 from pathlib import Path
+from typing import Any, Mapping
 
-import yaml
+from hpc_common import (
+    MODULE_TAG_RE,
+    env_bool,
+    load_platform_map,
+    load_shared_defaults,
+    parse_stages,
+    resolve_module_name,
+)
 
 
-def main():
-    # Load shared defaults
-    action_path = Path(os.environ["GITHUB_ACTION_PATH"])
-    with open(action_path.parent / "defaults.yml") as f:
-        shared_defaults = yaml.safe_load(f)
-
-    # Load platform map from config file
-    config_dir = action_path / "config"
-    with open(config_dir / "platforms.yml") as f:
-        platform_map = yaml.safe_load(f)
-
-    platform = os.environ["INPUT_PLATFORM"]
+def parse_hpc_config(
+    env: Mapping[str, str],
+    platform_map: dict[str, Any],
+    shared_defaults: dict[str, Any],
+) -> dict[str, str]:
+    """Compute the config step outputs from the INPUT_* environment."""
+    platform = env["INPUT_PLATFORM"]
     if platform not in platform_map:
         print(f"::error::Unknown platform '{platform}'")
         print(f"Available platforms: {', '.join(platform_map.keys())}")
@@ -30,37 +33,32 @@ def main():
 
     compiler_info = platform_map[platform]
 
-    # Check if staged build (parse JSON to check for actual stages)
-    stages_input = os.environ.get("INPUT_STAGES", "").strip()
-    stages_list = []
-    if stages_input:
-        with contextlib.suppress(json.JSONDecodeError):
-            stages_list = json.loads(stages_input)
-    use_staged = bool(stages_list)
+    use_staged = bool(parse_stages(env.get("INPUT_STAGES", "")))
 
-    dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
-    dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
-    sync_module_input = os.environ.get("INPUT_SYNC_MODULE", "true") == "true"
-    site = os.environ.get("INPUT_SITE", shared_defaults["hpc"]["site"])
+    dry_run = env_bool("INPUT_DRY_RUN", env=env)
+    dry_run_install = env_bool("INPUT_DRY_RUN_INSTALL", env=env)
+    sync_module_input = env_bool("INPUT_SYNC_MODULE", True, env=env)
+    site = env.get("INPUT_SITE", shared_defaults["hpc"]["site"])
     do_sync = not dry_run and sync_module_input and site != "ag-batch"
 
-    install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
-    dry_run_install_prefix_input = os.environ.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
+    install_prefix_input = env.get("INPUT_INSTALL_PREFIX", "").strip()
+    dry_run_install_prefix_input = env.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
     # Validate and normalize module_tag_name
-    raw_tag_name = os.environ.get("INPUT_MODULE_TAG_NAME", "new").strip()
+    raw_tag_name = env.get("INPUT_MODULE_TAG_NAME", "new").strip()
     if not raw_tag_name:
         module_tag_name = "new"
-    elif re.match(r"^[A-Za-z0-9._-]+$", raw_tag_name):
+    elif MODULE_TAG_RE.match(raw_tag_name):
         module_tag_name = raw_tag_name
     else:
         print(f"::error::module_tag_name '{raw_tag_name}' contains invalid characters. Allowed: [A-Za-z0-9._-]")
         sys.exit(1)
 
-    repository = os.environ["GITHUB_REPOSITORY"]
-    module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
-    ref_name = os.environ["INPUT_REF_NAME"]
+    module_name = resolve_module_name(
+        env.get("INPUT_MODULE_NAME", ""), env["GITHUB_REPOSITORY"]
+    )
+    ref_name = env["INPUT_REF_NAME"]
     safe_ref_name = ref_name.replace("/", "-")  # Sanitize for use in paths
-    prefix_compiler_specific = os.environ.get("INPUT_PREFIX_COMPILER_SPECIFIC", "false") == "true"
+    prefix_compiler_specific = env_bool("INPUT_PREFIX_COMPILER_SPECIFIC", env=env)
 
     if install_prefix_input:
         install_prefix = install_prefix_input
@@ -109,22 +107,33 @@ def main():
         else base_install_prefix
     )
 
-    # Write outputs
+    return {
+        "use_staged": "true" if use_staged else "false",
+        "do_sync": "true" if do_sync else "false",
+        "install_prefix": install_prefix,
+        "base_install_prefix": base_install_prefix,
+        "module_tag_name": module_tag_name,
+        **{key: str(value) for key, value in compiler_info.items()},
+    }
+
+
+def main():
+    action_path = Path(os.environ["GITHUB_ACTION_PATH"])
+    shared_defaults = load_shared_defaults(action_path)
+    platform_map = load_platform_map(action_path)
+
+    outputs = parse_hpc_config(os.environ, platform_map, shared_defaults)
+
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-        f.write(f"use_staged={'true' if use_staged else 'false'}\n")
-        f.write(f"do_sync={'true' if do_sync else 'false'}\n")
-        f.write(f"install_prefix={install_prefix}\n")
-        f.write(f"base_install_prefix={base_install_prefix}\n")
-        f.write(f"module_tag_name={module_tag_name}\n")
-        for key, value in compiler_info.items():
+        for key, value in outputs.items():
             f.write(f"{key}={value}\n")
 
-    print(f"Platform: {platform}")
-    print(f"Compiler: {compiler_info['compiler']}")
-    print(f"Build mode: {'staged' if use_staged else 'standard'}")
-    print(f"Install prefix: {install_prefix}")
-    print(f"Module tag name: {module_tag_name}")
-    print(f"Do sync: {do_sync}")
+    print(f"Platform: {os.environ['INPUT_PLATFORM']}")
+    print(f"Compiler: {outputs['compiler']}")
+    print(f"Build mode: {'staged' if outputs['use_staged'] == 'true' else 'standard'}")
+    print(f"Install prefix: {outputs['install_prefix']}")
+    print(f"Module tag name: {outputs['module_tag_name']}")
+    print(f"Do sync: {outputs['do_sync'] == 'true'}")
 
 
 if __name__ == "__main__":

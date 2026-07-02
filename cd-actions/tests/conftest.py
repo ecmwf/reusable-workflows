@@ -26,6 +26,10 @@ def import_script(action: str, script: str, alias: str):
     calling this.
     """
     path = CD_ACTIONS_DIR / action / "scripts" / f"{script}.py"
+    # Scripts import sibling modules (e.g. hpc_common); when run for real,
+    # their own directory is sys.path[0].
+    if str(path.parent) not in sys.path:
+        sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location(alias, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[alias] = module
