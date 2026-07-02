@@ -112,7 +112,7 @@ class TestMatrixSummaryRows:
 class TestLoadCondaPlatformsConfig:
     def test_loads_repo_config(self):
         config = load_conda_platforms_config(
-            CD_ACTIONS_DIR / "load-config" / "config" / "platforms-conda.yml"
+            CD_ACTIONS_DIR / "config" / "platforms-conda.yml"
         )
         assert "linux-64" in config
 

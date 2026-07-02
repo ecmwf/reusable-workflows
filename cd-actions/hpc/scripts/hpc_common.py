@@ -13,7 +13,12 @@ from typing import Any
 _ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 sys.path.insert(0, str(_ACTION_PATH.parent / "lib"))
 
-from cd_helpers import env_bool, load_yaml
+from cd_config import (
+    load_defaults as load_shared_defaults,
+    load_hpc_clusters as load_hpc_config,
+    load_hpc_platforms as load_platform_map,
+)
+from cd_helpers import env_bool
 
 __all__ = [
     "MODULE_TAG_RE",
@@ -41,15 +46,3 @@ def parse_stages(raw: str) -> list[Any]:
 def resolve_module_name(env_value: str, repository: str) -> str:
     """Module name input, falling back to the repository name."""
     return env_value.strip() or repository.split("/")[-1]
-
-
-def load_shared_defaults(action_path: Path) -> dict[str, Any]:
-    return load_yaml(action_path.parent / "defaults.yml")
-
-
-def load_platform_map(action_path: Path) -> dict[str, Any]:
-    return load_yaml(action_path / "config" / "platforms.yml")
-
-
-def load_hpc_config(action_path: Path) -> dict[str, Any]:
-    return load_yaml(action_path / "config" / "hpc.yml")

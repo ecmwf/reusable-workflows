@@ -9,14 +9,13 @@ from pathlib import Path
 ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
-from cd_helpers import env_bool, load_yaml
+from cd_config import load_conda_nexus
+from cd_helpers import env_bool
 
 
 def main():
     # Load Nexus URLs from config
-    action_path = Path(os.environ["GITHUB_ACTION_PATH"])
-    config_dir = action_path / "config"
-    nexus_config = load_yaml(config_dir / "nexus.yml")
+    nexus_config = load_conda_nexus()
 
     conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
     channels_input = os.environ.get(

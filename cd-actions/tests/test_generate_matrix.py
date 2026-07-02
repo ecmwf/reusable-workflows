@@ -39,7 +39,7 @@ class TestGenerateMatrixBasic:
         matrix = generate_matrix(config)
         item = _find_item(matrix, "conda-build")
 
-        # Defaults from cd-actions/defaults.yml
+        # Defaults from cd-actions/config/defaults.yml
         assert item["conda_dir"] == "./conda"
         # common_config merged channels
         assert item["channels"] == "ecmwf"

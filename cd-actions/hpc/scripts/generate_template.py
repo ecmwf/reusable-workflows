@@ -420,9 +420,9 @@ def render_sbatch(jinja_env: Environment, inputs: Inputs) -> str:
 
 def main():
     action_dir = Path(os.environ["GITHUB_ACTION_PATH"])
-    shared_defaults = load_shared_defaults(action_dir)
+    shared_defaults = load_shared_defaults()
     defaults = shared_defaults["hpc"]
-    hpc_config = load_hpc_config(action_dir)
+    hpc_config = load_hpc_config()
 
     jinja_env = make_jinja_env(action_dir / "templates")
 

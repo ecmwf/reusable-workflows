@@ -1,3 +1,4 @@
+# HPC compiler platform -> toolchain and modules. Read by lib/cd_config.load_hpc_platforms (hpc/scripts/parse_config.py).
 gnu-15.2.0:
   compiler: gnu-15.2.0
   compiler_cc: gcc

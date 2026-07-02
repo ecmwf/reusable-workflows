@@ -1,3 +1,4 @@
+# HPC site -> sync/tag cluster lists. Read by lib/cd_config.load_hpc_clusters (hpc/scripts/generate_template.py).
 sync_clusters:
   aa-batch: [ab, ac, ad]
   ab-batch: [aa, ac, ad]

@@ -1,3 +1,4 @@
+# Build type -> GitHub runner labels. Read by lib/cd_config.load_runners (generate_matrix).
 default:
   - self-hosted
   - platform-builder

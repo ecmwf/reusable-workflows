@@ -16,12 +16,17 @@ sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
 import yaml  # noqa: E402
 
+from cd_config import (
+    load_conda_platforms,
+    load_defaults,
+    load_runners,
+    load_system_package_platforms,
+)
 from cd_helpers import (
     bool_to_str,
     dict_to_cmake_args,
     dict_to_env_lines,
     list_to_line_separated,
-    load_yaml,
 )
 from conda_platforms import (
     conda_platform_matrix_entries,
@@ -129,7 +134,7 @@ def _resolve_field(
     return field_spec.name, rendered
 
 
-# Field tables per build type. Defaults are read from cd-actions/defaults.yml
+# Field tables per build type. Defaults are read from cd-actions/config/defaults.yml
 CONDA_FIELDS = [
     Field("conda_dir", default_key="conda_dir", fallback="./.cd/conda"),
     Field(
@@ -396,14 +401,10 @@ def _build_matrix_items(
 
 def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
     """Generate the build matrix dictionary from the parsed cd-config."""
-    action_path = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
-
-    shared_defaults = load_yaml(action_path.parent / "defaults.yml")
-
-    config_dir = action_path / "config"
-    runners_config = load_yaml(config_dir / "runners.yml")
-    sp_platforms_config = load_yaml(config_dir / "platforms-system-package.yml")
-    conda_platforms_config = load_yaml(config_dir / "platforms-conda.yml")
+    shared_defaults = load_defaults()
+    runners_config = load_runners()
+    sp_platforms_config = load_system_package_platforms()
+    conda_platforms_config = load_conda_platforms()
 
     common_config = config.get("common_config", {})
     matrix: dict[str, Any] = {"include": []}

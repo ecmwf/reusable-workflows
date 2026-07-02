@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 import re
 import sys
-from pathlib import Path
 from typing import Any, Mapping
 
 from hpc_common import (
@@ -118,9 +117,8 @@ def parse_hpc_config(
 
 
 def main():
-    action_path = Path(os.environ["GITHUB_ACTION_PATH"])
-    shared_defaults = load_shared_defaults(action_path)
-    platform_map = load_platform_map(action_path)
+    shared_defaults = load_shared_defaults()
+    platform_map = load_platform_map()
 
     outputs = parse_hpc_config(os.environ, platform_map, shared_defaults)
 

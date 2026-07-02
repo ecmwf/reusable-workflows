@@ -1,3 +1,4 @@
+# Conda Nexus repository URLs. Read by lib/cd_config.load_conda_nexus (conda/scripts/parse_config.py).
 production:
   url: https://nexus.ecmwf.int/repository/conda-ecmwf-public
 test:

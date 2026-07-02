@@ -10,7 +10,7 @@ from pathlib import Path
 ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
-from cd_helpers import load_yaml
+from cd_config import load_system_package_platforms
 from system_package_platforms import (
     UnknownSystemPackagePlatform,
     resolve_system_package_platform,
@@ -27,10 +27,7 @@ OUTPUT_KEYS = (
 
 
 def main() -> None:
-    platforms_path = (
-        ACTION_PATH.parent / "load-config" / "config" / "platforms-system-package.yml"
-    )
-    platforms = load_yaml(platforms_path)
+    platforms = load_system_package_platforms()
 
     os_input = os.environ["INPUT_OS"]
     try:
