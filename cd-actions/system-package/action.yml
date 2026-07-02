@@ -187,105 +187,23 @@ runs:
 
     - name: Generate CPack overrides
       id: overrides
-      shell: python3 {0}
-      run: |
-        import os
-
-        def cmake_escape(s):
-            """Escape backslashes, double-quotes, and semicolons for CMake strings."""
-            return s.replace('\\', '\\\\').replace('"', '\\"').replace(';', '\\;')
-
-        cpack_generator = '${{ steps.config.outputs.cpack_generator }}'
-        package_deps = '''${{ inputs.package_deps }}'''.strip()
-        description = '''${{ inputs.description }}'''.strip()
-
-        if not description:
-            description = '''${{ github.event.repository.description }}'''.strip()
-
-        license = '''${{ inputs.license }}'''.strip()
-        if not license:
-            license = '''${{ github.event.repository.license.spdx_id }}'''.strip()
-        if license == 'NOASSERTION':
-            license = ''
-
-        maintainer = '''${{ inputs.maintainer }}'''.strip()
-        vendor = '''${{ inputs.vendor }}'''.strip()
-
-        homepage_url = '''${{ inputs.homepage_url }}'''.strip()
-        if not homepage_url:
-            homepage_url = 'https://github.com/${{ github.repository }}'
-
-        install_prefix = '''${{ inputs.install_prefix }}'''.strip()
-        deb_section = '''${{ inputs.deb_section }}'''.strip()
-        deb_priority = '''${{ inputs.deb_priority }}'''.strip()
-        rpm_group = '''${{ inputs.rpm_group }}'''.strip()
-
-        if cpack_generator == 'DEB':
-            deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
-        else:
-            deps_var = 'CPACK_RPM_PACKAGE_REQUIRES'
-
-        overrides_file = os.path.join(os.environ['RUNNER_TEMP'], 'cpack-overrides.cmake')
-        lines = []
-
-        if package_deps:
-            lines.append(f'set({deps_var} "{cmake_escape(package_deps)}" CACHE STRING "" FORCE)')
-            print(f"Package deps ({deps_var}): {package_deps}")
-
-        if description:
-            lines.append(f'set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "{cmake_escape(description)}" CACHE STRING "" FORCE)')
-            print(f"Description: {description}")
-        else:
-            print("Description: (none)")
-
-        if license:
-            lines.append(f'set(CPACK_RPM_PACKAGE_LICENSE "{cmake_escape(license)}" CACHE STRING "" FORCE)')
-            print(f"License: {license}")
-        else:
-            print("License: (none)")
-
-        # DEB-specific options
-        if cpack_generator == 'DEB':
-            lines.append(f'set(CPACK_DEBIAN_PACKAGE_MAINTAINER "{cmake_escape(maintainer)}" CACHE STRING "" FORCE)')
-            print(f"Maintainer: {maintainer}")
-            if deb_section:
-                lines.append(f'set(CPACK_DEBIAN_PACKAGE_SECTION "{cmake_escape(deb_section)}" CACHE STRING "" FORCE)')
-                print(f"DEB Section: {deb_section}")
-            if deb_priority:
-                lines.append(f'set(CPACK_DEBIAN_PACKAGE_PRIORITY "{cmake_escape(deb_priority)}" CACHE STRING "" FORCE)')
-                print(f"DEB Priority: {deb_priority}")
-            lines.append('set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON CACHE BOOL "" FORCE)')
-
-        # RPM-specific options
-        if cpack_generator == 'RPM':
-            lines.append('set(CPACK_RPM_SPEC_MORE_DEFINE "%global __brp_check_rpaths %{nil}" CACHE STRING "" FORCE)')
-            if rpm_group:
-                lines.append(f'set(CPACK_RPM_PACKAGE_GROUP "{cmake_escape(rpm_group)}" CACHE STRING "" FORCE)')
-                print(f"RPM Group: {rpm_group}")
-
-        # Common metadata
-        if vendor:
-            lines.append(f'set(CPACK_PACKAGE_VENDOR "{cmake_escape(vendor)}" CACHE STRING "" FORCE)')
-            lines.append(f'set(CPACK_RPM_PACKAGE_VENDOR "{cmake_escape(vendor)}" CACHE STRING "" FORCE)')
-            print(f"Vendor: {vendor}")
-
-        if homepage_url:
-            lines.append(f'set(CPACK_PACKAGE_HOMEPAGE_URL "{cmake_escape(homepage_url)}" CACHE STRING "" FORCE)')
-            lines.append(f'set(CPACK_RPM_PACKAGE_URL "{cmake_escape(homepage_url)}" CACHE STRING "" FORCE)')
-            print(f"Homepage URL: {homepage_url}")
-
-        if install_prefix:
-            lines.append(f'set(CPACK_PACKAGING_INSTALL_PREFIX "{cmake_escape(install_prefix)}" CACHE STRING "" FORCE)')
-            print(f"Install Prefix: {install_prefix}")
-
-        with open(overrides_file, 'w') as f:
-            for line in lines:
-                f.write(line + '\n')
-
-        print(f"Wrote {len(lines)} overrides to {overrides_file}")
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write(f"overrides_file={overrides_file}\n")
+      shell: bash
+      env:
+        CPACK_GENERATOR: ${{ steps.config.outputs.cpack_generator }}
+        INPUT_PACKAGE_DEPS: ${{ inputs.package_deps }}
+        INPUT_DESCRIPTION: ${{ inputs.description }}
+        REPO_DESCRIPTION: ${{ github.event.repository.description }}
+        INPUT_LICENSE: ${{ inputs.license }}
+        REPO_LICENSE_SPDX: ${{ github.event.repository.license.spdx_id }}
+        INPUT_MAINTAINER: ${{ inputs.maintainer }}
+        INPUT_VENDOR: ${{ inputs.vendor }}
+        INPUT_HOMEPAGE_URL: ${{ inputs.homepage_url }}
+        REPO_URL: https://github.com/${{ github.repository }}
+        INPUT_INSTALL_PREFIX: ${{ inputs.install_prefix }}
+        INPUT_DEB_SECTION: ${{ inputs.deb_section }}
+        INPUT_DEB_PRIORITY: ${{ inputs.deb_priority }}
+        INPUT_RPM_GROUP: ${{ inputs.rpm_group }}
+      run: python3 "${{ github.action_path }}/scripts/generate_cpack_overrides.py"
 
     - name: Prepare cmake_options
       id: cmake-opts
@@ -310,49 +228,10 @@ runs:
 
     - name: Check version number
       if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
-      shell: python3 {0}
-      run: |
-        import os
-        import re
-        import sys
-
-        tag = "${{ inputs.ref_name }}"
-
-        def check_version():
-            file_name = "VERSION"
-            if os.path.isfile(file_name):
-                with open(file_name, 'r') as f:
-                    version = f.read().strip()
-                    return version
-            else:
-                print(f"::warning::{file_name} file not found! Using {file_name} is the preferred method.")
-                return
-
-        def check_cmakelists():
-            file_name = "CMakeLists.txt"
-            if os.path.isfile(file_name):
-                with open(file_name, 'r') as f:
-                    content = f.read()
-                    pattern = r"project\([\s\w]+VERSION\s+((?:\d+)(?:.\d+){0,3})"
-
-                    hit = re.search(pattern, content)
-                    version = hit.group(1)
-                    return version
-            else:
-                print(f"::warning::{file_name} file not found!")
-                return
-
-        version = check_version() or check_cmakelists()
-
-        if not version:
-            print("::error::Version not found!")
-            sys.exit(1)
-
-        if version != tag:
-            print(f"::error::Git tag ({tag}) and project version ({version}) do not match!")
-            sys.exit(1)
-
-        print("OK: Git tag and project versions match.")
+      shell: bash
+      env:
+        INPUT_REF_NAME: ${{ inputs.ref_name }}
+      run: python3 "${{ github.action_path }}/scripts/check_version.py"
 
     - name: Build package
       id: build
@@ -394,32 +273,11 @@ runs:
     - name: Determine Docker image for install test
       id: docker-image
       if: ${{ inputs.install_test == 'true' }}
-      shell: python3 {0}
-      run: |
-        import os
-
-        os_id = '${{ inputs.os }}'
-
-        # Map OS names that differ from their Docker Hub image name.
-        image_name_map = {
-            'rocky': 'rockylinux/rockylinux',
-        }
-
-        # Parse "<name>-<version>" from the os input.
-        name, _, version = os_id.partition('-')
-        image_name = image_name_map.get(name, name)
-        is_library = '/' not in image_name
-        docker_ref = f"{image_name}:{version}" if version else image_name
-
-        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if is_library else ''}{docker_ref}"
-
-        if docker_image:
-            print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
-        else:
-            print(f"::warning::No Docker image mapping for OS '{os_id}', skipping install test")
-
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write(f"docker_image={docker_image}\n")
+      shell: bash
+      env:
+        INPUT_OS: ${{ inputs.os }}
+        INPUT_INSTALL_TEST_OS_IMAGE: ${{ inputs.install_test_os_image }}
+      run: python3 "${{ github.action_path }}/scripts/determine_docker_image.py"
 
     - name: Test package installation in Docker
       if: ${{ inputs.install_test == 'true' && steps.docker-image.outputs.docker_image != '' }}
