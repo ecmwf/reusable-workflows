@@ -1,0 +1,20 @@
+linux-64:
+  runner:
+    - self-hosted
+    - platform-builder
+  setup_conda: false
+
+linux-aarch64:
+  runner: platform-builder-ubuntu-2404-arm64-000
+  setup_conda: true
+
+linux-aarch64-public:
+  runner: ubuntu-24.04-arm
+  conda_platform: linux-aarch64
+
+osx-arm64:
+  runner:
+    - self-hosted
+    - macos
+    - arm64
+  setup_conda: true

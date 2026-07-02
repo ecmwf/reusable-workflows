@@ -29,12 +29,20 @@ on:
         description: 'Conda channels as line-separated values'
         required: false
         type: string
-        default: 'conda-forge'
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        default: |
+          conda-forge
+          https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
       conda_build_args:
         description: 'Additional arguments for conda mambabuild as line-separated values'
         required: false
         type: string
         default: '--no-anaconda-upload'
+      platforms:
+        description: 'Conda platforms as line-separated values'
+        required: false
+        type: string
+        default: 'linux-64'
       skip_installation_test:
         description: 'Skip testing package installation from Nexus'
         required: false
@@ -66,13 +74,30 @@ on:
         default: ''
 
 jobs:
+  plan-platforms:
+    name: Plan Conda Platforms
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Resolve Conda platform matrix
+        id: plan
+        uses: ecmwf/reusable-workflows/cd-actions/resolve-conda-platforms@cd-conda-multi-platform
+        with:
+          name: ${{ inputs.name }}
+          platforms: ${{ inputs.platforms }}
+
   build:
-    name: Build Conda
-    runs-on: [self-hosted, platform-builder]
+    name: ${{ matrix.name }} (${{ matrix.conda_platform }})
+    needs: plan-platforms
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan-platforms.outputs.matrix) }}
     steps:
       - name: Detect release type
         id: detect-release-type
-        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@cd-conda-multi-platform
         with:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ inputs.dry_run }}
@@ -86,9 +111,11 @@ jobs:
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build with Conda${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
-        uses: ecmwf/reusable-workflows/cd-actions/conda@v2
+        uses: ecmwf/reusable-workflows/cd-actions/conda@cd-conda-multi-platform
         with:
-          name: ${{ inputs.name }}
+          name: ${{ matrix.name }}
+          platform: ${{ matrix.conda_platform }}
+          setup_conda: ${{ matrix.setup_conda }}
           ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
           dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
           test_nexus: ${{ inputs.test_nexus != '' && inputs.test_nexus || steps.detect-release-type.outputs.is_prerelease }}

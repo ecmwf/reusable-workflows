@@ -1,0 +1,29 @@
+name: Resolve Conda Platforms
+description: Resolve Conda platform inputs into a GitHub Actions matrix
+
+inputs:
+  name:
+    description: 'Base build name'
+    required: false
+    default: 'conda'
+  platforms:
+    description: 'Conda platforms as line-separated values or a YAML list'
+    required: false
+    default: 'linux-64'
+
+outputs:
+  matrix:
+    description: 'JSON matrix for strategy.matrix'
+    value: ${{ steps.resolve.outputs.matrix }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Conda platform matrix
+      id: resolve
+      shell: bash
+      env:
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_PLATFORMS: ${{ inputs.platforms }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "${{ github.action_path }}/scripts/resolve.py"

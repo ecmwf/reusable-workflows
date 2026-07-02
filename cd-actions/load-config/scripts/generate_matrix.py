@@ -23,6 +23,10 @@ from cd_helpers import (  # noqa: E402
     list_to_comma_separated,
     list_to_line_separated,
 )
+from conda_platforms import (  # noqa: E402
+    conda_platform_matrix_entries,
+    resolve_conda_platforms,
+)
 
 
 def deep_merge(
@@ -127,7 +131,8 @@ CONDA_FIELDS = [
     Field(
         "channels",
         default_key="channels",
-        fallback=["conda-forge"],
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        fallback=["conda-forge", "https://nexus-test.ecmwf.int/repository/conda-ecmwf-public"],
         transform=list_to_line_separated,
     ),
     Field(
@@ -342,14 +347,15 @@ def _resolve_system_package_platform(
     }
 
 
-def _build_matrix_item(
+def _build_matrix_items(
     build: dict[str, Any],
     common_config: dict[str, Any],
     runners_config: dict[str, Any],
     shared_defaults: dict[str, Any],
     sp_platforms_config: dict[str, Any],
-) -> dict[str, Any]:
-    """Generate a single matrix item from a build definition."""
+    conda_platforms_config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Generate one or more matrix items from a build definition."""
     build_type = build["type"]
     if build_type not in TYPE_FIELDS:
         supported = ", ".join(sorted(TYPE_FIELDS.keys()))
@@ -386,7 +392,22 @@ def _build_matrix_item(
         name, rendered = _resolve_field(build_config, type_defaults, field_spec)
         matrix_item[name] = rendered
 
-    return matrix_item
+    if build_type == "conda":
+        platforms_value = build_config.get("platforms", type_defaults.get("platforms"))
+        try:
+            platforms = resolve_conda_platforms(platforms_value, conda_platforms_config)
+        except ValueError as exc:
+            print(f"::error::{exc}")
+            raise SystemExit(1) from exc
+
+        return [
+            {**matrix_item, **platform_item}
+            for platform_item in conda_platform_matrix_entries(
+                build["name"], platforms, conda_platforms_config
+            )
+        ]
+
+    return [matrix_item]
 
 
 def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
@@ -403,20 +424,24 @@ def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
     with open(config_dir / "platforms-system-package.yml") as f:
         sp_platforms_config = yaml.safe_load(f)
 
+    with open(config_dir / "platforms-conda.yml") as f:
+        conda_platforms_config = yaml.safe_load(f)
+
     common_config = config.get("common_config", {})
     matrix: dict[str, Any] = {"include": []}
 
     for build in config.get("builds", []):
         if not build.get("enabled", True):
             continue
-        matrix_item = _build_matrix_item(
+        matrix_items = _build_matrix_items(
             build,
             common_config,
             runners_config,
             shared_defaults,
             sp_platforms_config,
+            conda_platforms_config,
         )
-        matrix["include"].append(matrix_item)
+        matrix["include"].extend(matrix_items)
 
     return matrix
 
@@ -425,7 +450,6 @@ def main() -> None:
     config_yaml = os.environ["STEP_LOAD_CONFIG"]
     config = yaml.safe_load(config_yaml)
     matrix = generate_matrix(config)
-
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
         f.write(f"matrix={json.dumps(matrix)}\n")
 

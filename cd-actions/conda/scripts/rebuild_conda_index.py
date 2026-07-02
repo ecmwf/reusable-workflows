@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 
 import requests
 
-STANDARD_ARCHS = ["linux-64", "osx-64", "osx-arm64", "win-64", "noarch"]
+STANDARD_ARCHS = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64", "noarch"]
 
 
 def parse_auth(auth: str) -> tuple[str, str] | None:

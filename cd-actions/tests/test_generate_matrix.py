@@ -48,8 +48,119 @@ class TestGenerateMatrixBasic:
         assert item["channels"] == "ecmwf"
         assert item["conda_build_args"] == "--no-anaconda-upload"
         assert item["skip_installation_test"] == "true"
+        assert item["conda_platform"] == "linux-64"
         assert item["runner"] == ["self-hosted", "platform-builder"]
         assert item["container"] == ""
+
+    def test_conda_multi_platform_expansion(self):
+        config = {
+            "builds": [
+                {
+                    "name": "conda",
+                    "type": "conda",
+                    "config": {
+                        "platforms": ["linux-64", "linux-aarch64", "osx-arm64"],
+                    },
+                }
+            ]
+        }
+        matrix = generate_matrix(config)
+
+        assert [item["name"] for item in matrix["include"]] == [
+            "conda-linux-64",
+            "conda-linux-aarch64",
+            "conda-osx-arm64",
+        ]
+        assert [item["conda_platform"] for item in matrix["include"]] == [
+            "linux-64",
+            "linux-aarch64",
+            "osx-arm64",
+        ]
+        assert matrix["include"][0]["runner"] == ["self-hosted", "platform-builder"]
+        assert matrix["include"][1]["runner"] == "platform-builder-ubuntu-2404-arm64-000"
+        assert matrix["include"][2]["runner"] == ["self-hosted", "macos", "arm64"]
+
+    def test_conda_default_channels_include_public_nexus(self):
+        config = {
+            "builds": [
+                {
+                    "name": "conda",
+                    "type": "conda",
+                    "config": {},
+                }
+            ]
+        }
+        matrix = generate_matrix(config)
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        assert (
+            matrix["include"][0]["channels"]
+            == "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public"
+        )
+
+    def test_conda_platform_alias_can_override_conda_target(self):
+        config = {
+            "builds": [
+                {
+                    "name": "conda",
+                    "type": "conda",
+                    "config": {"platforms": ["linux-aarch64-public"]},
+                }
+            ]
+        }
+        matrix = generate_matrix(config)
+        item = matrix["include"][0]
+
+        assert item["name"] == "conda"
+        assert item["conda_platform_key"] == "linux-aarch64-public"
+        assert item["conda_platform"] == "linux-aarch64"
+        assert item["runner"] == "ubuntu-24.04-arm"
+        assert item["setup_conda"] is True
+
+    def test_conda_multi_platform_alias_name_keeps_requested_platform(self):
+        config = {
+            "builds": [
+                {
+                    "name": "conda",
+                    "type": "conda",
+                    "config": {"platforms": ["linux-64", "linux-aarch64-public"]},
+                }
+            ]
+        }
+        matrix = generate_matrix(config)
+
+        assert [item["name"] for item in matrix["include"]] == [
+            "conda-linux-64",
+            "conda-linux-aarch64-public",
+        ]
+        assert [item["conda_platform"] for item in matrix["include"]] == [
+            "linux-64",
+            "linux-aarch64",
+        ]
+
+    def test_conda_duplicate_platforms_are_deduplicated(self):
+        config = {
+            "builds": [
+                {
+                    "name": "conda",
+                    "type": "conda",
+                    "config": {"platforms": ["linux-64", "linux-aarch64", "linux-64"]},
+                }
+            ]
+        }
+        matrix = generate_matrix(config)
+        assert [item["conda_platform"] for item in matrix["include"]] == [
+            "linux-64",
+            "linux-aarch64",
+        ]
+
+    def test_unsupported_conda_platform_fails(self):
+        config = {
+            "builds": [
+                {"name": "bad", "type": "conda", "config": {"platforms": ["linux-ppc64le"]}}
+            ]
+        }
+        with pytest.raises(SystemExit):
+            generate_matrix(config)
 
     def test_python_pypi(self):
         config = _load_config("cd-config-basic.yml")

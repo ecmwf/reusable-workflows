@@ -18,9 +18,13 @@ hpc:
   ecbundle: false
 
 conda:
+  platforms:
+    - linux-64
   conda_dir: ./.cd/conda
   channels:
     - conda-forge
+    # TEMPORARY: forward prod nexus -> test nexus (revert me)
+    - https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
   conda_build_args:
     - --no-anaconda-upload
   skip_installation_test: false
