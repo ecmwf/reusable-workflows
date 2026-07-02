@@ -3,3 +3,5 @@ production:
   url: https://nexus.ecmwf.int/repository/conda-ecmwf-public
 test:
   url: https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
+# TEMPORARY: forward prod nexus -> test nexus (revert me)
+force_test: true

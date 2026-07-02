@@ -9,22 +9,24 @@ from pathlib import Path
 ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
-from cd_config import load_conda_nexus
+from cd_config import load_conda_nexus, load_defaults
 from cd_helpers import env_bool
 
 
 def main():
-    # Load Nexus URLs from config
+    # Load Nexus URLs and conda defaults from config
     nexus_config = load_conda_nexus()
+    conda_defaults = load_defaults()["conda"]
 
-    conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
-    channels_input = os.environ.get(
-        "INPUT_CHANNELS",
-        # TEMPORARY: forward prod nexus -> test nexus (revert me)
-        "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public",
-    )
+    # Empty inputs mean "use the defaults from cd-actions/config/defaults.yml"
+    conda_dir = os.environ.get("INPUT_CONDA_DIR", "").strip() or conda_defaults["conda_dir"]
+    channels_input = os.environ.get("INPUT_CHANNELS", "")
+    if not channels_input.strip():
+        channels_input = "\n".join(conda_defaults["channels"])
     platform = os.environ.get("INPUT_PLATFORM", "linux-64") or "linux-64"
     conda_build_args_input = os.environ.get("INPUT_CONDA_BUILD_ARGS", "")
+    if not conda_build_args_input.strip():
+        conda_build_args_input = "\n".join(conda_defaults["conda_build_args"])
     conda_build_args_list: list[str] = []
     for line in conda_build_args_input.splitlines():
         stripped = line.strip()
@@ -39,8 +41,12 @@ def main():
     channels = f"-c {' -c '.join(channels_list)}" if channels_list else ""
     channels_csv = ",".join(channels_list)
 
-    # Determine Nexus URL based on prerelease flag
-    test_nexus = env_bool("INPUT_TEST_NEXUS", empty_is_default=True)
+    # Determine Nexus URL based on prerelease flag; force_test in
+    # nexus-conda.yml overrides the input while the TEMPORARY test-nexus
+    # forwarding is in place.
+    test_nexus = env_bool("INPUT_TEST_NEXUS", empty_is_default=True) or nexus_config.get(
+        "force_test", False
+    )
     if test_nexus:
         nexus_url = nexus_config["test"]["url"]
         nexus_token = os.environ.get("INPUT_NEXUS_TEST_TOKEN", "")

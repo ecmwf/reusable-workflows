@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+# Keep in sync with conda.platforms in cd-actions/config/defaults.yml.
 DEFAULT_CONDA_PLATFORMS = ["linux-64"]
 
 

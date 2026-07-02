@@ -21,23 +21,20 @@ on:
 
       # Build configuration
       conda_dir:
-        description: 'Directory containing conda recipe (meta.yaml)'
+        description: 'Directory containing conda recipe (meta.yaml). Empty means the conda.conda_dir default from cd-actions/config/defaults.yml'
         required: false
         type: string
-        default: './.cd/conda'
+        default: ''
       channels:
-        description: 'Conda channels as line-separated values'
+        description: 'Conda channels as line-separated values. Empty means the conda.channels default from cd-actions/config/defaults.yml'
         required: false
         type: string
-        # TEMPORARY: forward prod nexus -> test nexus (revert me)
-        default: |
-          conda-forge
-          https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
+        default: ''
       conda_build_args:
-        description: 'Additional arguments for conda mambabuild as line-separated values'
+        description: 'Additional arguments for conda mambabuild as line-separated values. Empty means the conda.conda_build_args default from cd-actions/config/defaults.yml'
         required: false
         type: string
-        default: '--no-anaconda-upload'
+        default: ''
       platforms:
         description: 'Conda platforms as line-separated values'
         required: false

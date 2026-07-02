@@ -136,6 +136,8 @@ def _resolve_field(
 
 # Field tables per build type. Defaults are read from cd-actions/config/defaults.yml
 CONDA_FIELDS = [
+    # The fallbacks below are dead backstops that only apply if
+    # config/defaults.yml loses the key — keep them in sync with it.
     Field("conda_dir", default_key="conda_dir", fallback="./.cd/conda"),
     Field(
         "channels",
@@ -354,6 +356,8 @@ def _build_matrix_items(
 
     matrix_item: dict[str, Any] = {
         "name": build["name"],
+        # The literal fallback is a dead backstop — keep in sync with the
+        # default entry in config/runners.yml.
         "runner": runners_config.get(
             build_type, runners_config.get("default", ["self-hosted", "platform-builder"])
         ),
