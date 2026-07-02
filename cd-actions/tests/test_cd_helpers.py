@@ -11,10 +11,11 @@ import sys
 # Make the shared helper module importable from the tests directory.
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from cd_helpers import (  # noqa: E402
+from cd_helpers import (
     bool_to_str,
     dict_to_cmake_args,
     dict_to_env_lines,
+    env_bool,
     list_to_comma_separated,
     list_to_line_separated,
     load_yaml,
@@ -113,3 +114,34 @@ class TestLoadYaml:
         path = tmp_path / "test.yml"
         path.write_text("key: value\nlist:\n  - one\n  - two\n")
         assert load_yaml(path) == {"key": "value", "list": ["one", "two"]}
+
+
+class TestEnvBool:
+    def test_unset_returns_default(self, monkeypatch):
+        monkeypatch.delenv("X_FLAG", raising=False)
+        assert env_bool("X_FLAG") is False
+        assert env_bool("X_FLAG", True) is True
+        assert env_bool("X_FLAG", True, empty_is_default=True) is True
+
+    def test_strict_matches_exact_lowercase_true(self, monkeypatch):
+        monkeypatch.setenv("X_FLAG", "true")
+        assert env_bool("X_FLAG") is True
+        monkeypatch.setenv("X_FLAG", "True")
+        assert env_bool("X_FLAG") is False
+        monkeypatch.setenv("X_FLAG", "false")
+        assert env_bool("X_FLAG", True) is False
+
+    def test_strict_empty_string_is_false(self, monkeypatch):
+        monkeypatch.setenv("X_FLAG", "")
+        assert env_bool("X_FLAG", True) is False
+
+    def test_empty_is_default_blank_falls_back(self, monkeypatch):
+        monkeypatch.setenv("X_FLAG", "  ")
+        assert env_bool("X_FLAG", True, empty_is_default=True) is True
+        assert env_bool("X_FLAG", False, empty_is_default=True) is False
+
+    def test_empty_is_default_ignores_case_and_whitespace(self, monkeypatch):
+        monkeypatch.setenv("X_FLAG", " True ")
+        assert env_bool("X_FLAG", empty_is_default=True) is True
+        monkeypatch.setenv("X_FLAG", "yes")
+        assert env_bool("X_FLAG", True, empty_is_default=True) is False

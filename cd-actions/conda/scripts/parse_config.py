@@ -3,24 +3,20 @@
 
 import os
 import shlex
+import sys
 from pathlib import Path
 
-import yaml
+ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
+sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
-
-def _bool_env(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None or value.strip() == "":
-        return default
-    return value.strip().lower() == "true"
+from cd_helpers import env_bool, load_yaml
 
 
 def main():
     # Load Nexus URLs from config
     action_path = Path(os.environ["GITHUB_ACTION_PATH"])
     config_dir = action_path / "config"
-    with open(config_dir / "nexus.yml") as f:
-        nexus_config = yaml.safe_load(f)
+    nexus_config = load_yaml(config_dir / "nexus.yml")
 
     conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
     channels_input = os.environ.get(
@@ -45,7 +41,7 @@ def main():
     channels_csv = ",".join(channels_list)
 
     # Determine Nexus URL based on prerelease flag
-    test_nexus = _bool_env("INPUT_TEST_NEXUS")
+    test_nexus = env_bool("INPUT_TEST_NEXUS", empty_is_default=True)
     if test_nexus:
         nexus_url = nexus_config["test"]["url"]
         nexus_token = os.environ.get("INPUT_NEXUS_TEST_TOKEN", "")

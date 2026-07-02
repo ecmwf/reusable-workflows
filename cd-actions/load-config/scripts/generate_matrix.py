@@ -16,16 +16,20 @@ sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
 import yaml  # noqa: E402
 
-from cd_helpers import (  # noqa: E402
+from cd_helpers import (
     bool_to_str,
     dict_to_cmake_args,
     dict_to_env_lines,
-    list_to_comma_separated,
     list_to_line_separated,
+    load_yaml,
 )
-from conda_platforms import (  # noqa: E402
+from conda_platforms import (
     conda_platform_matrix_entries,
     resolve_conda_platforms,
+)
+from system_package_platforms import (
+    UnknownSystemPackagePlatform,
+    resolve_system_package_platform,
 )
 
 
@@ -323,30 +327,6 @@ TYPE_FIELDS: dict[str, list[Field]] = {
 }
 
 
-def _resolve_system_package_platform(
-    build_config: dict[str, Any],
-    sp_platforms_config: dict[str, Any],
-) -> dict[str, str]:
-    """Resolve system-package platform metadata from the shared YAML map."""
-    platform_name = build_config.get("os", "")
-    if platform_name not in sp_platforms_config:
-        supported = ", ".join(sorted(sp_platforms_config.keys()))
-        print(f"::error::Unknown platform: {platform_name}. Supported: {supported}")
-        raise SystemExit(1)
-
-    platform_defaults = sp_platforms_config[platform_name]
-    os_id = platform_defaults["os"]
-    container = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
-    return {
-        "container": container,
-        "os": os_id,
-        "nexus_token_secret_prod": platform_defaults.get("nexus_token_secret_prod", ""),
-        "nexus_url_secret_prod": platform_defaults.get("nexus_url_secret_prod", ""),
-        "nexus_token_secret_test": platform_defaults["nexus_token_secret_test"],
-        "nexus_url_secret_test": platform_defaults["nexus_url_secret_test"],
-    }
-
-
 def _build_matrix_items(
     build: dict[str, Any],
     common_config: dict[str, Any],
@@ -379,9 +359,13 @@ def _build_matrix_items(
     type_defaults = shared_defaults.get(build_type, {})
 
     if build_type == "system-package":
-        platform_fields = _resolve_system_package_platform(
-            build_config, sp_platforms_config
-        )
+        try:
+            platform_fields = resolve_system_package_platform(
+                build_config.get("os", ""), sp_platforms_config
+            )
+        except UnknownSystemPackagePlatform as exc:
+            print(f"::error::Unknown platform: {exc.os_alias}. Supported: {exc.supported}")
+            raise SystemExit(1) from exc
         matrix_item.update(platform_fields)
         package_deps_value = build_config.get("package_deps", [])
         matrix_item["package_deps"] = _system_package_package_deps(
@@ -414,18 +398,12 @@ def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
     """Generate the build matrix dictionary from the parsed cd-config."""
     action_path = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 
-    with open(action_path.parent / "defaults.yml") as f:
-        shared_defaults = yaml.safe_load(f)
+    shared_defaults = load_yaml(action_path.parent / "defaults.yml")
 
     config_dir = action_path / "config"
-    with open(config_dir / "runners.yml") as f:
-        runners_config = yaml.safe_load(f)
-
-    with open(config_dir / "platforms-system-package.yml") as f:
-        sp_platforms_config = yaml.safe_load(f)
-
-    with open(config_dir / "platforms-conda.yml") as f:
-        conda_platforms_config = yaml.safe_load(f)
+    runners_config = load_yaml(config_dir / "runners.yml")
+    sp_platforms_config = load_yaml(config_dir / "platforms-system-package.yml")
+    conda_platforms_config = load_yaml(config_dir / "platforms-conda.yml")
 
     common_config = config.get("common_config", {})
     matrix: dict[str, Any] = {"include": []}

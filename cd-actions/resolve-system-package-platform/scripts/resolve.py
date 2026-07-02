@@ -1,40 +1,50 @@
 #!/usr/bin/env python3
 """Resolve a system-package OS alias to platform metadata."""
 
+from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path
 
-import yaml
+ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
+sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
+
+from cd_helpers import load_yaml
+from system_package_platforms import (
+    UnknownSystemPackagePlatform,
+    resolve_system_package_platform,
+)
+
+OUTPUT_KEYS = (
+    "os",
+    "container",
+    "nexus_token_secret_prod",
+    "nexus_url_secret_prod",
+    "nexus_token_secret_test",
+    "nexus_url_secret_test",
+)
 
 
 def main() -> None:
-    action_path = Path(os.environ["GITHUB_ACTION_PATH"])
-    platforms_path = action_path.parent / "load-config" / "config" / "platforms-system-package.yml"
-
-    with open(platforms_path) as f:
-        platforms = yaml.safe_load(f)
+    platforms_path = (
+        ACTION_PATH.parent / "load-config" / "config" / "platforms-system-package.yml"
+    )
+    platforms = load_yaml(platforms_path)
 
     os_input = os.environ["INPUT_OS"]
-    if os_input not in platforms:
-        supported = ", ".join(sorted(platforms.keys()))
-        print(f"::error::Unknown OS: {os_input}. Supported: {supported}")
+    try:
+        resolved = resolve_system_package_platform(os_input, platforms)
+    except UnknownSystemPackagePlatform as exc:
+        print(f"::error::Unknown OS: {exc.os_alias}. Supported: {exc.supported}")
         sys.exit(1)
 
-    platform = platforms[os_input]
-    os_id = platform["os"]
-    container = f"eccr.ecmwf.int/platform-builder/platform-builder:{os_id}"
-
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-        f.write(f"os={os_id}\n")
-        f.write(f"container={container}\n")
-        f.write(f"nexus_token_secret_prod={platform.get('nexus_token_secret_prod', '')}\n")
-        f.write(f"nexus_url_secret_prod={platform.get('nexus_url_secret_prod', '')}\n")
-        f.write(f"nexus_token_secret_test={platform['nexus_token_secret_test']}\n")
-        f.write(f"nexus_url_secret_test={platform['nexus_url_secret_test']}\n")
+        for key in OUTPUT_KEYS:
+            f.write(f"{key}={resolved[key]}\n")
 
-    print(f"Resolved OS '{os_input}' to '{os_id}'")
-    print(f"Container: {container}")
+    print(f"Resolved OS '{os_input}' to '{resolved['os']}'")
+    print(f"Container: {resolved['container']}")
 
 
 if __name__ == "__main__":

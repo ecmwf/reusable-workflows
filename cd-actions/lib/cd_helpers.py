@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
 
 import yaml
@@ -12,6 +11,26 @@ import yaml
 def load_yaml(path: str | os.PathLike[str]) -> Any:
     with open(path) as f:
         return yaml.safe_load(f)
+
+
+def env_bool(name: str, default: bool = False, *, empty_is_default: bool = False) -> bool:
+    """Parse a boolean environment variable.
+
+    Default (strict) semantics match ``os.environ.get(name, ...) == "true"``:
+    a set-but-blank or non-lowercase value is false. With ``empty_is_default``
+    a blank value falls back to the default and the comparison ignores
+    case/whitespace. The two modes intentionally differ on empty strings —
+    workflows can pass empty inputs, and call sites rely on their historical
+    behavior.
+    """
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    if empty_is_default:
+        if value.strip() == "":
+            return default
+        return value.strip().lower() == "true"
+    return value == "true"
 
 
 def bool_to_str(value: Any, name: str) -> str:
