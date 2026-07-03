@@ -9,10 +9,10 @@ import sys
 from typing import Any, Mapping
 
 from hpc_common import (
+    DEFAULT_SITE,
     MODULE_TAG_RE,
     env_bool,
     load_platform_map,
-    load_shared_defaults,
     parse_stages,
     resolve_module_name,
 )
@@ -21,7 +21,6 @@ from hpc_common import (
 def parse_hpc_config(
     env: Mapping[str, str],
     platform_map: dict[str, Any],
-    shared_defaults: dict[str, Any],
 ) -> dict[str, str]:
     """Compute the config step outputs from the INPUT_* environment."""
     platform = env["INPUT_PLATFORM"]
@@ -37,7 +36,7 @@ def parse_hpc_config(
     dry_run = env_bool("INPUT_DRY_RUN", env=env)
     dry_run_install = env_bool("INPUT_DRY_RUN_INSTALL", env=env)
     sync_module_input = env_bool("INPUT_SYNC_MODULE", True, env=env)
-    site = env.get("INPUT_SITE", shared_defaults["hpc"]["site"])
+    site = env.get("INPUT_SITE", DEFAULT_SITE)
     do_sync = not dry_run and sync_module_input and site != "ag-batch"
 
     install_prefix_input = env.get("INPUT_INSTALL_PREFIX", "").strip()
@@ -117,10 +116,9 @@ def parse_hpc_config(
 
 
 def main():
-    shared_defaults = load_shared_defaults()
     platform_map = load_platform_map()
 
-    outputs = parse_hpc_config(os.environ, platform_map, shared_defaults)
+    outputs = parse_hpc_config(os.environ, platform_map)
 
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
         for key, value in outputs.items():

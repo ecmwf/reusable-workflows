@@ -1,11 +1,11 @@
-# Per-build-type matrix defaults. Read by lib/cd_config.load_defaults (generate_matrix, hpc scripts).
+# Per-build-type matrix defaults for the main-cd.yml pipeline. Read by
+# lib/cd_config.load_defaults for load-config/scripts/generate_matrix.py;
 hpc:
   site: aa-batch
   platform: gnu-14.2.0
   parallel: 64
   ntasks: 1
   queue: nf
-  python_version: "3.12"
   self_test: true
   lock_permissions: true
   sync_module: true

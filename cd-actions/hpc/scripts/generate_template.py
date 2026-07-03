@@ -14,10 +14,14 @@ from typing import Any, Mapping
 from jinja2 import Environment, FileSystemLoader
 
 from hpc_common import (
+    DEFAULT_NTASKS,
+    DEFAULT_PARALLEL,
+    DEFAULT_PYTHON_VERSION,
+    DEFAULT_QUEUE,
+    DEFAULT_SITE,
     MODULE_TAG_RE,
     env_bool,
     load_hpc_config,
-    load_shared_defaults,
     parse_stages,
     resolve_module_name,
 )
@@ -104,7 +108,7 @@ class Inputs:
     prefix_compiler_specific: bool
 
 
-def read_inputs(env: Mapping[str, str], defaults: dict[str, Any]) -> Inputs:
+def read_inputs(env: Mapping[str, str]) -> Inputs:
     stages = parse_stages(env.get("INPUT_STAGES", ""))
     repository = env["GITHUB_REPOSITORY"]
     repo_owner, repo_name = repository.split("/")
@@ -144,11 +148,11 @@ def read_inputs(env: Mapping[str, str], defaults: dict[str, Any]) -> Inputs:
         install_prefix=env["STEP_CONFIG_INSTALL_PREFIX"],
         base_install_prefix=env["STEP_CONFIG_BASE_INSTALL_PREFIX"],
         module_name=resolve_module_name(env.get("INPUT_MODULE_NAME", ""), repository),
-        parallel=env.get("INPUT_PARALLEL", "").strip() or str(defaults["parallel"]),
-        ntasks=env.get("INPUT_NTASKS", "").strip() or str(defaults["ntasks"]),
+        parallel=env.get("INPUT_PARALLEL", "").strip() or DEFAULT_PARALLEL,
+        ntasks=env.get("INPUT_NTASKS", "").strip() or DEFAULT_NTASKS,
         gpus=env.get("INPUT_GPUS", "").strip(),
-        queue=env.get("INPUT_QUEUE", "").strip() or defaults["queue"],
-        site=env.get("INPUT_SITE", defaults["site"]),
+        queue=env.get("INPUT_QUEUE", "").strip() or DEFAULT_QUEUE,
+        site=env.get("INPUT_SITE", DEFAULT_SITE),
         do_sync=env.get("STEP_CONFIG_DO_SYNC", "false") == "true",
         tag_module=env_bool("INPUT_TAG_MODULE", True, env=env),
         is_prerelease=env_bool("INPUT_IS_PRERELEASE", env=env),
@@ -327,7 +331,6 @@ def compute_tagging(
 
 def build_ci_options(
     inputs: Inputs,
-    defaults: dict[str, Any],
     use_ecbundle: bool,
     sync_clusters: list[str],
     do_sync: bool,
@@ -347,7 +350,7 @@ def build_ci_options(
         "skip_install": inputs.dry_run and not inputs.dry_run_install,
         "workdir": "${TMPDIR}",
         "output_path": "",  # Set by generic.jinja wrapper
-        "python_version": inputs.python_version or defaults["python_version"],
+        "python_version": inputs.python_version or DEFAULT_PYTHON_VERSION,
         "requirements_path": inputs.requirements_path,
         "toml_opt_dep_sections": inputs.toml_opt_dep_sections,
         "conda_deps": inputs.conda_deps,
@@ -420,13 +423,11 @@ def render_sbatch(jinja_env: Environment, inputs: Inputs) -> str:
 
 def main():
     action_dir = Path(os.environ["GITHUB_ACTION_PATH"])
-    shared_defaults = load_shared_defaults()
-    defaults = shared_defaults["hpc"]
     hpc_config = load_hpc_config()
 
     jinja_env = make_jinja_env(action_dir / "templates")
 
-    inputs = read_inputs(os.environ, defaults)
+    inputs = read_inputs(os.environ)
 
     use_ecbundle, bundle_yml_path = detect_bundle(inputs.bundle_yml_input)
     if use_ecbundle:
@@ -445,7 +446,7 @@ def main():
 
     packages = build_packages(inputs, use_ecbundle)
     ci_options = build_ci_options(
-        inputs, defaults, use_ecbundle, sync_clusters, do_sync, do_tag, tag_clusters
+        inputs, use_ecbundle, sync_clusters, do_sync, do_tag, tag_clusters
     )
 
     # Build generic modules list (compiler + ninja if enabled)

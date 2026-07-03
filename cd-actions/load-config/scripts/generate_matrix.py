@@ -179,7 +179,7 @@ HPC_FIELDS = [
     Field("ctest_options", fallback=[], transform=list_to_line_separated),
     Field("self_test", default_key="self_test", fallback=True, transform=bool_to_str),
     Field("env_vars", fallback={}, transform=dict_to_env_lines),
-    Field("parallel", fallback=""),
+    Field("parallel", default_key="parallel", fallback="64"),
     Field("dependencies", fallback=[], transform=list_to_line_separated),
     Field(
         "dependency_cmake_options",
@@ -205,9 +205,9 @@ HPC_FIELDS = [
         transform=bool_to_str,
     ),
     Field("module_name", fallback=""),
-    Field("ntasks", fallback=""),
+    Field("ntasks", default_key="ntasks", fallback="1"),
     Field("gpus", fallback=""),
-    Field("queue", fallback=""),
+    Field("queue", default_key="queue", fallback="nf"),
     Field("post_script", fallback=""),
     Field(
         "clean_before_install",

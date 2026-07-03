@@ -186,6 +186,14 @@ class TestGenerateMatrixBasic:
             {"name": "py312", "modules": ["python3/3.12"]}
         ]
         assert item["runner"] == ["self-hosted", "linux", "hpc"]
+        # Resource defaults from cd-actions/config/defaults.yml resolve into
+        # the matrix so main-cd.yml always passes concrete values
+        assert item["parallel"] == "64"
+        assert item["ntasks"] == "1"
+        assert item["queue"] == "nf"
+        # No defaults: empty is meaningful (no gpus, not a python build)
+        assert item["gpus"] == ""
+        assert item["python_version"] == ""
 
     def test_tarball(self):
         config = _load_config("cd-config-basic.yml")

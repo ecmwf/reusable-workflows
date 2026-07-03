@@ -8,14 +8,6 @@ from conftest import import_script
 
 generate_template = import_script("hpc", "generate_template", "hpc_generate_template")
 
-DEFAULTS = {
-    "parallel": 64,
-    "ntasks": 1,
-    "queue": "nf",
-    "site": "aa-batch",
-    "python_version": "3.12",
-}
-
 BASE_ENV = {
     "GITHUB_REPOSITORY": "ecmwf/example",
     "INPUT_REF_NAME": "1.0.0",
@@ -27,7 +19,7 @@ BASE_ENV = {
 
 
 def _inputs(**env):
-    return generate_template.read_inputs({**BASE_ENV, **env}, DEFAULTS)
+    return generate_template.read_inputs({**BASE_ENV, **env})
 
 
 class TestSplitRepoRef:

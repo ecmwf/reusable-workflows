@@ -9,24 +9,29 @@ from pathlib import Path
 ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
 sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
 
-from cd_config import load_conda_nexus, load_defaults
+from cd_config import load_conda_nexus
 from cd_helpers import env_bool
+
+# Fallbacks for empty inputs — keep in sync with the input defaults in
+# conda/action.yml.
+DEFAULT_CONDA_DIR = "./.cd/conda"
+# TEMPORARY: forward prod nexus -> test nexus (revert me)
+DEFAULT_CHANNELS = "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public"
+DEFAULT_CONDA_BUILD_ARGS = "--no-anaconda-upload"
 
 
 def main():
-    # Load Nexus URLs and conda defaults from config
+    # Load Nexus URLs from config
     nexus_config = load_conda_nexus()
-    conda_defaults = load_defaults()["conda"]
 
-    # Empty inputs mean "use the defaults from cd-actions/config/defaults.yml"
-    conda_dir = os.environ.get("INPUT_CONDA_DIR", "").strip() or conda_defaults["conda_dir"]
+    conda_dir = os.environ.get("INPUT_CONDA_DIR", "").strip() or DEFAULT_CONDA_DIR
     channels_input = os.environ.get("INPUT_CHANNELS", "")
     if not channels_input.strip():
-        channels_input = "\n".join(conda_defaults["channels"])
+        channels_input = DEFAULT_CHANNELS
     platform = os.environ.get("INPUT_PLATFORM", "linux-64") or "linux-64"
     conda_build_args_input = os.environ.get("INPUT_CONDA_BUILD_ARGS", "")
     if not conda_build_args_input.strip():
-        conda_build_args_input = "\n".join(conda_defaults["conda_build_args"])
+        conda_build_args_input = DEFAULT_CONDA_BUILD_ARGS
     conda_build_args_list: list[str] = []
     for line in conda_build_args_input.splitlines():
         stripped = line.strip()
@@ -41,12 +46,8 @@ def main():
     channels = f"-c {' -c '.join(channels_list)}" if channels_list else ""
     channels_csv = ",".join(channels_list)
 
-    # Determine Nexus URL based on prerelease flag; force_test in
-    # nexus-conda.yml overrides the input while the TEMPORARY test-nexus
-    # forwarding is in place.
-    test_nexus = env_bool("INPUT_TEST_NEXUS", empty_is_default=True) or nexus_config.get(
-        "force_test", False
-    )
+    # Determine Nexus URL based on prerelease flag
+    test_nexus = env_bool("INPUT_TEST_NEXUS", empty_is_default=True)
     if test_nexus:
         nexus_url = nexus_config["test"]["url"]
         nexus_token = os.environ.get("INPUT_NEXUS_TEST_TOKEN", "")

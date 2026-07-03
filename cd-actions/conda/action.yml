@@ -38,17 +38,20 @@ inputs:
     required: false
     default: 'true'
   conda_dir:
-    description: 'Directory containing conda recipe (meta.yaml). Empty means the conda.conda_dir default from cd-actions/config/defaults.yml'
+    description: 'Directory containing conda recipe (meta.yaml)'
     required: false
-    default: ''
+    default: './.cd/conda'
   channels:
-    description: 'Conda channels to use as line-separated values. Empty means the conda.channels default from cd-actions/config/defaults.yml'
+    description: 'Conda channels to use as line-separated values'
     required: false
-    default: ''
+    # TEMPORARY: forward prod nexus -> test nexus (revert me)
+    default: |
+      conda-forge
+      https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
   conda_build_args:
-    description: 'Additional arguments for conda build command as line-separated values. Empty means the conda.conda_build_args default from cd-actions/config/defaults.yml'
+    description: 'Additional arguments for conda build command as line-separated values'
     required: false
-    default: ''
+    default: '--no-anaconda-upload'
 
 runs:
   using: composite
@@ -61,7 +64,9 @@ runs:
         INPUT_CHANNELS: ${{ inputs.channels }}
         INPUT_CONDA_BUILD_ARGS: ${{ inputs.conda_build_args }}
         INPUT_PLATFORM: ${{ inputs.platform }}
-        INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        # INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
+        INPUT_TEST_NEXUS: 'true'
         INPUT_NEXUS_TOKEN: ${{ inputs.nexus_token }}
         INPUT_NEXUS_TEST_TOKEN: ${{ inputs.nexus_test_token }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}

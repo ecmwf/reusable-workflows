@@ -72,7 +72,7 @@ inputs:
   parallel:
     description: 'Number of parallel build jobs'
     required: false
-    default: ''
+    default: '64'
   use_ninja:
     description: 'Use ninja build system instead of make'
     required: false
@@ -174,7 +174,7 @@ inputs:
   ntasks:
     description: 'Number of tasks for the job'
     required: false
-    default: ''
+    default: '1'
   gpus:
     description: 'Number of GPUs required'
     required: false
@@ -182,7 +182,7 @@ inputs:
   queue:
     description: 'HPC queue (nf, ng, deploy)'
     required: false
-    default: ''
+    default: 'nf'
 
   # Advanced Options
   site:

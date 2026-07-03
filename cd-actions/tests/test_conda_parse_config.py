@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import os
-import shutil
 
 import pytest
 
-from conftest import CD_ACTIONS_DIR, import_script
+from conftest import import_script
 
 parse_config = import_script("conda", "parse_config", "conda_parse_config")
 
@@ -21,19 +20,6 @@ def _clean_env(action_env, monkeypatch):
     for key in list(os.environ):
         if key.startswith("INPUT_"):
             monkeypatch.delenv(key, raising=False)
-
-
-@pytest.fixture
-def unforced_config_dir(tmp_path, monkeypatch):
-    """A config dir whose nexus-conda.yml has no TEMPORARY force_test flag."""
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    shutil.copy(CD_ACTIONS_DIR / "config" / "defaults.yml", config_dir / "defaults.yml")
-    (config_dir / "nexus-conda.yml").write_text(
-        f"production:\n  url: {PROD_NEXUS_URL}\ntest:\n  url: {TEST_NEXUS_URL}\n"
-    )
-    monkeypatch.setenv("CD_ACTIONS_CONFIG_DIR", str(config_dir))
-    return config_dir
 
 
 def _run(monkeypatch, github_output, **env) -> dict[str, str]:
@@ -108,26 +94,12 @@ class TestCondaBuildArgs:
 
 
 class TestNexusSelection:
-    def test_force_test_nexus_flag(self, monkeypatch, github_output):
-        # TEMPORARY: force_test in config/nexus-conda.yml forwards prod ->
-        # test regardless of the input. Pins the current forwarding behavior.
-        result = _run(
-            monkeypatch,
-            github_output,
-            INPUT_TEST_NEXUS="false",
-            INPUT_NEXUS_TEST_TOKEN="test-token",
-        )
-        assert result["nexus_url"] == TEST_NEXUS_URL
-        assert result["nexus_token"] == "test-token"
-
-    def test_default_is_production_without_force(
-        self, monkeypatch, github_output, unforced_config_dir
-    ):
+    def test_default_is_production(self, monkeypatch, github_output):
         result = _run(monkeypatch, github_output, INPUT_NEXUS_TOKEN="prod-token")
         assert result["nexus_url"] == PROD_NEXUS_URL
         assert result["nexus_token"] == "prod-token"
 
-    def test_test_nexus(self, monkeypatch, github_output, unforced_config_dir):
+    def test_test_nexus(self, monkeypatch, github_output):
         result = _run(
             monkeypatch,
             github_output,
@@ -137,15 +109,15 @@ class TestNexusSelection:
         assert result["nexus_url"] == TEST_NEXUS_URL
         assert result["nexus_token"] == "test-token"
 
-    def test_empty_test_nexus_means_production(
-        self, monkeypatch, github_output, unforced_config_dir
-    ):
+    def test_empty_test_nexus_means_production(self, monkeypatch, github_output):
         result = _run(monkeypatch, github_output, INPUT_TEST_NEXUS="")
         assert result["nexus_url"] == PROD_NEXUS_URL
 
 
 class TestDefaultsFallback:
-    def test_empty_inputs_fall_back_to_defaults_yml(self, monkeypatch, github_output):
+    def test_empty_inputs_fall_back_to_action_defaults(self, monkeypatch, github_output):
+        # Explicit empty inputs resolve to the script constants, which mirror
+        # the input defaults in conda/action.yml.
         result = _run(
             monkeypatch,
             github_output,
