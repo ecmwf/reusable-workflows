@@ -203,7 +203,7 @@ runs:
         INPUT_DEB_SECTION: ${{ inputs.deb_section }}
         INPUT_DEB_PRIORITY: ${{ inputs.deb_priority }}
         INPUT_RPM_GROUP: ${{ inputs.rpm_group }}
-      run: python3 "${{ github.action_path }}/scripts/generate_cpack_overrides.py"
+      run: python3 "$GITHUB_ACTION_PATH/scripts/generate_cpack_overrides.py"
 
     - name: Prepare cmake_options
       id: cmake-opts
@@ -231,7 +231,7 @@ runs:
       shell: bash
       env:
         INPUT_REF_NAME: ${{ inputs.ref_name }}
-      run: python3 "${{ github.action_path }}/scripts/check_version.py"
+      run: python3 "$GITHUB_ACTION_PATH/scripts/check_version.py"
 
     - name: Build package
       id: build
@@ -277,7 +277,7 @@ runs:
       env:
         INPUT_OS: ${{ inputs.os }}
         INPUT_INSTALL_TEST_OS_IMAGE: ${{ inputs.install_test_os_image }}
-      run: python3 "${{ github.action_path }}/scripts/determine_docker_image.py"
+      run: python3 "$GITHUB_ACTION_PATH/scripts/determine_docker_image.py"
 
     - name: Test package installation in Docker
       if: ${{ inputs.install_test == 'true' && steps.docker-image.outputs.docker_image != '' }}
