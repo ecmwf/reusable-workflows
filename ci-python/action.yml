@@ -111,7 +111,11 @@ runs:
           build_command="uv build --sdist --no-sources"
         fi
 
+        # Note: we install cffi from source in order to ensure that it is linked with the system ffi library.
+        # This in turn relies on the libffi-dev package being installed on the system, avoiding errors such as
+        # "it seems that the version of the libffi library seen at runtime is different from the 'ffi.h' file seen at compile-time"
         $pip_command install --upgrade pip
+        $pip_command install --force-reinstall --no-binary :all: cffi
         $pip_command install pytest pytest-cov build
         if [ -f ${{ inputs.requirements_path }} ]; then
           $pip_command install -r ${{ inputs.requirements_path }}
