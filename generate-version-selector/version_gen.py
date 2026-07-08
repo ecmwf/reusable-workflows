@@ -64,6 +64,8 @@ def main():
 
     prefix = f"https://sites.ecmwf.int/{args.space}/{args.name}"
     API_URL = join_url(prefix, "s/api/v2/files", args.path)
+    if not args.path:
+        API_URL += "/"
     headers = {
         "accept": "*/*",
         "Authorization": f"Bearer {os.environ['SITES_TOKEN']}",
