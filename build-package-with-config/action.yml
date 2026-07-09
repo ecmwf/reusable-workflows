@@ -37,6 +37,9 @@ inputs:
   python_version:
     description: Version of python to optionally setup. If not supplied, only system python is available.
     required: false
+  python_version_overrides:
+    description: YAML mapping of matrix.os values to quoted Python versions. When supplied, this input takes precedence over config Python version settings.
+    required: false
   python_requirements:
     description: Path to a pip requirements file, relative to the repository root. If supplied, dependencies are installed into a virtual env.
     required: false
@@ -75,10 +78,19 @@ runs:
     - name: Merge inputs with config file
       id: config
       shell: python3 {0}
+      env:
+        INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
+        INPUT_PYTHON_VERSION_OVERRIDES: ${{ inputs.python_version_overrides }}
+        INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
+        MATRIX_OS: ${{ matrix.os }}
       run: |
         import os
         import json
+        import sys
         import yaml
+
+        sys.path.insert(0, os.environ["GITHUB_ACTION_PATH"])
+        from scripts.python_version import resolve_python_version
 
         inputs_yaml = """${{ inputs.build_package_inputs }}"""
         inputs = yaml.safe_load(inputs_yaml) or {}
@@ -110,9 +122,22 @@ runs:
             deps_config[repo] = ref
           config["dependencies"] = "\n".join([f"{k}@{v}" if v else k for k, v in deps_config.items()])
 
-        python_version = "${{ inputs.python_version }}" or config.pop("python_version", "")
-        python_requirements = "${{ inputs.python_requirements }}" or config.pop("python_requirements", "")
+        config_python_version = config.pop("python_version", "")
+        config_python_version_overrides = config.pop("python_version_overrides", {})
+        python_version = resolve_python_version(
+          os.environ["MATRIX_OS"],
+          os.environ["INPUT_PYTHON_VERSION"],
+          os.environ["INPUT_PYTHON_VERSION_OVERRIDES"],
+          config_python_version,
+          config_python_version_overrides,
+        )
+        python_requirements = os.environ["INPUT_PYTHON_REQUIREMENTS"] or config.pop("python_requirements", "")
         config.pop("python_requirements", None)
+
+        print(
+          "Python version for %s: %s"
+          % (os.environ["MATRIX_OS"] or "system", python_version or "system")
+        )
 
         combined = {**config, **inputs}
 
