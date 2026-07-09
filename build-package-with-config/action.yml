@@ -110,6 +110,7 @@ runs:
             deps_config[repo] = ref
           config["dependencies"] = "\n".join([f"{k}@{v}" if v else k for k, v in deps_config.items()])
 
+        python_version = "${{ inputs.python_version }}" or config.pop("python_version", "")
         python_requirements = "${{ inputs.python_requirements }}" or config.pop("python_requirements", "")
         config.pop("python_requirements", None)
 
@@ -117,7 +118,7 @@ runs:
 
         combined["self_coverage"] = "${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}"
 
-        if "${{ inputs.python_version }}" or python_requirements:
+        if python_version or python_requirements:
           combined["cmake_options"] = f'{combined.get("cmake_options", "")} -DPython3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python'
 
         print("Combined inputs:\n", yaml.dump(combined, sort_keys=False), sep='')
@@ -126,6 +127,7 @@ runs:
           print(f"config<<EOF", file=f)
           print(json.dumps(combined, separators=(',', ':')), file=f)
           print("EOF", file=f)
+          print(f"python_version={python_version}", file=f)
           print(f"python_requirements={python_requirements}", file=f)
 
     - name: Check upstream build status
@@ -136,9 +138,9 @@ runs:
 
     - name: Setup python
       shell: bash -e {0}
-      if: ${{ inputs.python_version || steps.config.outputs.python_requirements }}
+      if: ${{ steps.config.outputs.python_version || steps.config.outputs.python_requirements }}
       run: |
-        PYTHON="${{ inputs.python_version }}"
+        PYTHON="${{ steps.config.outputs.python_version }}"
         uv venv --python "${PYTHON:-$(command -v python3)}" $RUNNER_TEMP/bpvenv
         REQUIREMENTS="${{ steps.config.outputs.python_requirements }}"
         if [ -n "$REQUIREMENTS" ]; then
