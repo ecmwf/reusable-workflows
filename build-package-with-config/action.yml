@@ -9,9 +9,16 @@ inputs:
     description: build-package action inputs in yaml format.
     required: false
   build_config:
-    description:
+    description: |
       Path to build configuration yaml. Relative path from the repository root,
-      e.g. `.github/build-config.yml`.
+      e.g. `.github/build-config.yml`. The reserved key `overrides:` may map
+      `matrix.os` names to partial configs which are shallow-merged over the
+      other keys for the matching runner, e.g.:
+        python_version: "3.11"
+        overrides:
+          rocky-8.6:
+            python_version: "3.10"
+      When `build_config_key` is used, `overrides` goes inside the selected section.
     required: false
   build_config_key:
     description: Config name in the build config file.
@@ -36,9 +43,6 @@ inputs:
     required: false
   python_version:
     description: Version of python to optionally setup. If not supplied, only system python is available.
-    required: false
-  python_version_overrides:
-    description: YAML mapping of matrix.os values to quoted Python versions. When supplied, this input takes precedence over config Python version settings.
     required: false
   python_requirements:
     description: Path to a pip requirements file, relative to the repository root. If supplied, dependencies are installed into a virtual env.
@@ -80,7 +84,6 @@ runs:
       shell: python3 {0}
       env:
         INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
-        INPUT_PYTHON_VERSION_OVERRIDES: ${{ inputs.python_version_overrides }}
         INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
         MATRIX_OS: ${{ matrix.os }}
       run: |
@@ -90,7 +93,7 @@ runs:
         import yaml
 
         sys.path.insert(0, os.environ["GITHUB_ACTION_PATH"])
-        from scripts.python_version import resolve_python_version
+        from scripts.build_config import apply_os_overrides, pop_python_version
 
         inputs_yaml = """${{ inputs.build_package_inputs }}"""
         inputs = yaml.safe_load(inputs_yaml) or {}
@@ -106,8 +109,10 @@ runs:
           with open(config_path, "r") as f:
             config = yaml.safe_load(f)
           if "${{ inputs.build_config_key }}":
-            config = config["${{ inputs.build_config_key }}"] 
+            config = config["${{ inputs.build_config_key }}"]
           print("Config file:\n", yaml.dump(config, sort_keys=False), sep='')
+
+        config = apply_os_overrides(config, os.environ["MATRIX_OS"])
 
         build_deps_input = """${{ inputs.build_dependencies }}"""
         if build_deps_input:
@@ -122,15 +127,8 @@ runs:
             deps_config[repo] = ref
           config["dependencies"] = "\n".join([f"{k}@{v}" if v else k for k, v in deps_config.items()])
 
-        config_python_version = config.pop("python_version", "")
-        config_python_version_overrides = config.pop("python_version_overrides", {})
-        python_version = resolve_python_version(
-          os.environ["MATRIX_OS"],
-          os.environ["INPUT_PYTHON_VERSION"],
-          os.environ["INPUT_PYTHON_VERSION_OVERRIDES"],
-          config_python_version,
-          config_python_version_overrides,
-        )
+        config_python_version = pop_python_version(config)
+        python_version = os.environ["INPUT_PYTHON_VERSION"] or config_python_version
         python_requirements = os.environ["INPUT_PYTHON_REQUIREMENTS"] or config.pop("python_requirements", "")
         config.pop("python_requirements", None)
 
