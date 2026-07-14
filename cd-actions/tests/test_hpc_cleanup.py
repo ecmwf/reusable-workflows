@@ -27,6 +27,10 @@ CMAKE_TEMPLATE = JINJA_ENV.from_string(
     "{% from 'cmake.jinja' import cmake_package with context %}"
     "{{ cmake_package(package) }}"
 )
+ECBUNDLE_TEMPLATE = JINJA_ENV.from_string(
+    "{% from 'ecbundle.jinja' import ecbundle_workflow with context %}"
+    "{{ ecbundle_workflow(package) }}"
+)
 
 
 def _render_cleanup(prefix: Path, *, explicit: bool = False) -> str:
@@ -63,6 +67,42 @@ def _run_cleanup(
         capture_output=True,
         env=env,
         check=False,
+    )
+
+
+def _render_ecbundle_workflow(
+    *,
+    self_test: bool = False,
+    skip_install: bool = False,
+    ctest_options: list[str] | None = None,
+) -> str:
+    return ECBUNDLE_TEMPLATE.render(
+        package={
+            "name": "test-bundle",
+            "owner": "test-owner",
+            "repo": "test-bundle",
+            "ref": "main",
+            "type": "ecbundle",
+            "prefix": "${SCRATCH}/dry-run-install/test-bundle/main",
+            "cmake_options": [],
+            "ctest_options": ctest_options or [],
+            "modules": [],
+            "cache_key": "unused",
+            "subdir": "",
+        },
+        ci_options={
+            "workdir": "${TMPDIR}",
+            "parallel": 4,
+            "cpus_per_task": 4,
+            "self_test": self_test,
+            "skip_install": skip_install,
+            "dry_run": skip_install,
+            "dry_run_install": False,
+            "clean_before_install": False,
+        },
+        github={"user": "test-user", "token": "test-token"},
+        generic_modules=[],
+        env=[],
     )
 
 
@@ -254,3 +294,57 @@ def test_standard_cmake_cleanup_remains_between_build_and_install():
 
     assert build < cleanup < install
     assert rendered.count("Cleaning before install: test-package") == 1
+
+
+def test_ecbundle_workflow_orders_build_test_and_install():
+    rendered = _render_ecbundle_workflow(
+        self_test=True, ctest_options=["--output-on-failure", "-j4"]
+    )
+
+    build = rendered.index('ecbundle-build "${ECBUNDLE_BUILD_ARGS[@]}"')
+    test = rendered.index("time ctest")
+    install = rendered.index('ecbundle-build --install "${ECBUNDLE_BUILD_ARGS[@]}"')
+
+    assert build < test < install
+    # ctest options are passed through verbatim
+    assert "--output-on-failure -j4" in rendered
+    # ctest runs from the top of the bundle build tree
+    assert "cd ${TMPDIR}/builds\ntime ctest" in rendered
+
+
+def test_ecbundle_workflow_omits_test_step_when_self_test_disabled():
+    rendered = _render_ecbundle_workflow(self_test=False)
+
+    assert "time ctest" not in rendered
+    assert 'ecbundle-build "${ECBUNDLE_BUILD_ARGS[@]}"' in rendered
+    assert 'ecbundle-build --install "${ECBUNDLE_BUILD_ARGS[@]}"' in rendered
+
+
+def test_ecbundle_workflow_defaults_to_output_on_failure_when_ctest_options_unset():
+    rendered = _render_ecbundle_workflow(self_test=True)
+
+    # No ctest_options supplied => default --output-on-failure is injected
+    assert "time ctest --output-on-failure" in rendered
+
+
+def test_ecbundle_workflow_user_ctest_options_replace_the_default():
+    rendered = _render_ecbundle_workflow(
+        self_test=True, ctest_options=["-j8", "--stop-on-failure"]
+    )
+
+    # User-supplied options fully replace the default; --output-on-failure
+    # is not silently appended.
+    assert "time ctest -j8 --stop-on-failure" in rendered
+    assert "--output-on-failure" not in rendered
+
+
+def test_ecbundle_workflow_still_tests_when_install_is_skipped():
+    rendered = _render_ecbundle_workflow(self_test=True, skip_install=True)
+
+    build = rendered.index('ecbundle-build "${ECBUNDLE_BUILD_ARGS[@]}"')
+    test = rendered.index("time ctest")
+
+    assert build < test
+    # No install invocation, and the dry-run message is emitted instead
+    assert 'ecbundle-build --install "${ECBUNDLE_BUILD_ARGS[@]}"' not in rendered
+    assert "Dry run: skipping ecbundle install" in rendered
