@@ -1,5 +1,5 @@
 {# ecbundle support macros for HPC build templates #}
-{% from 'base.jinja' import start_group, end_group with context %}
+{% from 'base.jinja' import start_group, end_group, print_ctest_options with context %}
 {% from 'git.jinja' import git_fetch, set_package_version with context %}
 {% from 'environment.jinja' import clean_install_dir, export_package_env with context %}
 
@@ -43,21 +43,43 @@ ecbundle-create --no-colour --verbose --shallow --update
 
 {{ clean_install_dir(package) }}
 
-{# ecbundle-build: Configure, build, and install #}
+{# Shared ecbundle-build arguments; install is triggered by a second invocation
+   below so that ctest can run between build and install. #}
+ECBUNDLE_BUILD_ARGS=(
+    --cmake="{{ package.cmake_options|map('strip_d_prefix')|join(' ') }}"
+    -j{{ ci_options.parallel }}
+    --no-colour
+    --src-dir={{ ci_options.workdir }}/{{ package.name }}/source
+    --build-dir={{ ci_options.workdir }}/builds
+    --install-dir={{ package.prefix }}
+)
+
+{# ecbundle-build: Configure and build (without install) #}
 {{ start_group("ecbundle-build") }}
 cd {{ ci_options.workdir }}/{{ package.name }}
-ecbundle-build \
-    --cmake="{{ package.cmake_options|map('strip_d_prefix')|join(' ') }}" \
-    -j{{ ci_options.parallel }} \
-    --no-colour \
-    {% if not ci_options.skip_install %}--install{% endif %} \
-    --src-dir={{ ci_options.workdir }}/{{ package.name }}/source \
-    --build-dir={{ ci_options.workdir }}/builds \
-    --install-dir={{ package.prefix }}
-{% if ci_options.skip_install %}
+ecbundle-build "${ECBUNDLE_BUILD_ARGS[@]}"
+{{ end_group() }}
+
+{% if ci_options.self_test %}
+{# Run tests from the top of the bundle build tree.
+   Default to --output-on-failure so CI logs are useful when tests fail;
+   any user-supplied ctest_options fully replace this default. #}
+{% set ctest_opts = package.ctest_options or ['--output-on-failure'] %}
+{{ start_group("Testing: " + package.name) }}
+cd {{ ci_options.workdir }}/builds
+time ctest {{ print_ctest_options(ctest_opts) }}
+{{ end_group() }}
+{% endif %}
+
+{# ecbundle-build --install: install after successful build (and tests, if enabled) #}
+{% if not ci_options.skip_install %}
+{{ start_group("ecbundle-build --install") }}
+cd {{ ci_options.workdir }}/{{ package.name }}
+ecbundle-build --install "${ECBUNDLE_BUILD_ARGS[@]}"
+{{ end_group() }}
+{% else %}
 echo "Dry run: skipping ecbundle install"
 {% endif %}
-{{ end_group() }}
 
 {# Cleanup credentials #}
 rm -f ~/.git-credentials
