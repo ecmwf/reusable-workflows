@@ -11,14 +11,7 @@ inputs:
   build_config:
     description: |
       Path to build configuration yaml. Relative path from the repository root,
-      e.g. `.github/build-config.yml`. The reserved key `overrides:` may map
-      `matrix.os` names to partial configs which are shallow-merged over the
-      other keys for the matching runner, e.g.:
-        python_version: "3.11"
-        overrides:
-          rocky-8.6:
-            python_version: "3.10"
-      When `build_config_key` is used, `overrides` goes inside the selected section.
+      e.g. `.github/build-config.yml`.
     required: false
   build_config_key:
     description: Config name in the build config file.
@@ -82,6 +75,7 @@ runs:
         INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
         INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
         MATRIX_OS: ${{ matrix.os }}
+        MATRIX_COMPILER: ${{ matrix.compiler }}
         SELF_COVERAGE: ${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}
       run: python3 "$GITHUB_ACTION_PATH/scripts/build_config.py" merge-config
 

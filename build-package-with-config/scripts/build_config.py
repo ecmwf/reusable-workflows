@@ -18,36 +18,72 @@ def parse_repository(repository):
     return repo, ref
 
 
-def apply_os_overrides(config, matrix_os):
-    """Shallow-merge the ``overrides`` section matching matrix_os into config.
+def _parse_override_key(key):
+    """Normalize an ``overrides`` key into a (compiler, os) pattern tuple.
 
-    Mutates and returns config. The ``overrides`` key is always removed so it
-    is never forwarded to build-package.
+    Bare keys are matrix.os names; ``<compiler>@<os>`` keys may use ``*`` as
+    either segment to match any value.
     """
+    if not isinstance(key, str) or not key:
+        raise ValueError(
+            "`overrides` keys in build config must be non-empty strings, "
+            "either `<os>` or `<compiler>@<os>`"
+        )
+    if "@" in key:
+        compiler, _, os_name = key.partition("@")
+        if "@" in os_name or not compiler or not os_name:
+            raise ValueError(
+                "`overrides` key %r in build config must be `<os>` or `<compiler>@<os>`,"
+                " with `*` as a wildcard segment" % key
+            )
+    else:
+        compiler, os_name = "*", key
+    if compiler == "*" and os_name == "*":
+        raise ValueError(
+            "`overrides` key %r in build config matches every job, "
+            "move its entries into the base config instead" % key
+        )
+    return compiler, os_name
+
+
+def apply_overrides(config, matrix_os, matrix_compiler):
+    """Shallow-merge the ``overrides`` sections matching the matrix job into config."""
     overrides = config.pop("overrides", None)
     if overrides is None:
         return config
     if not isinstance(overrides, dict):
         raise ValueError(
-            "`overrides` in build config must be a mapping of matrix.os names to config mappings"
+            "`overrides` in build config must be a mapping of `<os>` or "
+            "`<compiler>@<os>` keys to config mappings"
         )
-    for os_name, section in overrides.items():
-        if not isinstance(os_name, str) or not os_name:
+    sections = {}
+    for key, section in overrides.items():
+        pattern = _parse_override_key(key)
+        if pattern in sections:
             raise ValueError(
-                "`overrides` keys in build config must be non-empty matrix.os strings"
+                "`overrides` keys %r and `%s@%s` in build config are the same pattern"
+                % (key, *pattern)
             )
-        if section is None:
-            continue
-        if not isinstance(section, dict):
+        if section is not None and not isinstance(section, dict):
             raise ValueError(
                 "`overrides` section for %r in build config must be a mapping of config keys"
-                % os_name
+                % key
             )
-        if "overrides" in section:
+        if section and "overrides" in section:
             raise ValueError("nested `overrides` are not supported in build config")
-    section = overrides.get(matrix_os) if matrix_os else None
-    if section:
-        config.update(section)
+        sections[pattern] = section or {}
+
+    def specificity(pattern):
+        compiler, os_name = pattern
+        return (os_name != "*") * 2 + (compiler != "*")
+
+    matched = [
+        pattern
+        for pattern in sections
+        if pattern[0] in ("*", matrix_compiler) and pattern[1] in ("*", matrix_os)
+    ]
+    for pattern in sorted(matched, key=specificity):
+        config.update(sections[pattern])
     return config
 
 
@@ -99,7 +135,8 @@ def main_merge_config():
         print("Config file:\n", yaml.dump(config, sort_keys=False), sep="")
 
     matrix_os = os.environ.get("MATRIX_OS", "")
-    config = apply_os_overrides(config, matrix_os)
+    matrix_compiler = os.environ.get("MATRIX_COMPILER", "")
+    config = apply_overrides(config, matrix_os, matrix_compiler)
 
     input_deps = os.environ.get("INPUT_BUILD_DEPENDENCIES", "")
     if input_deps:

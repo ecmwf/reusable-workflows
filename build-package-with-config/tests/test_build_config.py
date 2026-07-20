@@ -11,7 +11,7 @@ SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from build_config import (
-    apply_os_overrides,
+    apply_overrides,
     main_merge_config,
     main_parse_repository,
     merge_dependencies,
@@ -23,7 +23,7 @@ from build_config import (
 def test_no_overrides_key_is_noop():
     config = {"dependencies": "ecmwf/ecbuild", "python_version": "3.11"}
 
-    assert apply_os_overrides(config, "rocky-8.6") == {
+    assert apply_overrides(config, "rocky-8.6", "gnu") == {
         "dependencies": "ecmwf/ecbuild",
         "python_version": "3.11",
     }
@@ -37,7 +37,7 @@ def test_matching_override_shallow_merges_over_base():
         "overrides": {"rocky-8.6": {"python_version": "3.10"}},
     }
 
-    assert apply_os_overrides(config, "rocky-8.6") == {
+    assert apply_overrides(config, "rocky-8.6", "gnu") == {
         "dependencies": "ecmwf/ecbuild",
         "python_version": "3.10",
         "cmake_options": "-DENABLE_TESTS=ON",
@@ -50,7 +50,7 @@ def test_override_can_add_new_key():
         "overrides": {"macos-13-arm": {"cmake_options": "-DENABLE_TESTS=OFF"}},
     }
 
-    assert apply_os_overrides(config, "macos-13-arm") == {
+    assert apply_overrides(config, "macos-13-arm", "clang") == {
         "python_version": "3.11",
         "cmake_options": "-DENABLE_TESTS=OFF",
     }
@@ -62,7 +62,7 @@ def test_non_matching_sections_are_dropped():
         "overrides": {"rocky-8.6": {"python_version": "3.10"}},
     }
 
-    assert apply_os_overrides(config, "ubuntu-22.04") == {"python_version": "3.11"}
+    assert apply_overrides(config, "ubuntu-22.04", "gnu") == {"python_version": "3.11"}
 
 
 def test_empty_matrix_os_matches_nothing():
@@ -71,11 +71,11 @@ def test_empty_matrix_os_matches_nothing():
         "overrides": {"rocky-8.6": {"python_version": "3.10"}},
     }
 
-    assert apply_os_overrides(config, "") == {"python_version": "3.11"}
+    assert apply_overrides(config, "", "") == {"python_version": "3.11"}
 
 
 def test_null_overrides_treated_as_absent():
-    assert apply_os_overrides({"overrides": None, "parallel": 8}, "rocky-8.6") == {
+    assert apply_overrides({"overrides": None, "parallel": 8}, "rocky-8.6", "gnu") == {
         "parallel": 8
     }
 
@@ -83,32 +83,141 @@ def test_null_overrides_treated_as_absent():
 def test_null_os_section_is_noop():
     config = {"python_version": "3.11", "overrides": {"rocky-8.6": None}}
 
-    assert apply_os_overrides(config, "rocky-8.6") == {"python_version": "3.11"}
+    assert apply_overrides(config, "rocky-8.6", "gnu") == {"python_version": "3.11"}
+
+
+def test_compiler_only_override_matches_any_os():
+    config = {
+        "python_version": "3.11",
+        "overrides": {"clang@*": {"cmake_options": "-DENABLE_OMP=OFF"}},
+    }
+
+    assert apply_overrides(config, "macos-13-arm", "clang") == {
+        "python_version": "3.11",
+        "cmake_options": "-DENABLE_OMP=OFF",
+    }
+
+
+def test_compiler_only_override_ignores_other_compilers():
+    config = {
+        "python_version": "3.11",
+        "overrides": {"clang@*": {"cmake_options": "-DENABLE_OMP=OFF"}},
+    }
+
+    assert apply_overrides(config, "rocky-8.6", "gnu") == {"python_version": "3.11"}
+
+
+@pytest.mark.parametrize(
+    ("matrix_os", "matrix_compiler", "expected_parallel"),
+    [
+        ("rocky-8.6", "clang", 1),
+        ("rocky-8.6", "gnu", 8),
+        ("debian-11", "clang", 8),
+    ],
+)
+def test_exact_combo_requires_both_segments(matrix_os, matrix_compiler, expected_parallel):
+    config = {"parallel": 8, "overrides": {"clang@rocky-8.6": {"parallel": 1}}}
+
+    result = apply_overrides(config, matrix_os, matrix_compiler)
+
+    assert result == {"parallel": expected_parallel}
+
+
+def test_merge_order_is_compiler_then_os_then_exact():
+    config = {
+        "cmake_options": "base",
+        "parallel": 8,
+        "overrides": {
+            "clang@rocky-8.6": {"cmake_options": "exact", "combo_key": True},
+            "rocky-8.6": {"cmake_options": "os", "os_key": True},
+            "clang@*": {"cmake_options": "compiler", "compiler_key": True},
+        },
+    }
+
+    assert apply_overrides(config, "rocky-8.6", "clang") == {
+        "cmake_options": "exact",
+        "parallel": 8,
+        "combo_key": True,
+        "os_key": True,
+        "compiler_key": True,
+    }
+
+
+def test_os_override_beats_compiler_override():
+    config = {
+        "overrides": {
+            "rocky-8.6": {"cmake_options": "os"},
+            "clang@*": {"cmake_options": "compiler"},
+        }
+    }
+
+    assert apply_overrides(config, "rocky-8.6", "clang") == {"cmake_options": "os"}
+
+
+def test_explicit_wildcard_compiler_equals_bare_os_key():
+    config = {
+        "python_version": "3.11",
+        "overrides": {"*@rocky-8.6": {"python_version": "3.10"}},
+    }
+
+    assert apply_overrides(config, "rocky-8.6", "gnu") == {"python_version": "3.10"}
+
+
+def test_duplicate_normalized_keys_rejected():
+    config = {
+        "overrides": {
+            "rocky-8.6": {"parallel": 1},
+            "*@rocky-8.6": {"parallel": 2},
+        }
+    }
+
+    with pytest.raises(ValueError, match="same pattern"):
+        apply_overrides(config, "rocky-8.6", "gnu")
+
+
+def test_empty_compiler_matches_wildcard_but_not_exact():
+    config = {
+        "overrides": {
+            "clang@rocky-8.6": {"combo_key": True},
+            "clang@*": {"compiler_key": True},
+            "rocky-8.6": {"os_key": True},
+        }
+    }
+
+    assert apply_overrides(config, "rocky-8.6", "") == {"os_key": True}
 
 
 @pytest.mark.parametrize("value", ["rocky-8.6", ["rocky-8.6"], 3])
 def test_overrides_must_be_a_mapping(value):
     with pytest.raises(ValueError, match="overrides"):
-        apply_os_overrides({"overrides": value}, "rocky-8.6")
+        apply_overrides({"overrides": value}, "rocky-8.6", "gnu")
 
 
 @pytest.mark.parametrize("matrix_os", ["rocky-8.6", "ubuntu-22.04"])
 def test_os_sections_must_be_mappings(matrix_os):
     with pytest.raises(ValueError, match="overrides"):
-        apply_os_overrides({"overrides": {"rocky-8.6": "3.10"}}, matrix_os)
+        apply_overrides({"overrides": {"rocky-8.6": "3.10"}}, matrix_os, "gnu")
 
 
 @pytest.mark.parametrize("os_name", ["", 3.14])
 def test_override_keys_must_be_nonempty_strings(os_name):
     with pytest.raises(ValueError, match="overrides"):
-        apply_os_overrides({"overrides": {os_name: {"python_version": "3.10"}}}, "rocky-8.6")
+        apply_overrides(
+            {"overrides": {os_name: {"python_version": "3.10"}}}, "rocky-8.6", "gnu"
+        )
+
+
+@pytest.mark.parametrize("key", ["a@b@c", "@rocky-8.6", "clang@", "*", "*@*"])
+def test_invalid_override_keys_rejected(key):
+    with pytest.raises(ValueError, match="overrides"):
+        apply_overrides({"overrides": {key: {"parallel": 1}}}, "rocky-8.6", "clang")
 
 
 def test_nested_overrides_rejected():
     config = {"overrides": {"rocky-8.6": {"overrides": {"rocky-8.6": {}}}}}
 
     with pytest.raises(ValueError, match="nested"):
-        apply_os_overrides(config, "rocky-8.6")
+        apply_overrides(config, "rocky-8.6", "gnu")
 
 
 @pytest.mark.parametrize("config", [{}, {"python_version": None}, {"python_version": ""}])
@@ -135,7 +244,7 @@ def test_overridden_unquoted_python_version_fails_clearly():
         "python_version": "3.11",
         "overrides": {"rocky-8.6": {"python_version": 3.1}},
     }
-    apply_os_overrides(config, "rocky-8.6")
+    apply_overrides(config, "rocky-8.6", "gnu")
 
     with pytest.raises(ValueError, match="quoted"):
         pop_python_version(config)
@@ -210,6 +319,7 @@ def _run_merge_config(monkeypatch, tmp_path, **env):
         "INPUT_PYTHON_VERSION": "",
         "INPUT_PYTHON_REQUIREMENTS": "",
         "MATRIX_OS": "",
+        "MATRIX_COMPILER": "",
         "SELF_COVERAGE": "false",
     }
     defaults.update(env)
@@ -285,6 +395,34 @@ def test_merge_config_combines_config_key_section_with_inputs(monkeypatch, tmp_p
         ),
         "self_coverage": "true",
     }
+
+
+def test_merge_config_applies_compiler_overrides(monkeypatch, tmp_path):
+    config_file = tmp_path / "build-config.yml"
+    config_file.write_text(
+        "ci:\n"
+        "  cmake_options: -DENABLE_TESTS=ON\n"
+        '  python_version: "3.11"\n'
+        "  overrides:\n"
+        "    rocky-8.6:\n"
+        '      python_version: "3.10"\n'
+        '    "clang@*":\n'
+        "      cmake_options: -DENABLE_OMP=OFF\n"
+    )
+
+    outputs = _run_merge_config(
+        monkeypatch,
+        tmp_path,
+        INPUT_BUILD_CONFIG=str(config_file),
+        INPUT_BUILD_CONFIG_KEY="ci",
+        MATRIX_OS="rocky-8.6",
+        MATRIX_COMPILER="clang",
+    )
+
+    assert outputs["python_version"] == "3.10"
+    assert outputs["config"]["cmake_options"] == (
+        "-DENABLE_OMP=OFF -DPython3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python"
+    )
 
 
 def test_merge_config_without_config_key_uses_whole_file(monkeypatch, tmp_path):
