@@ -9,7 +9,7 @@ inputs:
     description: build-package action inputs in yaml format.
     required: false
   build_config:
-    description:
+    description: |
       Path to build configuration yaml. Relative path from the repository root,
       e.g. `.github/build-config.yml`.
     required: false
@@ -37,25 +37,19 @@ inputs:
   python_version:
     description: Version of python to optionally setup. If not supplied, only system python is available.
     required: false
+  python_requirements:
+    description: Path to a pip requirements file, relative to the repository root. If supplied, dependencies are installed into a virtual env.
+    required: false
 
 runs:
   using: composite
   steps:
     - name: Parse repository input
       id: inputs
-      shell: python3 {0}
-      run: |
-        import os
-        repo = "${{ inputs.repository }}"
-        if ":" in repo:
-            _, repo = repo.split(":")
-        repo, ref = repo.split("@")
-        if repo.count("/") > 1:
-            owner, repo, _ = repo.split("/", maxsplit=2)
-            repo = f"{owner}/{repo}"
-        with open(os.getenv("GITHUB_OUTPUT"), "a") as f:
-            print("repo", repo, sep="=", file=f)
-            print("ref", ref, sep="=", file=f)
+      shell: bash -e {0}
+      env:
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+      run: python3 "$GITHUB_ACTION_PATH/scripts/build_config.py" parse-repository
 
     - name: Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -71,55 +65,19 @@ runs:
 
     - name: Merge inputs with config file
       id: config
-      shell: python3 {0}
-      run: |
-        import os
-        import json
-        import yaml
-
-        inputs_yaml = """${{ inputs.build_package_inputs }}"""
-        inputs = yaml.safe_load(inputs_yaml) or {}
-        token = "${{ inputs.github_token }}"
-        if token:
-          inputs["github_token"] = token
-        print("Inputs:\n", yaml.dump(inputs, sort_keys=False), sep='')
-
-        config_path = "${{ inputs.build_config }}"
-        if not config_path:
-          config = {}
-        else:
-          with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-          if "${{ inputs.build_config_key }}":
-            config = config["${{ inputs.build_config_key }}"] 
-          print("Config file:\n", yaml.dump(config, sort_keys=False), sep='')
-
-        build_deps_input = """${{ inputs.build_dependencies }}"""
-        if build_deps_input:
-          deps_config = {}
-          for line in config.get("dependencies", "").splitlines():
-            repo, *refs = line.split('@')
-            ref = "" if len(refs) == 0 else refs[0]
-            deps_config[repo] = ref
-          for line in build_deps_input.splitlines():
-            repo, *refs = line.split('@')
-            ref = "" if len(refs) == 0 else refs[0]
-            deps_config[repo] = ref
-          config["dependencies"] = "\n".join([f"{k}@{v}" if v else k for k, v in deps_config.items()])
-
-        combined = {**config, **inputs}
-
-        combined["self_coverage"] = "${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}"
-
-        if "${{ inputs.python_version }}":
-          combined["cmake_options"] = f'{combined.get("cmake_options", "")} -DPython3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python'
-
-        print("Combined inputs:\n", yaml.dump(combined, sort_keys=False), sep='')
-
-        with open(os.getenv("GITHUB_OUTPUT"), "a") as f:
-          print(f"config<<EOF", file=f)
-          print(json.dumps(combined, separators=(',', ':')), file=f)
-          print("EOF", file=f)
+      shell: bash -e {0}
+      env:
+        INPUT_BUILD_PACKAGE_INPUTS: ${{ inputs.build_package_inputs }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+        INPUT_BUILD_CONFIG: ${{ inputs.build_config }}
+        INPUT_BUILD_CONFIG_KEY: ${{ inputs.build_config_key }}
+        INPUT_BUILD_DEPENDENCIES: ${{ inputs.build_dependencies }}
+        INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
+        INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
+        MATRIX_OS: ${{ matrix.os }}
+        MATRIX_COMPILER: ${{ matrix.compiler }}
+        SELF_COVERAGE: ${{ inputs.codecov_upload == 'true' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request')) }}
+      run: python3 "$GITHUB_ACTION_PATH/scripts/build_config.py" merge-config
 
     - name: Check upstream build status
       uses: ecmwf/reusable-workflows/check-upstream-conclusion@v2
@@ -129,10 +87,14 @@ runs:
 
     - name: Setup python
       shell: bash -e {0}
-      if: ${{ inputs.python_version }}
+      if: ${{ steps.config.outputs.python_version || steps.config.outputs.python_requirements }}
       run: |
-        source /opt/conda/etc/profile.d/conda.sh
-        conda create -y -p $RUNNER_TEMP/bpvenv python=${{ inputs.python_version }}
+        PYTHON="${{ steps.config.outputs.python_version }}"
+        uv venv --python "${PYTHON:-$(command -v python3)}" $RUNNER_TEMP/bpvenv
+        REQUIREMENTS="${{ steps.config.outputs.python_requirements }}"
+        if [ -n "$REQUIREMENTS" ]; then
+          uv pip install -p $RUNNER_TEMP/bpvenv/bin/python -r "$REQUIREMENTS"
+        fi
         echo "Python3_EXECUTABLE=$RUNNER_TEMP/bpvenv/bin/python" >> "$GITHUB_ENV"
         echo "Python3_ROOT_DIR=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"
         echo "pythonLocation=$RUNNER_TEMP/bpvenv/bin" >> "$GITHUB_ENV"

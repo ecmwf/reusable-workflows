@@ -5,7 +5,7 @@
   "scripts": {
     "lint": "eslint --fix .github",
     "lint-no-fix": "npm run lint -- --no-fix",
-    "test": "uv run pytest cd-actions/tests",
+    "test": "uv run pytest cd-actions/tests build-package-with-config/tests",
     "version": "auto-changelog && git add CHANGELOG.md"
   },
   "git": {
