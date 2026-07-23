@@ -73,7 +73,7 @@ def resolve_sync_tag_options(
 
 def make_jinja_env(action_dir):
     jinja_env = Environment(
-        loader=FileSystemLoader([action_dir / "templates", action_dir.parent / "hpc" / "templates"]),
+        loader=FileSystemLoader([action_dir / "templates", action_dir.parent / "hpc-common" / "templates"]),
         trim_blocks=True,
         lstrip_blocks=True,
     )
@@ -86,7 +86,7 @@ def main():
     with open(action_dir.parent / "defaults.yml") as f:
         defaults = yaml.safe_load(f)["hpc"]
 
-    with open(action_dir.parent / "hpc" / "config" / "hpc.yml") as f:
+    with open(action_dir / "config" / "hpc.yml") as f:
         hpc_config = yaml.safe_load(f)
 
     dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"

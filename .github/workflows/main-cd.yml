@@ -141,8 +141,6 @@ jobs:
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
           lock_permissions: ${{ matrix.lock_permissions }}
-          # Sync/tag runs once per module in the hpc-sync-tag job below
-          sync_module: 'false'
           module_name: ${{ matrix.module_name }}
           ntasks: ${{ matrix.ntasks }}
           gpus: ${{ matrix.gpus }}
@@ -152,9 +150,6 @@ jobs:
           dry_run_install: ${{ matrix.dry_run_install }}
           dry_run_install_prefix: ${{ matrix.dry_run_install_prefix }}
           site: ${{ matrix.site }}
-          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
-          tag_module: 'false'
-          module_tag_name: ${{ matrix.module_tag_name || vars.HPC_MODULE_TAG_NAME || 'new' }}
           use_ninja: ${{ matrix.use_ninja }}
           force_build: ${{ matrix.force_build }}
           ecbundle: ${{ matrix.ecbundle }}
@@ -225,7 +220,7 @@ jobs:
           nexus_url: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_url_secret_prod != '') && secrets[matrix.nexus_url_secret_prod] || secrets[matrix.nexus_url_secret_test] }}
 
   hpc-sync-tag:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.name || 'Sync and tag HPC module' }}
     if: ${{ fromJson(needs.load-config.outputs.hpc_sync_tag_matrix).include[0] != null }}
     needs: [detect-release-type, load-config, build]
     runs-on: ${{ matrix.runner }}

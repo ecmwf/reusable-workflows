@@ -12,10 +12,7 @@ import yaml
 
 
 def main():
-    # Load shared defaults
     action_path = Path(os.environ["GITHUB_ACTION_PATH"])
-    with open(action_path.parent / "defaults.yml") as f:
-        shared_defaults = yaml.safe_load(f)
 
     # Load platform map from config file
     config_dir = action_path / "config"
@@ -40,22 +37,8 @@ def main():
 
     dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
     dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
-    sync_module_input = os.environ.get("INPUT_SYNC_MODULE", "true") == "true"
-    site = os.environ.get("INPUT_SITE", shared_defaults["hpc"]["site"])
-    do_sync = not dry_run and sync_module_input and site != "ag-batch"
-
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
     dry_run_install_prefix_input = os.environ.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
-    # Validate and normalize module_tag_name
-    raw_tag_name = os.environ.get("INPUT_MODULE_TAG_NAME", "new").strip()
-    if not raw_tag_name:
-        module_tag_name = "new"
-    elif re.match(r"^[A-Za-z0-9._-]+$", raw_tag_name):
-        module_tag_name = raw_tag_name
-    else:
-        print(f"::error::module_tag_name '{raw_tag_name}' contains invalid characters. Allowed: [A-Za-z0-9._-]")
-        sys.exit(1)
-
     repository = os.environ["GITHUB_REPOSITORY"]
     module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
     ref_name = os.environ["INPUT_REF_NAME"]
@@ -112,10 +95,8 @@ def main():
     # Write outputs
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
         f.write(f"use_staged={'true' if use_staged else 'false'}\n")
-        f.write(f"do_sync={'true' if do_sync else 'false'}\n")
         f.write(f"install_prefix={install_prefix}\n")
         f.write(f"base_install_prefix={base_install_prefix}\n")
-        f.write(f"module_tag_name={module_tag_name}\n")
         for key, value in compiler_info.items():
             f.write(f"{key}={value}\n")
 
@@ -123,8 +104,6 @@ def main():
     print(f"Compiler: {compiler_info['compiler']}")
     print(f"Build mode: {'staged' if use_staged else 'standard'}")
     print(f"Install prefix: {install_prefix}")
-    print(f"Module tag name: {module_tag_name}")
-    print(f"Do sync: {do_sync}")
 
 
 if __name__ == "__main__":

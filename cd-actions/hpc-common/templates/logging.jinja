@@ -1,0 +1,8 @@
+{# Neutral GitHub Actions logging macros for HPC jobs #}
+{% macro start_group(msg) -%}
+echo "::group::{{ msg }}"
+{%- endmacro %}
+
+{% macro end_group() -%}
+echo "::endgroup::"
+{%- endmacro %}

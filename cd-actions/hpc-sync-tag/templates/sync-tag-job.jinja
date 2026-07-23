@@ -1,4 +1,4 @@
-{% from 'finalize.jinja' import sync_module_commands, module_tag_commands with context %}
+{% from 'sync-tag-commands.jinja' import sync_module_commands, module_tag_commands with context %}
 echo "Sync/tag started: $(date -u)"
 echo "Job: {{ ci_options.build_name }}"
 echo "Module: {{ ci_options.module_name }} @ {{ ci_options.ref_name }}"
