@@ -446,12 +446,55 @@ def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
     return matrix
 
 
+def generate_hpc_sync_tag_matrix(build_matrix: dict[str, Any]) -> dict[str, Any]:
+    """Deduplicate hpc builds into per-module sync/tag matrix entries."""
+    repo_name = os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
+    entries: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    for item in build_matrix["include"]:
+        if item.get("type") != "hpc":
+            continue
+        if item["sync_module"] == "false" and item["tag_module"] == "false":
+            continue
+
+        module_name = "" if item["module_name"] == repo_name else item["module_name"]
+        module_tag_name = item["module_tag_name"]
+        key = (module_name, item["site"], module_tag_name)
+
+        entry = entries.get(key)
+        if entry is None:
+            name = f"sync-tag-{module_name or repo_name or 'module'}-{item['site']}"
+            if module_tag_name:
+                name += f"-{module_tag_name}"
+            entries[key] = {
+                "name": name,
+                "runner": item["runner"],
+                "module_name": module_name,
+                "site": item["site"],
+                "module_tag_name": module_tag_name,
+                "sync_module": item["sync_module"],
+                "tag_module": item["tag_module"],
+                "queue": item["queue"],
+                "workdir": item["workdir"],
+                "output_dir": item["output_dir"],
+            }
+        else:
+            if item["sync_module"] == "true":
+                entry["sync_module"] = "true"
+            if item["tag_module"] == "true":
+                entry["tag_module"] = "true"
+
+    return {"include": list(entries.values())}
+
+
 def main() -> None:
     config_yaml = os.environ["STEP_LOAD_CONFIG"]
     config = yaml.safe_load(config_yaml)
     matrix = generate_matrix(config)
+    sync_tag_matrix = generate_hpc_sync_tag_matrix(matrix)
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
         f.write(f"matrix={json.dumps(matrix)}\n")
+        f.write(f"hpc_sync_tag_matrix={json.dumps(sync_tag_matrix)}\n")
 
 
 if __name__ == "__main__":

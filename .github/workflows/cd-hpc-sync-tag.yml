@@ -1,0 +1,104 @@
+name: CD HPC Sync Tag
+
+on:
+  workflow_call:
+    inputs:
+      # Standard
+      name:
+        description: 'Job name for identification'
+        required: false
+        type: string
+        default: 'hpc-sync-tag'
+      ref_name:
+        description: 'Git ref name (defaults to PR head ref or github.ref_name)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Force dry run mode - skip sync and tag'
+        required: false
+        type: boolean
+        default: false
+
+      # Authentication
+      troika_user:
+        description: 'HPC submission user (defaults to HPC_CI_SSH_USER secret)'
+        required: false
+        type: string
+        default: ''
+
+      # Platform / runner
+      site:
+        description: 'HPC site name'
+        required: false
+        type: string
+        default: 'aa-batch'
+      workdir:
+        description: 'Work directory on HPC'
+        required: false
+        type: string
+        default: ''
+      output_dir:
+        description: 'Output directory on HPC'
+        required: false
+        type: string
+        default: ''
+
+      # Module configuration
+      module_name:
+        description: 'Module name for sync (if different from repo name)'
+        required: false
+        type: string
+        default: ''
+      sync_module:
+        description: 'Sync module to other clusters'
+        required: false
+        type: string
+        default: 'true'
+      tag_module:
+        description: 'Tag module after sync'
+        required: false
+        type: string
+        default: 'true'
+      module_tag_name:
+        description: 'Module tag name (defaults to vars.HPC_MODULE_TAG_NAME or new)'
+        required: false
+        type: string
+        default: ''
+
+      # Resource options
+      queue:
+        description: 'HPC queue (nf, ng, deploy)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  sync-tag:
+    name: Sync and Tag HPC Module
+    runs-on: [self-hosted, linux, hpc]
+    steps:
+      - name: Detect release type
+        id: detect-release-type
+        uses: ecmwf/reusable-workflows/cd-actions/detect-release-type@v2
+        with:
+          ref_name: ${{ inputs.ref_name }}
+          dry_run: ${{ inputs.dry_run }}
+          deployment_regex: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
+          prerelease_regex: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
+
+      - name: Sync and tag HPC module${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
+        uses: ecmwf/reusable-workflows/cd-actions/hpc-sync-tag@v2
+        with:
+          name: ${{ inputs.name }}
+          ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
+          dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
+          is_prerelease: ${{ steps.detect-release-type.outputs.is_prerelease }}
+          troika_user: ${{ inputs.troika_user || secrets.HPC_CI_SSH_USER }}
+          site: ${{ inputs.site }}
+          module_name: ${{ inputs.module_name }}
+          sync_module: ${{ inputs.sync_module }}
+          tag_module: ${{ inputs.tag_module }}
+          module_tag_name: ${{ inputs.module_tag_name || vars.HPC_MODULE_TAG_NAME || 'new' }}
+          queue: ${{ inputs.queue }}
+          workdir: ${{ inputs.workdir }}
+          output_dir: ${{ inputs.output_dir }}

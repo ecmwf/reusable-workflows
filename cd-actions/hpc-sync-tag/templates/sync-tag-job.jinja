@@ -1,0 +1,10 @@
+{% from 'finalize.jinja' import sync_module_commands, module_tag_commands with context %}
+echo "Sync/tag started: $(date -u)"
+echo "Job: {{ ci_options.build_name }}"
+echo "Module: {{ ci_options.module_name }} @ {{ ci_options.ref_name }}"
+{% if ci_options.sync_module %}
+{{ sync_module_commands(module_name=ci_options.module_name) }}
+{% endif %}
+{% if ci_options.do_tag %}
+{{ module_tag_commands(module_name=ci_options.module_name) }}
+{% endif %}
