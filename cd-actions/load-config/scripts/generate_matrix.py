@@ -448,7 +448,7 @@ def generate_matrix(config: dict[str, Any]) -> dict[str, Any]:
 
 def generate_hpc_sync_tag_matrix(build_matrix: dict[str, Any]) -> dict[str, Any]:
     """Deduplicate hpc builds into per-module sync/tag matrix entries."""
-    repo_name = os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
+    repo_name = os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1].strip()
     entries: dict[tuple[str, str, str], dict[str, Any]] = {}
 
     for item in build_matrix["include"]:
@@ -457,8 +457,9 @@ def generate_hpc_sync_tag_matrix(build_matrix: dict[str, Any]) -> dict[str, Any]
         if item["sync_module"] == "false" and item["tag_module"] == "false":
             continue
 
-        module_name = "" if item["module_name"] == repo_name else item["module_name"]
-        module_tag_name = item["module_tag_name"]
+        module_name = item["module_name"].strip()
+        module_name = "" if module_name == repo_name else module_name
+        module_tag_name = item["module_tag_name"].strip()
         key = (module_name, item["site"], module_tag_name)
 
         entry = entries.get(key)
