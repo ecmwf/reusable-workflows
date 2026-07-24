@@ -16,9 +16,10 @@ LIB_DIR = Path(__file__).parent.parent / "lib"
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(LIB_DIR))
 
-os.environ.setdefault("GITHUB_ACTION_PATH", str(Path(__file__).parent.parent / "load-config"))
+from generate_matrix import generate_matrix
+from generate_matrix import generate_hpc_sync_tag_matrix
 
-from generate_matrix import generate_matrix  # noqa: E402
+os.environ.setdefault("GITHUB_ACTION_PATH", str(Path(__file__).parent.parent / "load-config"))
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -259,6 +260,186 @@ class TestGenerateMatrixHpcStaged:
         assert stages[0]["modules"] == ["python3/3.12", "boost/1.87"]
         assert stages[0]["cmake_options"] == {"Python3_ROOT": "/path/to/python"}
         assert stages[1]["name"] == "py313"
+
+
+def _hpc_build(name: str, **config) -> dict:
+    return {"name": name, "type": "hpc", "config": config}
+
+
+class TestHpcSyncTagMatrix:
+    @pytest.fixture(autouse=True)
+    def _repo_env(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_REPOSITORY", "ecmwf/test-repo")
+
+    def _sync_tag_matrix(self, config: dict) -> dict:
+        return generate_hpc_sync_tag_matrix(generate_matrix(config))
+
+    def test_multi_compiler_builds_dedupe_to_one_entry(self):
+        config = _load_config("cd-config-hpc-multi-compiler.yml")
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        entry = matrix["include"][0]
+        assert entry["name"] == "sync-tag-test-repo-aa-batch"
+        assert entry["runner"] == ["self-hosted", "linux", "hpc"]
+        assert entry["module_name"] == ""
+        assert entry["site"] == "aa-batch"
+        assert entry["module_tag_name"] == ""
+        assert entry["sync_module"] == "true"
+        assert entry["tag_module"] == "true"
+        assert entry["queue"] == ""
+        assert entry["workdir"] == ""
+        assert entry["output_dir"] == ""
+
+    def test_submission_options_are_carried_through(self):
+        config = {
+            "builds": [
+                _hpc_build("a", queue="deploy", workdir="/w", output_dir="/o"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        entry = matrix["include"][0]
+        assert entry["queue"] == "deploy"
+        assert entry["workdir"] == "/w"
+        assert entry["output_dir"] == "/o"
+
+    def test_submission_options_keep_first_builds_values_on_dedup(self):
+        config = {
+            "builds": [
+                _hpc_build("a", queue="deploy"),
+                _hpc_build("b", queue="ng", workdir="/w"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        entry = matrix["include"][0]
+        assert entry["queue"] == "deploy"
+        assert entry["workdir"] == ""
+
+    def test_distinct_modules_and_sites_get_separate_entries(self):
+        config = {
+            "builds": [
+                _hpc_build("a", module_name="mod-a"),
+                _hpc_build("b", module_name="mod-b"),
+                _hpc_build("c", site="ab-batch"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert [(e["module_name"], e["site"]) for e in matrix["include"]] == [
+            ("mod-a", "aa-batch"),
+            ("mod-b", "aa-batch"),
+            ("", "ab-batch"),
+        ]
+
+    def test_explicit_repo_module_name_dedupes_with_default(self):
+        config = {
+            "builds": [
+                _hpc_build("a", module_name="test-repo"),
+                _hpc_build("b"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        assert matrix["include"][0]["module_name"] == ""
+
+    def test_repo_module_name_is_stripped_before_deduplication(self):
+        config = {
+            "builds": [
+                _hpc_build("a", module_name=" test-repo "),
+                _hpc_build("b"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        assert matrix["include"][0]["module_name"] == ""
+
+    def test_flags_are_or_merged_across_builds(self):
+        config = {
+            "builds": [
+                _hpc_build("a", sync_module=True, tag_module=False),
+                _hpc_build("b", sync_module=False, tag_module=True),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        entry = matrix["include"][0]
+        assert entry["sync_module"] == "true"
+        assert entry["tag_module"] == "true"
+
+    def test_builds_with_sync_and_tag_disabled_are_excluded(self):
+        config = {
+            "builds": [_hpc_build("a", sync_module=False, tag_module=False)]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert matrix["include"] == []
+
+    def test_distinct_tag_names_get_separate_entries(self):
+        config = {
+            "builds": [
+                _hpc_build("a", module_tag_name="rc"),
+                _hpc_build("b"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert [(e["name"], e["module_tag_name"]) for e in matrix["include"]] == [
+            ("sync-tag-test-repo-aa-batch-rc", "rc"),
+            ("sync-tag-test-repo-aa-batch", ""),
+        ]
+
+    def test_explicit_new_tag_is_preserved(self):
+        config = {"builds": [_hpc_build("a", module_tag_name="new")]}
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        entry = matrix["include"][0]
+        assert entry["name"] == "sync-tag-test-repo-aa-batch-new"
+        assert entry["module_tag_name"] == "new"
+
+    def test_tag_name_is_stripped_before_deduplication(self):
+        config = {
+            "builds": [
+                _hpc_build("a", module_tag_name=" new "),
+                _hpc_build("b", module_tag_name="new"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 1
+        entry = matrix["include"][0]
+        assert entry["name"] == "sync-tag-test-repo-aa-batch-new"
+        assert entry["module_tag_name"] == "new"
+
+    def test_explicit_new_tag_does_not_dedupe_with_empty(self):
+        config = {
+            "builds": [
+                _hpc_build("a", module_tag_name="new"),
+                _hpc_build("b"),
+            ]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert len(matrix["include"]) == 2
+        assert [entry["module_tag_name"] for entry in matrix["include"]] == [
+            "new",
+            "",
+        ]
+
+    def test_non_hpc_builds_produce_empty_matrix(self):
+        config = {
+            "builds": [{"name": "conda", "type": "conda", "config": {}}]
+        }
+        matrix = self._sync_tag_matrix(config)
+
+        assert matrix["include"] == []
 
 
 class TestUnsupportedBuildType:

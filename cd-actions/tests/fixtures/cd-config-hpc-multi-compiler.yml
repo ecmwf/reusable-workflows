@@ -1,0 +1,12 @@
+builds:
+  - name: hpc-gnu
+    type: hpc
+    config:
+      platform: gnu-14.2.0
+      prefix_compiler_specific: true
+
+  - name: hpc-intel
+    type: hpc
+    config:
+      platform: intel-2025.0.1
+      prefix_compiler_specific: true
