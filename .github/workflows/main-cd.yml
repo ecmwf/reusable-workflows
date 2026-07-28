@@ -44,6 +44,7 @@ jobs:
     outputs:
       config: ${{ steps.load-config.outputs.config }}
       build_matrix: ${{ steps.load-config.outputs.build_matrix }}
+      hpc_sync_tag_matrix: ${{ steps.load-config.outputs.hpc_sync_tag_matrix }}
       release_enabled: ${{ steps.load-config.outputs.release_enabled }}
     steps:
       - name: Checkout repository
@@ -140,7 +141,6 @@ jobs:
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
           lock_permissions: ${{ matrix.lock_permissions }}
-          sync_module: ${{ matrix.sync_module }}
           module_name: ${{ matrix.module_name }}
           ntasks: ${{ matrix.ntasks }}
           gpus: ${{ matrix.gpus }}
@@ -150,9 +150,6 @@ jobs:
           dry_run_install: ${{ matrix.dry_run_install }}
           dry_run_install_prefix: ${{ matrix.dry_run_install_prefix }}
           site: ${{ matrix.site }}
-          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
-          tag_module: ${{ matrix.tag_module }}
-          module_tag_name: ${{ matrix.module_tag_name || vars.HPC_MODULE_TAG_NAME || 'new' }}
           use_ninja: ${{ matrix.use_ninja }}
           force_build: ${{ matrix.force_build }}
           ecbundle: ${{ matrix.ecbundle }}
@@ -222,10 +219,38 @@ jobs:
           nexus_token: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_token_secret_prod != '') && secrets[matrix.nexus_token_secret_prod] || secrets[matrix.nexus_token_secret_test] }}
           nexus_url: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_url_secret_prod != '') && secrets[matrix.nexus_url_secret_prod] || secrets[matrix.nexus_url_secret_test] }}
 
+  hpc-sync-tag:
+    name: ${{ matrix.name || 'Sync and tag HPC module' }}
+    if: ${{ fromJson(needs.load-config.outputs.hpc_sync_tag_matrix).include[0] != null }}
+    needs: [detect-release-type, load-config, build]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      # Serialize sync/tag jobs - modulemgr and software-sync are not concurrency-safe
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.load-config.outputs.hpc_sync_tag_matrix) }}
+    steps:
+      - name: Sync and tag HPC module
+        uses: ecmwf/reusable-workflows/cd-actions/hpc-sync-tag@v2
+        with:
+          name: ${{ matrix.name }}
+          ref_name: ${{ needs.detect-release-type.outputs.ref_name }}
+          dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
+          is_prerelease: ${{ needs.detect-release-type.outputs.is_prerelease }}
+          troika_user: ${{ secrets.HPC_CI_SSH_USER }}
+          site: ${{ matrix.site }}
+          module_name: ${{ matrix.module_name }}
+          sync_module: ${{ matrix.sync_module }}
+          tag_module: ${{ matrix.tag_module }}
+          module_tag_name: ${{ matrix.module_tag_name || vars.HPC_MODULE_TAG_NAME || 'new' }}
+          queue: ${{ matrix.queue }}
+          workdir: ${{ matrix.workdir }}
+          output_dir: ${{ matrix.output_dir }}
+
   release:
     name: Create Release
-    if: ${{ always() && needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
-    needs: [detect-release-type, load-config, build]
+    if: ${{ always() && needs.load-config.outputs.release_enabled == 'true' && needs.detect-release-type.outputs.is_dry_run == 'false' && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.hpc-sync-tag.result == 'success' || needs.hpc-sync-tag.result == 'skipped') }}
+    needs: [detect-release-type, load-config, build, hpc-sync-tag]
     runs-on: ubuntu-latest
     permissions:
       contents: write

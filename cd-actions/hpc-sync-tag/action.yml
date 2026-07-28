@@ -1,0 +1,92 @@
+name: HPC Module Sync and Tag
+description: Sync a built HPC module to other clusters and tag it. Run once per module after all HPC builds complete — sync and tag operate per module/version, so running them from each compiler build races on the same module tree and tag pointer.
+
+inputs:
+  # Standard CD inputs
+  name:
+    description: 'Job name for identification'
+    required: false
+    default: ''
+  ref_name:
+    description: 'Git ref name (the module version to sync and tag)'
+    required: true
+  dry_run:
+    description: 'Dry run mode - skip sync and tag'
+    required: false
+    default: 'false'
+  is_prerelease:
+    description: 'Prerelease mode - sync but skip tagging'
+    required: false
+    default: 'false'
+
+  # HPC Authentication
+  troika_user:
+    description: 'HPC submission user'
+    required: true
+
+  # Module configuration
+  site:
+    description: 'HPC site name'
+    required: false
+    default: 'aa-batch'
+  module_name:
+    description: 'Module name for sync (if different from repo name)'
+    required: false
+    default: ''
+  sync_module:
+    description: 'Sync module to other clusters'
+    required: false
+    default: 'true'
+  tag_module:
+    description: 'Tag module after sync'
+    required: false
+    default: 'true'
+  module_tag_name:
+    description: 'Module tag name'
+    required: false
+    default: 'new'
+
+  # Resource options
+  queue:
+    description: 'HPC queue (nf, ng, deploy)'
+    required: false
+    default: ''
+  workdir:
+    description: 'Work directory on HPC'
+    required: false
+    default: ''
+  output_dir:
+    description: 'Output directory on HPC'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Generate sync/tag template
+      id: template
+      shell: bash
+      env:
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_REF_NAME: ${{ inputs.ref_name }}
+        INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        INPUT_IS_PRERELEASE: ${{ inputs.is_prerelease }}
+        INPUT_SITE: ${{ inputs.site }}
+        INPUT_MODULE_NAME: ${{ inputs.module_name }}
+        INPUT_SYNC_MODULE: ${{ inputs.sync_module }}
+        INPUT_TAG_MODULE: ${{ inputs.tag_module }}
+        INPUT_MODULE_TAG_NAME: ${{ inputs.module_tag_name }}
+        INPUT_QUEUE: ${{ inputs.queue }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "${{ github.action_path }}/scripts/generate_template.py"
+
+    - name: Sync and tag with ci-hpc-generic
+      if: ${{ steps.template.outputs.do_run == 'true' }}
+      uses: ecmwf/reusable-workflows/ci-hpc-generic@v2
+      with:
+        troika_user: ${{ inputs.troika_user }}
+        site: ${{ inputs.site }}
+        workdir: ${{ inputs.workdir }}
+        output_dir: ${{ inputs.output_dir }}
+        template: ${{ steps.template.outputs.template }}
+        sbatch_options: ${{ steps.template.outputs.sbatch_options }}

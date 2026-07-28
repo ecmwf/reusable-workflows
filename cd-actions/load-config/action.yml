@@ -14,6 +14,9 @@ outputs:
   build_matrix:
     description: 'JSON build matrix for strategy.matrix'
     value: ${{ steps.generate-matrix.outputs.matrix }}
+  hpc_sync_tag_matrix:
+    description: 'JSON matrix of deduplicated HPC module sync/tag targets'
+    value: ${{ steps.generate-matrix.outputs.hpc_sync_tag_matrix }}
   release_enabled:
     description: 'Whether release is enabled in config'
     value: ${{ steps.parse-release.outputs.enabled }}

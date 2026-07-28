@@ -79,29 +79,6 @@ fi
 {%- endmacro %}
 
 
-{# === Module Sync Commands === #}
-{% macro sync_module_commands(module_name) -%}
-{{ start_group("Synchronize module") }}
-module load modulemgr
-modulemgr -v -f sync {{ module_name }}
-{% if ci_options.sync_clusters %}
-/home/deploy/software-sync/bin/software-sync -s local -t {{ ci_options.sync_clusters|join(",") }} -p {{ module_name }}
-modulemgr -v -f -m {{ ci_options.sync_clusters|join(",") }} sync {{ module_name }}
-{% endif %}
-{{ end_group() }}
-{%- endmacro %}
-
-
-{# === Module Tag Commands === #}
-{% macro module_tag_commands(module_name) -%}
-{{ start_group("Tag module") }}
-echo "Tagging module {{ module_name }} version {{ ci_options.ref_name }} as {{ ci_options.module_tag_name }} on clusters {{ ci_options.tag_clusters|join(",") }}"
-module load modulemgr
-modulemgr -m "{{ ci_options.tag_clusters|join(",") }}" -f -v tag "{{ module_name }}" "{{ ci_options.ref_name }}" "{{ ci_options.module_tag_name }}"
-{{ end_group() }}
-{%- endmacro %}
-
-
 {# === Post Script Execution === #}
 {% macro post_script() -%}
 {% if ci_options.post_script %}
@@ -139,10 +116,4 @@ timeout 300 chmod -R a-w "{{ ci_options.install_prefix }}" || echo "Warning: chm
 {% endif %}
 {% endif %}
 
-{% if ci_options.sync_module %}
-{{ sync_module_commands(module_name=ci_options.module_name or ci_options.main_package_name) }}
-{% endif %}
-{% if ci_options.do_tag %}
-{{ module_tag_commands(module_name=ci_options.module_name or ci_options.main_package_name) }}
-{% endif %}
 {%- endmacro %}

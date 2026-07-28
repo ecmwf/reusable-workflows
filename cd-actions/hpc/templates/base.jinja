@@ -1,13 +1,12 @@
 {# Reusable base macros for HPC build templates #}
+{% from 'logging.jinja' import start_group as _start_group, end_group as _end_group with context %}
 
-{# === GitHub Actions Logging === #}
 {% macro start_group(msg) -%}
-echo "::group::{{ msg }}"
+{{ _start_group(msg) }}
 {%- endmacro %}
 
-
 {% macro end_group() -%}
-echo "::endgroup::"
+{{ _end_group() }}
 {%- endmacro %}
 
 

@@ -11,8 +11,9 @@ from jinja2 import Environment, FileSystemLoader
 
 
 TEMPLATE_DIR = Path(__file__).parent.parent / "hpc" / "templates"
+COMMON_TEMPLATE_DIR = Path(__file__).parent.parent / "hpc-common" / "templates"
 JINJA_ENV = Environment(
-    loader=FileSystemLoader(TEMPLATE_DIR),
+    loader=FileSystemLoader([TEMPLATE_DIR, COMMON_TEMPLATE_DIR]),
     trim_blocks=True,
     lstrip_blocks=True,
 )
