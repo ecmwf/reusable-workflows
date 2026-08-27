@@ -165,6 +165,8 @@ group:
     template:
       year: 2024-2025
       authors: Anemoi Contributors
+  - source: sync-files/anemoi/all/.agents/skills/anemoi-architecture/SKILL.md
+    dest: .agents/skills/anemoi-architecture/SKILL.md
   repos: |
     ecmwf/anemoi-registry
 
@@ -257,6 +259,8 @@ group:
     template:
       year: 2024-2025
       authors: Anemoi Contributors
+  - source: sync-files/anemoi/all/.agents/skills/anemoi-architecture/SKILL.md
+    dest: .agents/skills/anemoi-architecture/SKILL.md
   repos: |
     ecmwf/anemoi
 
@@ -330,5 +334,7 @@ group:
       repo_name: anemoi-core
   - source: sync-files/anemoi/all/tools/pre-commit-copyright-notice.txt
     dest: tools/pre-commit-copyright-notice.txt
+  - source: sync-files/anemoi/all/.agents/skills/anemoi-architecture/SKILL.md
+    dest: .agents/skills/anemoi-architecture/SKILL.md
   repos: |
     ecmwf/anemoi-core
