@@ -247,7 +247,7 @@ jobs:
 
       - name: Codecov Upload
         if: steps.build.outputs.coverage_file
-        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
         with:
           files: ${{ steps.build-test.outputs.coverage_file }}
 
