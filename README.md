@@ -712,6 +712,16 @@ Expands in `pytest -v -m "${{ inputs.skip-tests }}"` to coordinate marked tests.
 **Type:** `string`
 **Example:** `'poetry run pytest'`
 
+#### `resolution`
+
+Optional, `uv` dependency resolution strategy passed to `uv pip install --resolution`.
+
+Leave empty for `uv`'s default (`highest`). Set to `lowest-direct` to test against the lowest versions of *direct* dependencies declared in `pyproject.toml`. `lowest` additionally forces *transitive* dependencies down to their floor. `lowest-direct` and `lowest` resolution requires every dependency in `pyproject.toml` to declare an explicit lower bound otherwise `uv` may resolve down to an unreasonably old or broken version.
+
+**Default:** `''`
+**Type:** `string`
+**Example:** `'lowest-direct'`
+
 ## publish-rust-crate.yml
 
 ### Usage
