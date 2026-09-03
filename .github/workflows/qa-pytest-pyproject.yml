@@ -44,6 +44,16 @@ on:
         type: string
         required: false
         default: "./"
+      resolution:
+        description: >
+          uv dependency resolution strategy passed to `uv pip install --resolution`.
+          Leave empty for uv's default ('highest'). Set to 'lowest-direct' to test
+          against the lowest versions of direct dependencies declared in
+          pyproject.toml (uv resolves transitive dependencies normally). 'lowest'
+          forces transitive dependencies down too.
+        required: false
+        default: ''
+        type: string
 
 env:
   UV_SYSTEM_PYTHON: 1  # ensures uv uses the system Python interpreter instead of downloading its own.
@@ -68,7 +78,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         if: ${{ inputs.install-dependencies }}
         run: |
-          uv pip install .[${{ inputs.optional-dependencies }}] pytest pytest-md pytest-emoji
+          uv pip install .[${{ inputs.optional-dependencies }}] pytest pytest-md pytest-emoji ${{ inputs.resolution != '' && format('--resolution {0}', inputs.resolution) || '' }}
       - name: Run pytest
         uses: pavelzw/pytest-action@510c5e90c360a185039bea56ce8b3e7e51a16507 # v2.2.0
         with:
@@ -77,5 +87,5 @@ jobs:
           job-summary: ${{ inputs.job-summary }}
           custom-arguments: ${{ inputs.skip-tests != '' && '-m ' || '' }}${{ inputs.skip-tests }}
           click-to-expand: true
-          report-title:  "Test report (python ${{ inputs.python-version }} on ${{ matrix.platform }})"
+          report-title:  "Test report (python ${{ inputs.python-version }} on ${{ matrix.platform }}${{ inputs.resolution != '' && format(', resolution={0}', inputs.resolution) || '' }})"
           custom-pytest: cd ${{ inputs.working-directory }} && ${{ inputs.custom-pytest }}
