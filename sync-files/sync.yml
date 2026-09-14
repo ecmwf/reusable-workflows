@@ -48,7 +48,7 @@ group:
       repo_name: anemoi-datasets
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Datasets for training data-driven weather forecasts."
+      short_description: "Datasets for training data-driven weather forecasts."
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -68,7 +68,7 @@ group:
       repo_name: anemoi-plugins
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Plugins for use with anemoi."
+      short_description: "Plugins for use with anemoi."
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -85,7 +85,7 @@ group:
       repo_name: anemoi-inference
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Inference tools for data-driven weather forecasts."
+      short_description: "Inference tools for data-driven weather forecasts."
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -102,7 +102,7 @@ group:
       repo_name: anemoi-registry
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Registry for data-driven weather forecasts."
+      short_description: "Registry for data-driven weather forecasts."
     exclude: |
       .release-please-config.json
       .github/CODEOWNERS
@@ -124,7 +124,7 @@ group:
       repo_name: anemoi-transform
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Miscellanous data transformation functions for training data-driven weather forecasts."
+      short_description: "Miscellanous data transformation functions for training data-driven weather forecasts."
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -141,7 +141,7 @@ group:
       repo_name: anemoi-utils
       year: 2024-2025
       authors: Anemoi Contributors
-      short_desc: "Miscellanous tools for training data-driven weather forecasts."
+      short_description: "Miscellanous tools for training data-driven weather forecasts."
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
