@@ -1,7 +1,8 @@
 # This configuration file is used by the file broadcasting infrastructure in .github/workflows/sync-files-to-repos.yml.
 # It defines the files to be copied to the repositories listed in the `repos` field.
 # You can use templating and fairly intricate logic to define the files to be copied and replaced.
-# Read more here: https://github.com/BetaHuhn/repo-file-sync-action/
+# Read more here: https://github.com/mcocdawc/repo-file-sync-action/ (fork of BetaHuhn/repo-file-sync-action)
+# `exclude` paths are relative to `source`; an entry ending in `/` excludes a whole folder.
 group:
 ##################
 # Anemoi Files   #
@@ -48,9 +49,6 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
       short_desc: "Datasets for training data-driven weather forecasts."
-    # exclude: |
-    #   .release-please-manifest.json
-    #   .github/PULL_REQUEST_TEMPLATE/pull_request_template-core.md
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -71,9 +69,6 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
       short_desc: "Plugins for use with anemoi."
-    # exclude: |
-    #   .release-please-manifest.json
-    #   .github/PULL_REQUEST_TEMPLATE/pull_request_template-core.md
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -91,10 +86,6 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
       short_desc: "Inference tools for data-driven weather forecasts."
-    # exclude: |
-    #   .release-please-manifest.json
-    #   .github/PULL_REQUEST_TEMPLATE/pull_request_template-core.md
-    #   .github/workflows/push-to-private.yml
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -105,61 +96,17 @@ group:
 
 # Anemoi Registry specific
 - files:
-  - source: sync-files/anemoi/all/.github/pull_request_template.md
-    dest: .github/pull_request_template.md
-    template: true
-  - source: sync-files/anemoi/all/.gitignore
-    dest: .gitignore
-  - source: sync-files/anemoi/all/CONTRIBUTORS.md
-    dest: CONTRIBUTORS.md
+  - source: sync-files/anemoi/all/
+    dest: ./
     template:
       repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-public.yml
-    dest: .github/workflows/pr-label-public.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-conventional-commits.yml
-    dest: .github/workflows/pr-label-conventional-commits.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/python-publish.yml
-    dest: .github/workflows/python-publish.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
-    dest: .github/workflows/pr-conventional-commit.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-file-based.yml
-    dest: .github/workflows/pr-label-file-based.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/python-pull-request.yml
-    dest: .github/workflows/python-pull-request.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/readthedocs-pr-update.yml
-    dest: .github/workflows/readthedocs-pr-update.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/release-please.yml
-    dest: .github/workflows/release-please.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.github/workflows/inactivity-bot.yml
-    dest: .github/workflows/inactivity-bot.yml
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/README.md
-    dest: README.md
-    template:
-      repo_name: anemoi-registry
-  - source: sync-files/anemoi/all/.pre-commit-config.yaml
-    dest: .pre-commit-config.yaml
-  - source: sync-files/anemoi/all/tools/pre-commit-copyright-notice.txt
-    dest: tools/pre-commit-copyright-notice.txt
-  - source: sync-files/anemoi/all/.github/labeler.yml
-    dest: .github/labeler.yml
+      year: 2024-2025
+      authors: Anemoi Contributors
+      short_desc: "Registry for data-driven weather forecasts."
+    exclude: |
+      .release-please-config.json
+      .github/CODEOWNERS
+      .github/workflows/pr-label-ats.yml
   - source: sync-files/general/python/LICENSE
     dest: LICENSE
     template:
@@ -167,7 +114,6 @@ group:
       authors: Anemoi Contributors
   repos: |
     ecmwf/anemoi-registry
-
 
 
 # Anemoi transform specific
@@ -179,10 +125,6 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
       short_desc: "Miscellanous data transformation functions for training data-driven weather forecasts."
-    # exclude: |
-    #   .release-please-manifest.json
-    #   .github/PULL_REQUEST_TEMPLATE/pull_request_template-core.md
-    #   .github/workflows/push-to-private.yml
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -200,10 +142,6 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
       short_desc: "Miscellanous tools for training data-driven weather forecasts."
-    # exclude: |
-    #   .release-please-manifest.json
-    #   .github/PULL_REQUEST_TEMPLATE/pull_request_template-core.md
-    #   .github/workflows/push-to-private.yml
   - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
     dest: .github/workflows/downstream-ci-hpc.yml
     template:
@@ -213,45 +151,18 @@ group:
 
 # Anemoi specific
 - files:
-  - source: sync-files/anemoi/all/.github/pull_request_template.md
-    dest: .github/pull_request_template.md
-    template: true
-  - source: sync-files/anemoi/all/.gitignore
-    dest: .gitignore
-  - source: sync-files/anemoi/all/CONTRIBUTORS.md
-    dest: CONTRIBUTORS.md
+  - source: sync-files/anemoi/all/
+    dest: ./
     template:
       repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-public.yml
-    dest: .github/workflows/pr-label-public.yml
-    template:
-      repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-conventional-commits.yml
-    dest: .github/workflows/pr-label-conventional-commits.yml
-    template:
-      repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
-    dest: .github/workflows/pr-conventional-commit.yml
-    template:
-      repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-file-based.yml
-    dest: .github/workflows/pr-label-file-based.yml
-    template:
-      repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-ats.yml
-    dest: .github/workflows/pr-label-ats.yml
-    template:
-      repo_name: anemoi
-  - source: sync-files/anemoi/all/.github/workflows/inactivity-bot.yml
-    dest: .github/workflows/inactivity-bot.yml
-    template:
-      repo_name: anemoi
-  - source: sync-files/anemoi/all/.pre-commit-config.yaml
-    dest: .pre-commit-config.yaml
-  - source: sync-files/anemoi/all/tools/pre-commit-copyright-notice.txt
-    dest: tools/pre-commit-copyright-notice.txt
-  - source: sync-files/anemoi/all/.github/labeler.yml
-    dest: .github/labeler.yml
+    exclude: |
+      README.md
+      .release-please-config.json
+      .github/CODEOWNERS
+      .github/workflows/python-publish.yml
+      .github/workflows/python-pull-request.yml
+      .github/workflows/readthedocs-pr-update.yml
+      .github/workflows/release-please.yml
   - source: sync-files/general/python/LICENSE
     dest: LICENSE
     template:
@@ -262,6 +173,19 @@ group:
 
 # Anemoi Core specific
 - files:
+  - source: sync-files/anemoi/all/
+    dest: ./
+    template:
+      repo_name: anemoi-core
+    exclude: |
+      README.md
+      .release-please-config.json
+      .github/CODEOWNERS
+      .github/labeler.yml
+      .github/workflows/python-publish.yml
+      .github/workflows/python-pull-request.yml
+      .github/workflows/readthedocs-pr-update.yml
+      .github/workflows/release-please.yml
   - source: sync-files/general/python/LICENSE
     dest: graphs/LICENSE
     template:
@@ -278,10 +202,6 @@ group:
       year: 2024-2025
       authors: Anemoi Contributors
   - source: sync-files/anemoi/all/CONTRIBUTORS.md
-    dest: CONTRIBUTORS.md
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/CONTRIBUTORS.md
     dest: graphs/CONTRIBUTORS.md
     template:
       repo_name: anemoi-graphs
@@ -293,42 +213,7 @@ group:
     dest: training/CONTRIBUTORS.md
     template:
       repo_name: anemoi-training
-  - source: sync-files/anemoi/all/.github/pull_request_template.md
-    dest: .github/pull_request_template.md
-    template: true
-  - source: sync-files/anemoi/all/.gitignore
-    dest: .gitignore
   - source: sync-files/general/python/.github/dependabot.yml
     dest: .github/dependabot.yml
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-public.yml
-    dest: .github/workflows/pr-label-public.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-conventional-commits.yml
-    dest: .github/workflows/pr-label-conventional-commits.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-file-based.yml
-    dest: .github/workflows/pr-label-file-based.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/pr-conventional-commit.yml
-    dest: .github/workflows/pr-conventional-commit.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/pr-label-ats.yml
-    dest: .github/workflows/pr-label-ats.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.github/workflows/inactivity-bot.yml
-    dest: .github/workflows/inactivity-bot.yml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/.pre-commit-config.yaml
-    dest: .pre-commit-config.yaml
-    template:
-      repo_name: anemoi-core
-  - source: sync-files/anemoi/all/tools/pre-commit-copyright-notice.txt
-    dest: tools/pre-commit-copyright-notice.txt
   repos: |
     ecmwf/anemoi-core
