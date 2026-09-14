@@ -3,6 +3,13 @@
 # You can use templating and fairly intricate logic to define the files to be copied and replaced.
 # Read more here: https://github.com/mcocdawc/repo-file-sync-action/ (fork of BetaHuhn/repo-file-sync-action)
 # `exclude` paths are relative to `source`; an entry ending in `/` excludes a whole folder.
+#
+# Layout:
+# - sync-files/anemoi/  files broadcast to the anemoi repos, always overwritten; use `exclude` per repo
+# - sync-files/init/    files created once and then owned by each repo (`replace: false`). They can't live in
+#                       sync-files/anemoi/: `replace: false` is checked against the entry's `dest`, which is `./`
+#                       for a whole folder and always exists, so the whole folder would be skipped.
+# - sync-files/general/ generic Python project files (LICENSE, dependabot)
 group:
 ##################
 # Anemoi Files   #
@@ -26,10 +33,10 @@ group:
 
 # Init specific files once
 - files:
-  - source: sync-files/anemoi/some/.release-please-manifest.json
+  - source: sync-files/init/.release-please-manifest.json
     dest: ./.release-please-manifest.json
     replace: false
-  - source: sync-files/anemoi/some/.readthedocs.yaml
+  - source: sync-files/init/.readthedocs.yaml
     dest: ./.readthedocs.yaml
     replace: false
   repos: |
@@ -42,61 +49,49 @@ group:
 
 # Anemoi Datasets specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-datasets
       year: 2024-2025
       authors: Anemoi Contributors
       short_description: "Datasets for training data-driven weather forecasts."
-  - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
-    dest: .github/workflows/downstream-ci-hpc.yml
-    template:
-      repo_name: anemoi-datasets
-  - source: sync-files/anemoi/some/.github/workflows/push-to-private.yml
-    dest: .github/workflows/push-to-private.yml
-    template:
-      repo_name: anemoi-datasets
   repos: |
     ecmwf/anemoi-datasets
 
 # Anemoi plugins specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-plugins
       year: 2024-2025
       authors: Anemoi Contributors
       short_description: "Plugins for use with anemoi."
-  - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
-    dest: .github/workflows/downstream-ci-hpc.yml
-    template:
-      repo_name: anemoi-plugins
+    exclude: |
+      .github/workflows/push-to-private.yml
   repos: |
     ecmwf/anemoi-plugins
 
 
 # Anemoi inference specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-inference
       year: 2024-2025
       authors: Anemoi Contributors
       short_description: "Inference tools for data-driven weather forecasts."
-  - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
-    dest: .github/workflows/downstream-ci-hpc.yml
-    template:
-      repo_name: anemoi-inference
+    exclude: |
+      .github/workflows/push-to-private.yml
   repos: |
     ecmwf/anemoi-inference
 
 
 # Anemoi Registry specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-registry
@@ -106,7 +101,9 @@ group:
     exclude: |
       .release-please-config.json
       .github/CODEOWNERS
+      .github/workflows/downstream-ci-hpc.yml
       .github/workflows/pr-label-ats.yml
+      .github/workflows/push-to-private.yml
   - source: sync-files/general/python/LICENSE
     dest: LICENSE
     template:
@@ -118,40 +115,36 @@ group:
 
 # Anemoi transform specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-transform
       year: 2024-2025
       authors: Anemoi Contributors
       short_description: "Miscellanous data transformation functions for training data-driven weather forecasts."
-  - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
-    dest: .github/workflows/downstream-ci-hpc.yml
-    template:
-      repo_name: anemoi-transform
+    exclude: |
+      .github/workflows/push-to-private.yml
   repos: |
     ecmwf/anemoi-transform
 
 
 # Anemoi utils specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-utils
       year: 2024-2025
       authors: Anemoi Contributors
       short_description: "Miscellanous tools for training data-driven weather forecasts."
-  - source: sync-files/anemoi/some/.github/workflows/downstream-ci-hpc.yml
-    dest: .github/workflows/downstream-ci-hpc.yml
-    template:
-      repo_name: anemoi-utils
+    exclude: |
+      .github/workflows/push-to-private.yml
   repos: |
     ecmwf/anemoi-utils
 
 # Anemoi specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi
@@ -159,6 +152,8 @@ group:
       README.md
       .release-please-config.json
       .github/CODEOWNERS
+      .github/workflows/downstream-ci-hpc.yml
+      .github/workflows/push-to-private.yml
       .github/workflows/python-publish.yml
       .github/workflows/python-pull-request.yml
       .github/workflows/readthedocs-pr-update.yml
@@ -173,7 +168,7 @@ group:
 
 # Anemoi Core specific
 - files:
-  - source: sync-files/anemoi/all/
+  - source: sync-files/anemoi/
     dest: ./
     template:
       repo_name: anemoi-core
@@ -182,6 +177,8 @@ group:
       .release-please-config.json
       .github/CODEOWNERS
       .github/labeler.yml
+      .github/workflows/downstream-ci-hpc.yml
+      .github/workflows/push-to-private.yml
       .github/workflows/python-publish.yml
       .github/workflows/python-pull-request.yml
       .github/workflows/readthedocs-pr-update.yml
@@ -201,15 +198,15 @@ group:
     template:
       year: 2024-2025
       authors: Anemoi Contributors
-  - source: sync-files/anemoi/all/CONTRIBUTORS.md
+  - source: sync-files/anemoi/CONTRIBUTORS.md
     dest: graphs/CONTRIBUTORS.md
     template:
       repo_name: anemoi-graphs
-  - source: sync-files/anemoi/all/CONTRIBUTORS.md
+  - source: sync-files/anemoi/CONTRIBUTORS.md
     dest: models/CONTRIBUTORS.md
     template:
       repo_name: anemoi-models
-  - source: sync-files/anemoi/all/CONTRIBUTORS.md
+  - source: sync-files/anemoi/CONTRIBUTORS.md
     dest: training/CONTRIBUTORS.md
     template:
       repo_name: anemoi-training
