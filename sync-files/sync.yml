@@ -1,7 +1,7 @@
 # This configuration file is used by the file broadcasting infrastructure in .github/workflows/sync-files-to-repos.yml.
 # It defines the files to be copied to the repositories listed in the `repos` field.
 # You can use templating and fairly intricate logic to define the files to be copied and replaced.
-# Read more here: https://github.com/mcocdawc/repo-file-sync-action/ (fork of BetaHuhn/repo-file-sync-action)
+# Read more here: https://github.com/ecmwf/repo-file-sync-action/ (ECMWF fork of BetaHuhn/repo-file-sync-action)
 # `exclude` paths are relative to `source`; an entry ending in `/` excludes a whole folder.
 #
 # Layout:
