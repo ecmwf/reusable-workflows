@@ -15,3 +15,16 @@ updates:
       interval: monthly
     cooldown:
       default-days: 7
+
+  # Maintain pre-commit hook versions of the config broadcast to the anemoi repos
+  - package-ecosystem: pre-commit
+    directory: /sync-files/anemoi
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
