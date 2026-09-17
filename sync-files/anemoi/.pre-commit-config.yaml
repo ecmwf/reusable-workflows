@@ -98,3 +98,6 @@ repos:
   rev: v0.96.0
   hooks:
   - id: docsig
+ci:
+  autoupdate_schedule: quarterly # until pre-commit.ci is uninstalled; updates come from dependabot in reusable-workflows
+  autoupdate_commit_msg: "chore(deps): pre-commit.ci autoupdate"
