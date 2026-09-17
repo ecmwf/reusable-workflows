@@ -14,7 +14,29 @@ jobs:
   quality:
     uses: ecmwf/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
     with:
-      skip-hooks: "no-commit-to-branch,protect-synced-files"
+      skip-hooks: "no-commit-to-branch"
+
+  # Reject PRs that change files synced from ecmwf/reusable-workflows (see tools/check_synced_files.py).
+  # PRs opened by the sync bot are allowed to, also after pushing fixes to them.
+  protect-synced-files:
+    if: {% raw %}github.event_name == 'pull_request' && github.event.pull_request.user.login != 'DeployDuck'{% endraw %}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.x"
+      - name: Install pre-commit
+        run: python -m pip install pre-commit
+      - name: Check synced files changed by this PR
+        # HEAD is the merge commit of the PR into the base branch, so base.sha...HEAD are exactly the PR's changes
+        run: >
+          pre-commit run protect-synced-files --show-diff-on-failure --color=always
+          --from-ref {% raw %}${{ github.event.pull_request.base.sha }}{% endraw %} --to-ref HEAD
 
   checks:
     strategy:

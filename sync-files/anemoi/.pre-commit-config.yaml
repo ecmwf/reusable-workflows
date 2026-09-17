@@ -6,10 +6,9 @@ repos:
   hooks:
   - id: protect-synced-files
     name: protect files synced from ecmwf/reusable-workflows
-    description: Rejects changes to files that are overwritten by the file sync, unless whitelisted in .github/synced-files-whitelist.txt
+    description: Rejects changes (vs. HEAD, or the --from-ref/--to-ref range) to files overwritten by the file sync, unless whitelisted in .github/synced-files-whitelist
     language: python
     entry: python tools/check_synced_files.py
-    stages: [pre-commit] # Only on commit; CI runs --all-files and skips this hook
     files: |
       (?x)^(
         \.gitignore
@@ -102,5 +101,3 @@ repos:
   rev: v0.96.0
   hooks:
   - id: docsig # Configured in [tool.docsig] of pyproject.toml
-ci:
-  skip: [protect-synced-files]

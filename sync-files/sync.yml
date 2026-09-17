@@ -11,9 +11,10 @@
 #                       for a whole folder and always exists, so the whole folder would be skipped.
 # - sync-files/general/ generic Python project files (LICENSE, dependabot)
 #
-# Anemoi repos reject local edits of synced files with the `protect-synced-files` pre-commit hook
-# (sync-files/anemoi/.pre-commit-config.yaml, tools/check_synced_files.py). A repo that owns its own version of a
-# synced file must BOTH `exclude` it below AND list it in its .github/synced-files-whitelist.txt.
+# Anemoi repos reject edits of synced files with the `protect-synced-files` pre-commit hook
+# (sync-files/anemoi/.pre-commit-config.yaml, tools/check_synced_files.py), at commit time and on PRs
+# (job in .github/workflows/python-pull-request.yml, skipped for PRs of the sync bot). A repo that owns its own version of a
+# synced file must BOTH `exclude` it below AND list it in its .github/synced-files-whitelist.
 # When adding a file to sync-files/anemoi/ or sync-files/general/, add its destination to the `files` regex of that hook.
 #
 # Tool configuration (ruff line length, isort, docsig, pyproject-fmt) is not passed as hook args,
@@ -57,8 +58,8 @@ group:
 
 # Whitelist of synced files owned by the repo, see the `protect-synced-files` hook above
 - files:
-  - source: sync-files/init/.github/synced-files-whitelist.txt
-    dest: .github/synced-files-whitelist.txt
+  - source: sync-files/init/.github/synced-files-whitelist
+    dest: .github/synced-files-whitelist
     replace: false
   repos: |
     ecmwf/anemoi
