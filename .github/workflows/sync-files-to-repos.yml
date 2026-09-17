@@ -6,6 +6,11 @@ on:
     paths:
       - "sync-files/**" # Only trigger on changes in sync-files directory
   workflow_dispatch: # Keep manual trigger capability
+    inputs:
+      dry_run:
+        description: "Dry run: sync into local clones and print the diffs, but don't push or open PRs"
+        type: boolean
+        default: false
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -24,3 +29,20 @@ jobs:
           COMMIT_PREFIX: "chore: "
           BRANCH_PREFIX: "chore/file-broadcast/"
           COMMIT_BODY: "Triggered from common files on https://github.com/ecmwf/reusable-workflows"
+          # `inputs.dry_run` is empty on push, i.e. false
+          DRY_RUN: ${{ inputs.dry_run == true }}
+          SKIP_CLEANUP: ${{ inputs.dry_run == true }}
+          TMP_DIR: sync-tmp
+      - name: Show Dry Run Changes
+        # The action only logs changes at debug level, so print the locally committed diff of every target repo
+        if: inputs.dry_run
+        run: |
+          # Clones live in sync-tmp/github.com/<owner>/<repo>@<branch>
+          find sync-tmp -mindepth 2 -maxdepth 4 -type d -name .git | sort | while read -r gitdir; do
+            repo=$(dirname "$gitdir")
+            base=$(git -C "$repo" rev-list --max-parents=0 HEAD | tail -n 1)
+            echo "::group::${repo#sync-tmp/}"
+            git -C "$repo" --no-pager diff --stat "$base" HEAD
+            git -C "$repo" --no-pager diff "$base" HEAD
+            echo "::endgroup::"
+          done
