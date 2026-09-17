@@ -1,12 +1,10 @@
 # This file is synced from https://github.com/ecmwf/reusable-workflows/tree/main/sync-files
 # Tool configuration (line length, rules, ...) belongs into pyproject.toml, not into hook args.
 repos:
-# Prevent local changes to synced files
 - repo: local
   hooks:
   - id: protect-synced-files
     name: protect files synced from ecmwf/reusable-workflows
-    description: Rejects changes (vs. HEAD, or the --from-ref/--to-ref range) to files overwritten by the file sync, unless whitelisted in .github/synced-files-whitelist
     language: python
     entry: python tools/check_synced_files.py
     files: |
@@ -26,6 +24,7 @@ repos:
         |\.github/workflows/pr-conventional-commit\.yml
         |\.github/workflows/pr-label-ats\.yml
         |\.github/workflows/pr-label-file-based\.yml
+        |\.github/workflows/pr-protect-synced-files\.yml
         |\.github/workflows/push-to-private\.yml
         |\.github/workflows/python-publish\.yml
         |\.github/workflows/python-pull-request\.yml
@@ -67,11 +66,9 @@ repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.16.8
   hooks:
-  # Linting incl. import sorting (rule `I`), configured in [tool.ruff] of pyproject.toml
   - id: ruff-check
     args: [--fix, --exit-non-zero-on-fix]
-  # Formatting, runs after the fixes of ruff-check
-  - id: ruff-format
+  - id: ruff-format # after ruff-check, whose fixes may need reformatting
 - repo: https://github.com/sphinx-contrib/sphinx-lint
   rev: v1.0.2
   hooks:
@@ -96,8 +93,8 @@ repos:
 - repo: https://github.com/tox-dev/pyproject-fmt
   rev: "v2.29.4"
   hooks:
-  - id: pyproject-fmt # Configured in [tool.pyproject-fmt] of pyproject.toml
+  - id: pyproject-fmt
 - repo: https://github.com/jshwi/docsig # Check docstrings against function sig
   rev: v0.96.0
   hooks:
-  - id: docsig # Configured in [tool.docsig] of pyproject.toml
+  - id: docsig

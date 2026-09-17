@@ -6,19 +6,13 @@
 #
 # Layout:
 # - sync-files/anemoi/  files broadcast to the anemoi repos, always overwritten; use `exclude` per repo
-# - sync-files/init/    files created once and then owned by each repo (`replace: false`). They can't live in
-#                       sync-files/anemoi/: `replace: false` is checked against the entry's `dest`, which is `./`
-#                       for a whole folder and always exists, so the whole folder would be skipped.
+# - sync-files/init/    files created once and then owned by each repo (`replace: false` only works per file,
+#                       not for a folder `dest: ./`)
 # - sync-files/general/ generic Python project files (LICENSE, dependabot)
 #
-# Anemoi repos reject edits of synced files with the `protect-synced-files` pre-commit hook
-# (sync-files/anemoi/.pre-commit-config.yaml, tools/check_synced_files.py), at commit time and on PRs
-# (job in .github/workflows/python-pull-request.yml, skipped for PRs of the sync bot). A repo that owns its own version of a
-# synced file must BOTH `exclude` it below AND list it in its .github/synced-files-whitelist.
-# When adding a file to sync-files/anemoi/ or sync-files/general/, add its destination to the `files` regex of that hook.
-#
-# Tool configuration (ruff line length, isort, docsig, pyproject-fmt) is not passed as hook args,
-# it lives in [tool.*] of each repo's pyproject.toml.
+# The `protect-synced-files` hook in sync-files/anemoi/.pre-commit-config.yaml rejects edits of synced files.
+# A repo owning its own version must BOTH `exclude` it below AND list it in its .github/synced-files-whitelist.
+# New files in sync-files/anemoi/ or sync-files/general/ must be added to the hook's `files` regex.
 group:
 ##################
 # Anemoi Files   #
@@ -56,7 +50,7 @@ group:
     ecmwf/anemoi-utils
     ecmwf/anemoi-plugins
 
-# Whitelist of synced files owned by the repo, see the `protect-synced-files` hook above
+# Whitelist for the `protect-synced-files` hook
 - files:
   - source: sync-files/init/.github/synced-files-whitelist
     dest: .github/synced-files-whitelist
