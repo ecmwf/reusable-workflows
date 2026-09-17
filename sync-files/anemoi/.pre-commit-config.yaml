@@ -1,5 +1,42 @@
+# This file is synced from https://github.com/ecmwf/reusable-workflows/tree/main/sync-files
+# Tool configuration (line length, rules, ...) belongs into pyproject.toml, not into hook args.
 repos:
-# Empty notebookds
+# Prevent local changes to synced files
+- repo: local
+  hooks:
+  - id: protect-synced-files
+    name: protect files synced from ecmwf/reusable-workflows
+    description: Rejects changes to files that are overwritten by the file sync, unless whitelisted in .github/synced-files-whitelist.txt
+    language: python
+    entry: python tools/check_synced_files.py
+    stages: [pre-commit] # Only on commit; CI runs --all-files and skips this hook
+    files: |
+      (?x)^(
+        \.gitignore
+        |\.pre-commit-config\.yaml
+        |\.release-please-config\.json
+        |CONTRIBUTORS\.md
+        |LICENSE
+        |README\.md
+        |\.github/CODEOWNERS
+        |\.github/dependabot\.yml
+        |\.github/labeler\.yml
+        |\.github/pull_request_template\.md
+        |\.github/workflows/downstream-ci-hpc\.yml
+        |\.github/workflows/inactivity-bot\.yml
+        |\.github/workflows/pr-conventional-commit\.yml
+        |\.github/workflows/pr-label-ats\.yml
+        |\.github/workflows/pr-label-file-based\.yml
+        |\.github/workflows/push-to-private\.yml
+        |\.github/workflows/python-publish\.yml
+        |\.github/workflows/python-pull-request\.yml
+        |\.github/workflows/readthedocs-pr-update\.yml
+        |\.github/workflows/release-please\.yml
+        |tools/check_synced_files\.py
+        |tools/pre-commit-copyright-notice\.txt
+        |(graphs|models|training)/(CONTRIBUTORS\.md|LICENSE)
+      )$
+# Empty notebooks
 - repo: local
   hooks:
   - id: clear-notebooks-output
@@ -14,6 +51,8 @@ repos:
   hooks:
   - id: check-yaml # Check YAML files for syntax errors only
     args: [--unsafe, --allow-multiple-documents]
+  - id: check-toml # Check TOML files for syntax errors
+  - id: check-case-conflict # Check for files that would conflict on case-insensitive filesystems
   - id: debug-statements # Check for debugger imports and py37+ breakpoint()
   - id: end-of-file-fixer # Ensure files end in a newline
   - id: trailing-whitespace # Trailing whitespace checker
@@ -21,34 +60,19 @@ repos:
   - id: check-added-large-files # Check for large files added to git
   - id: check-merge-conflict # Check for files that contain merge conflict
 - repo: https://github.com/pre-commit/pygrep-hooks
-  rev: v1.10.0  # Use the ref you want to point at
+  rev: v1.10.0
   hooks:
   - id: python-use-type-annotations # Check for missing type annotations
   - id: python-check-blanket-noqa # Check for # noqa: all
   - id: python-no-log-warn # Check for log.warn
-- repo: https://github.com/psf/black-pre-commit-mirror
-  rev: 26.5.1
-  hooks:
-  - id: black
-    args: [--line-length=120]
-- repo: https://github.com/pycqa/isort
-  rev: 9.0.0a3
-  hooks:
-  - id: isort
-    args:
-    - -l 120
-    - --force-single-line-imports
-    - --profile black
-    - --project anemoi
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.15.15
+  rev: v0.16.8
   hooks:
-  - id: ruff
-    args:
-    - --line-length=120
-    - --fix
-    - --exit-non-zero-on-fix
-    - --exclude=docs/**/*_.py
+  # Linting incl. import sorting (rule `I`), configured in [tool.ruff] of pyproject.toml
+  - id: ruff-check
+    args: [--fix, --exit-non-zero-on-fix]
+  # Formatting, runs after the fixes of ruff-check
+  - id: ruff-format
 - repo: https://github.com/sphinx-contrib/sphinx-lint
   rev: v1.0.2
   hooks:
@@ -71,21 +95,12 @@ repos:
     - --license
     - tools/pre-commit-copyright-notice.txt
 - repo: https://github.com/tox-dev/pyproject-fmt
-  rev: "v2.23.0"
+  rev: "v2.29.4"
   hooks:
-  - id: pyproject-fmt
-    args: ["--max-supported-python", "3.12"]
+  - id: pyproject-fmt # Configured in [tool.pyproject-fmt] of pyproject.toml
 - repo: https://github.com/jshwi/docsig # Check docstrings against function sig
-  rev: v0.86.0
+  rev: v0.96.0
   hooks:
-  - id: docsig
-    args:
-    - --ignore-no-params # Allow docstrings without parameters
-    - --check-dunders    # Check dunder methods
-    - --check-overridden # Check overridden methods
-    - --check-protected  # Check protected methods
-    - --check-class      # Check class docstrings
-    - --disable=SIG101,SIG102,SIG305     # Disable empty docstrings
+  - id: docsig # Configured in [tool.docsig] of pyproject.toml
 ci:
-  autoupdate_schedule: monthly
-  autoupdate_commit_msg: "chore(deps): pre-commit.ci autoupdate"
+  skip: [protect-synced-files]
