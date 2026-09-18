@@ -1,0 +1,38 @@
+name: Require successful CI
+description: Wait for the newest eligible CI run for an exact source commit; fail closed.
+inputs:
+  source_sha:
+    description: Full commit SHA to validate
+    required: true
+  workflow:
+    description: CI workflow filename
+    default: ci.yml
+  allowed_events:
+    description: Comma-separated trusted CI event types
+    default: push
+  allowed_branches:
+    description: Comma-separated trusted CI branches (required)
+    required: true
+  timeout_seconds:
+    description: Maximum wait for missing or pending CI
+    default: '1800'
+  token:
+    description: Token with actions read permission
+    default: ${{ github.token }}
+outputs:
+  run_url:
+    description: Accepted CI run URL
+    value: ${{ steps.gate.outputs.run_url }}
+runs:
+  using: composite
+  steps:
+    - id: gate
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        CI_SOURCE_SHA: ${{ inputs.source_sha }}
+        CI_WORKFLOW: ${{ inputs.workflow }}
+        CI_ALLOWED_EVENTS: ${{ inputs.allowed_events }}
+        CI_ALLOWED_BRANCHES: ${{ inputs.allowed_branches }}
+        CI_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+      run: python3 "$GITHUB_ACTION_PATH/gate.py"
