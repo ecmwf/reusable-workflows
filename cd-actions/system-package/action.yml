@@ -514,5 +514,6 @@ runs:
           echo "Successfully uploaded!"
         else
           echo "$status: Upload failed"
+          echo "Response: ${response%???}"
           exit 1
         fi
