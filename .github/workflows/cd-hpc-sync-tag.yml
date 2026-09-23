@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: false
+      release_type:
+        description: 'Release type - auto (detect from ref_name) or nightly (sync without tagging)'
+        required: false
+        type: string
+        default: 'auto'
 
       # Authentication
       troika_user:
@@ -83,10 +88,11 @@ jobs:
         with:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ inputs.dry_run }}
+          release_type: ${{ inputs.release_type }}
           deployment_regex: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
           prerelease_regex: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
 
-      - name: Sync and tag HPC module${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
+      - name: Sync and tag HPC module${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_nightly == 'true' && ' [NIGHTLY]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
         uses: ecmwf/reusable-workflows/cd-actions/hpc-sync-tag@v2
         with:
           name: ${{ inputs.name }}

@@ -16,6 +16,12 @@ inputs:
     description: 'Use test Nexus repository'
     required: false
     default: 'false'
+  nightly:
+    description: >-
+      Nightly build - exports NIGHTLY_VERSION (<next version>.dev<commit time>), which the recipe must use, e.g.
+      {% set git_tag = environ.get('NIGHTLY_VERSION') or environ.get('GIT_DESCRIBE_TAG', '0.0.0').lstrip('v') %}
+    required: false
+    default: 'false'
   platform:
     description: 'Conda target platform/subdir, e.g. linux-64, linux-aarch64, osx-arm64'
     required: false
@@ -122,6 +128,14 @@ runs:
         mamba info
         mamba list
 
+    - name: Set nightly version
+      if: ${{ inputs.nightly == 'true' }}
+      shell: bash -el {0}
+      run: |
+        version=$(python3 "${{ github.action_path }}/../lib/nightly_version.py" --style conda)
+        echo "Nightly version: $version"
+        echo "NIGHTLY_VERSION=$version" >> "$GITHUB_ENV"
+
     - name: Build conda package
       shell: bash -el {0}
       run: |
@@ -187,6 +201,18 @@ runs:
                 exit 1
             fi
             echo "Verified package subdir: $package -> $subdir"
+
+            if [[ "${{ inputs.nightly }}" == "true" ]]; then
+                pkg_stem="$(basename "$package")"
+                pkg_stem="${pkg_stem%.conda}"
+                pkg_stem="${pkg_stem%.tar.bz2}"
+                pkg_no_build="${pkg_stem%-*}"
+                pkg_version="${pkg_no_build##*-}"
+                if [[ "$pkg_version" != "$NIGHTLY_VERSION" ]]; then
+                    echo "::error::$(basename "$package") has version $pkg_version, expected nightly version $NIGHTLY_VERSION - the recipe must take its version from NIGHTLY_VERSION"
+                    exit 1
+                fi
+            fi
         done
 
     - name: Upload artifacts

@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: false
+      release_type:
+        description: 'Release type - auto (detect from ref_name) or nightly (install into /usr/local/apps/<module>/nightly, cleaned first)'
+        required: false
+        type: string
+        default: 'auto'
       dry_run_install:
         description: 'Install module during dry runs'
         required: false
@@ -243,6 +248,7 @@ jobs:
         with:
           ref_name: ${{ inputs.ref_name }}
           dry_run: ${{ inputs.dry_run }}
+          release_type: ${{ inputs.release_type }}
           deployment_regex: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
           prerelease_regex: ${{ vars.TAG_REGEX_FOR_PRERELEASE }}
 
@@ -252,13 +258,14 @@ jobs:
           fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '50' }}
           fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Build with HPC${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
+      - name: Build with HPC${{ steps.detect-release-type.outputs.is_dry_run == 'true' && ' [DRY RUN]' || steps.detect-release-type.outputs.is_nightly == 'true' && ' [NIGHTLY]' || steps.detect-release-type.outputs.is_prerelease == 'true' && ' [PRERELEASE]' || ' [RELEASE]' }}
         uses: ecmwf/reusable-workflows/cd-actions/hpc@v2
         with:
           name: ${{ inputs.name }}
           ref_name: ${{ steps.detect-release-type.outputs.ref_name }}
           sha: ${{ github.event.pull_request.head.sha || github.sha }}
           dry_run: ${{ steps.detect-release-type.outputs.is_dry_run }}
+          nightly: ${{ steps.detect-release-type.outputs.is_nightly }}
           github_user: ${{ inputs.github_user || secrets.BUILD_PACKAGE_HPC_GITHUB_USER }}
           github_token: ${{ inputs.github_token || secrets.GH_REPO_READ_TOKEN }}
           troika_user: ${{ inputs.troika_user || secrets.HPC_CI_SSH_USER }}

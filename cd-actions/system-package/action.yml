@@ -16,6 +16,10 @@ inputs:
     description: 'Skip tag-vs-VERSION validation'
     required: false
     default: 'false'
+  nightly:
+    description: 'Nightly build - version becomes <next VERSION>~nightly.<commit time>.g<sha>, skips tag-vs-VERSION validation'
+    required: false
+    default: 'false'
   dependencies:
     description: 'List of dependency repositories to build (e.g. owner/repo@ref, one per line)'
     required: false
@@ -190,6 +194,7 @@ runs:
       shell: python3 {0}
       run: |
         import os
+        import sys
 
         def cmake_escape(s):
             """Escape backslashes, double-quotes, and semicolons for CMake strings."""
@@ -229,12 +234,27 @@ runs:
         lines = []
 
         # Sanitize CPACK_PACKAGE_VERSION from VERSION file
+        version = ''
         if os.path.isfile('VERSION'):
             with open('VERSION') as f:
                 version = f.read().strip()
-            if version:
-                lines.append(f'set(CPACK_PACKAGE_VERSION "{cmake_escape(version)}" CACHE STRING "" FORCE)')
-                print(f"Version (from VERSION file): {version}")
+
+        if '${{ inputs.nightly }}' == 'true':
+            if not version:
+                print("::error::Nightly builds need a VERSION file")
+                sys.exit(1)
+            # Path inside the job container, unlike github.action_path
+            sys.path.insert(0, os.path.join(os.environ['GITHUB_ACTION_PATH'], '..', 'lib'))
+            # Avoid a root-owned __pycache__ in the action cache
+            sys.dont_write_bytecode = True
+            from nightly_version import commit_stamp, nightly_version
+
+            stamp, sha = commit_stamp()
+            version = nightly_version(version, stamp, sha, 'system')
+
+        if version:
+            lines.append(f'set(CPACK_PACKAGE_VERSION "{cmake_escape(version)}" CACHE STRING "" FORCE)')
+            print(f"Version: {version}")
 
         if package_deps:
             lines.append(f'set({deps_var} "{cmake_escape(package_deps)}" CACHE STRING "" FORCE)')
@@ -324,7 +344,7 @@ runs:
       run: echo "${{ inputs.env }}" >> "$GITHUB_ENV"
 
     - name: Check version number
-      if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' }}
+      if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' && inputs.nightly != 'true' }}
       shell: python3 {0}
       run: |
         import os
