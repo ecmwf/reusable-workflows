@@ -156,7 +156,6 @@ prof/
 # Azure tests
 __blobstorage__/
 
-# Synthetic-dataset sidecars used to build the documentation view trees
-# (anemoi-datasets, see docs/build_trees.py); these must be tracked despite the *.json rule.
+# anemoi-datasets docs/build_trees.py inputs, tracked despite *.json
 !docs/using/code/*.json
 !docs/using/yaml/*.json

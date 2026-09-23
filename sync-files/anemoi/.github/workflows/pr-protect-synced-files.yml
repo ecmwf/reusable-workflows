@@ -1,4 +1,3 @@
-# Rejects PRs changing files synced from ecmwf/reusable-workflows, see tools/check_synced_files.py
 name: "[PR] Protect Synced Files"
 
 on:

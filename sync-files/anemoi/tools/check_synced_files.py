@@ -7,10 +7,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-"""Reject changes to files synced from ecmwf/reusable-workflows, unless whitelisted.
-
-Changed means: between --from-ref and --to-ref if given, otherwise relative to HEAD.
-"""
+"""Reject changes to files synced from ecmwf/reusable-workflows, unless whitelisted."""
 
 import os
 import subprocess
@@ -25,13 +22,13 @@ SYNC_CONFIG_URL: Final[str] = "https://github.com/ecmwf/reusable-workflows/blob/
 
 
 def git_lines(*args: str) -> list[str]:
-    """Return the non-empty output lines of a git command."""
+    """Non-empty output lines of a git command."""
     result = subprocess.run(["git", *args], check=True, capture_output=True, text=True)
     return [line for line in result.stdout.splitlines() if line]
 
 
 def changed_files() -> set[str]:
-    """Return the paths changed in the pre-commit ref range, or relative to HEAD incl. untracked files."""
+    """Paths changed in the pre-commit ref range, else relative to HEAD incl. untracked."""
     from_ref = os.environ.get("PRE_COMMIT_FROM_REF")
     to_ref = os.environ.get("PRE_COMMIT_TO_REF")
     if from_ref and to_ref:
@@ -40,7 +37,7 @@ def changed_files() -> set[str]:
 
 
 def read_whitelist() -> set[str]:
-    """Return the whitelisted paths, one per line, `#` starts a comment."""
+    """Whitelisted paths, one per line, `#` starts a comment."""
     if not WHITELIST.is_file():
         return set()
     entries = (line.split("#", 1)[0].strip() for line in WHITELIST.read_text().splitlines())

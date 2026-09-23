@@ -16,7 +16,6 @@ updates:
     cooldown:
       default-days: 7
 
-  # Maintain pre-commit hook versions of the config broadcast to the anemoi repos
   - package-ecosystem: pre-commit
     directory: /sync-files/anemoi
     schedule:

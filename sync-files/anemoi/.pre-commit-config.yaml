@@ -34,7 +34,6 @@ repos:
         |tools/pre-commit-copyright-notice\.txt
         |(graphs|models|training)/(CONTRIBUTORS\.md|LICENSE)
       )$
-# Empty notebooks
 - repo: local
   hooks:
   - id: clear-notebooks-output
@@ -47,22 +46,22 @@ repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
   hooks:
-  - id: check-yaml # Check YAML files for syntax errors only
+  - id: check-yaml
     args: [--unsafe, --allow-multiple-documents]
-  - id: check-toml # Check TOML files for syntax errors
-  - id: check-case-conflict # Check for files that would conflict on case-insensitive filesystems
-  - id: debug-statements # Check for debugger imports and py37+ breakpoint()
-  - id: end-of-file-fixer # Ensure files end in a newline
-  - id: trailing-whitespace # Trailing whitespace checker
-  - id: no-commit-to-branch # Prevent committing to main / master
-  - id: check-added-large-files # Check for large files added to git
-  - id: check-merge-conflict # Check for files that contain merge conflict
+  - id: check-toml
+  - id: check-case-conflict
+  - id: debug-statements
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+  - id: no-commit-to-branch
+  - id: check-added-large-files
+  - id: check-merge-conflict
 - repo: https://github.com/pre-commit/pygrep-hooks
   rev: v1.10.0
   hooks:
-  - id: python-use-type-annotations # Check for missing type annotations
-  - id: python-check-blanket-noqa # Check for # noqa: all
-  - id: python-no-log-warn # Check for log.warn
+  - id: python-use-type-annotations
+  - id: python-check-blanket-noqa
+  - id: python-no-log-warn
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.16.8
   hooks:
@@ -99,5 +98,5 @@ repos:
   hooks:
   - id: docsig
 ci:
-  autoupdate_schedule: quarterly # until pre-commit.ci is uninstalled; updates come from dependabot in reusable-workflows
+  autoupdate_schedule: quarterly # updates come from dependabot in reusable-workflows
   autoupdate_commit_msg: "chore(deps): pre-commit.ci autoupdate"
