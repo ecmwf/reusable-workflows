@@ -10,6 +10,10 @@ inputs:
     description: 'Force dry run mode'
     required: false
     default: 'false'
+  release_type:
+    description: 'Release type - auto (detect from ref_name) or nightly (non-tag build published like a prerelease)'
+    required: false
+    default: 'auto'
   deployment_regex:
     description: 'Regex pattern for deployment tags'
     required: true
@@ -22,8 +26,11 @@ outputs:
     description: 'Whether this is a dry run'
     value: ${{ steps.detect.outputs.is_dry_run }}
   is_prerelease:
-    description: 'Whether this is a prerelease'
+    description: 'Whether this is a prerelease (also true for nightlies)'
     value: ${{ steps.detect.outputs.is_prerelease }}
+  is_nightly:
+    description: 'Whether this is a nightly build'
+    value: ${{ steps.detect.outputs.is_nightly }}
   ref_name:
     description: 'Resolved git ref name'
     value: ${{ steps.detect.outputs.ref_name }}
@@ -37,20 +44,32 @@ runs:
       env:
         INPUT_REF_NAME: ${{ inputs.ref_name || github.event.pull_request.head.ref || github.ref_name }}
         INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
         DEPLOYMENT_REGEX: ${{ inputs.deployment_regex }}
         PRERELEASE_REGEX: ${{ inputs.prerelease_regex }}
       run: |
         import re
         import os
+        import sys
 
         ref_name = os.environ["INPUT_REF_NAME"]
         deployment_regex = os.environ["DEPLOYMENT_REGEX"]
         prerelease_regex = os.environ["PRERELEASE_REGEX"]
         dry_run_input = os.environ["INPUT_DRY_RUN"]
+        release_type = os.environ["INPUT_RELEASE_TYPE"] or "auto"
+        is_nightly = "false"
 
         print(f"Analyzing ref: {ref_name}")
 
-        if re.match(deployment_regex, ref_name):
+        if release_type == "nightly":
+            print("Nightly build requested")
+            is_dry_run = "false"
+            is_prerelease = "true"
+            is_nightly = "true"
+        elif release_type != "auto":
+            print(f"::error::Invalid release_type '{release_type}' (expected auto or nightly)")
+            sys.exit(1)
+        elif re.match(deployment_regex, ref_name):
             print("Standard release detected")
             is_dry_run = "false"
             is_prerelease = "false"
@@ -71,3 +90,4 @@ runs:
             f.write(f"ref_name={ref_name}\n")
             f.write(f"is_dry_run={is_dry_run}\n")
             f.write(f"is_prerelease={is_prerelease}\n")
+            f.write(f"is_nightly={is_nightly}\n")

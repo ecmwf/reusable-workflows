@@ -25,6 +25,10 @@ inputs:
     description: 'Custom install prefix for dry_run_install (default: $SCRATCH/dry-run-install/<module>/<ref>)'
     required: false
     default: ''
+  nightly:
+    description: 'Nightly build - install into /usr/local/apps/<module>/nightly (unless install_prefix is set) and always clean before install'
+    required: false
+    default: 'false'
 
   # HPC Authentication
   github_user:
@@ -44,7 +48,7 @@ inputs:
 
   # Installation
   install_prefix:
-    description: 'Custom install prefix, defaults to /usr/local/apps/<module>/<ref>'
+    description: 'Custom install prefix, defaults to /usr/local/apps/<module>/<ref> (or <module>/nightly for nightlies)'
     required: false
     default: ''
   prefix_compiler_specific:
@@ -215,6 +219,7 @@ runs:
         INPUT_DRY_RUN_INSTALL: ${{ inputs.dry_run_install }}
         INPUT_DRY_RUN_INSTALL_PREFIX: ${{ inputs.dry_run_install_prefix }}
         INPUT_INSTALL_PREFIX: ${{ inputs.install_prefix }}
+        INPUT_NIGHTLY: ${{ inputs.nightly }}
         INPUT_MODULE_NAME: ${{ inputs.module_name }}
         INPUT_REF_NAME: ${{ inputs.ref_name }}
         INPUT_PREFIX_COMPILER_SPECIFIC: ${{ inputs.prefix_compiler_specific }}
@@ -249,6 +254,7 @@ runs:
         INPUT_FORCE_BUILD: ${{ inputs.force_build }}
         INPUT_ECBUNDLE: ${{ inputs.ecbundle }}
         INPUT_CLEAN_BEFORE_INSTALL: ${{ inputs.clean_before_install }}
+        INPUT_NIGHTLY: ${{ inputs.nightly }}
         INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
         INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
         INPUT_PYTHON_TOML_OPT_DEP_SECTIONS: ${{ inputs.python_toml_opt_dep_sections }}

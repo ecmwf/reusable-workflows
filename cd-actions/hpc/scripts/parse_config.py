@@ -38,6 +38,7 @@ def main():
     dry_run = os.environ.get("INPUT_DRY_RUN", "false") == "true"
     dry_run_install = os.environ.get("INPUT_DRY_RUN_INSTALL", "false") == "true"
     install_prefix_input = os.environ.get("INPUT_INSTALL_PREFIX", "").strip()
+    nightly = os.environ.get("INPUT_NIGHTLY", "false") == "true"
     dry_run_install_prefix_input = os.environ.get("INPUT_DRY_RUN_INSTALL_PREFIX", "").strip()
     repository = os.environ["GITHUB_REPOSITORY"]
     module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
@@ -47,6 +48,8 @@ def main():
 
     if install_prefix_input:
         install_prefix = install_prefix_input
+    elif nightly:
+        install_prefix = f"/usr/local/apps/{module_name}/nightly"
     else:
         install_prefix = f"/usr/local/apps/{module_name}/{safe_ref_name}"
 

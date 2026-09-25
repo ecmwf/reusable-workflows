@@ -77,7 +77,10 @@ def main():
     self_test = os.environ.get("INPUT_SELF_TEST", "true") == "true"
     force_build = os.environ.get("INPUT_FORCE_BUILD", "false") == "true"
     ecbundle = os.environ.get("INPUT_ECBUNDLE", "false") == "true"
-    clean_before_install = os.environ.get("INPUT_CLEAN_BEFORE_INSTALL", "false") == "true"
+    clean_before_install = (
+        os.environ.get("INPUT_CLEAN_BEFORE_INSTALL", "false") == "true"
+        or os.environ.get("INPUT_NIGHTLY", "false") == "true"
+    )
     python_version = os.environ.get("INPUT_PYTHON_VERSION", "").strip()
     requirements_path = os.environ.get("INPUT_PYTHON_REQUIREMENTS", "").strip() or "requirements.txt"
     toml_opt_dep_sections_raw = os.environ.get("INPUT_PYTHON_TOML_OPT_DEP_SECTIONS", "").strip()

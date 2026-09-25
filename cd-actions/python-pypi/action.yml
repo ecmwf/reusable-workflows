@@ -34,6 +34,10 @@ inputs:
     description: 'Publish to TestPyPI instead of PyPI (overrides is_prerelease)'
     required: false
     default: 'false'
+  nightly:
+    description: 'Nightly build - version becomes <next version>.dev<commit time>, set via SETUPTOOLS_SCM_PRETEND_VERSION (needs setuptools_scm or hatch-vcs)'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -43,6 +47,20 @@ runs:
       shell: bash
       run: |
         echo '${{ inputs.env_vars }}' >> $GITHUB_ENV
+
+    - name: Set nightly version
+      if: ${{ inputs.nightly == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        if ! grep -q -E 'setuptools[-_]scm|hatch-vcs' pyproject.toml; then
+          echo "::error::Nightly builds need setuptools_scm or hatch-vcs versioning"
+          exit 1
+        fi
+        version=$(python3 "${{ github.action_path }}/../lib/nightly_version.py" --style python)
+        echo "Nightly version: $version"
+        echo "NIGHTLY_VERSION=$version" >> "$GITHUB_ENV"
+        echo "SETUPTOOLS_SCM_PRETEND_VERSION=$version" >> "$GITHUB_ENV"
 
     - name: Build package with uv
       shell: bash
@@ -73,7 +91,26 @@ runs:
         UV_PUBLISH_TOKEN: ${{ inputs.pypi_test_token }}
       run: |
         echo "Publishing to TestPyPI..."
-        uv publish --publish-url https://test.pypi.org/legacy/
+        files=(dist/*)
+        if [ "${{ inputs.nightly }}" == "true" ]; then
+          # Re-runs rebuild the same version, skip files already uploaded
+          published=""
+          for release in $(for wheel in dist/*.whl; do basename "$wheel" | cut -d- -f1,2; done | sort -u); do
+            if release_json=$(curl -sfL "https://test.pypi.org/pypi/${release%%-*}/${release#*-}/json"); then
+              published+=$(python3 -c 'import json, sys; print("\n".join(u["filename"] for u in json.load(sys.stdin)["urls"]))' <<< "$release_json")$'\n'
+            fi
+          done
+          files=()
+          for dist in dist/*; do
+            if grep -qxF "$(basename "$dist")" <<< "$published"; then
+              echo "::notice::$(basename "$dist") is already on TestPyPI, skipping"
+            else
+              files+=("$dist")
+            fi
+          done
+          [ ${#files[@]} -gt 0 ] || exit 0
+        fi
+        uv publish --publish-url https://test.pypi.org/legacy/ "${files[@]}"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
