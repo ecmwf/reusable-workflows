@@ -17,6 +17,10 @@ inputs:
   name:
     description: Name of the site within given space
     required: true
+  recursive:
+    description: Whether to upload recursively
+    required: false
+    default: "true"
 runs:
   using: composite
   steps:
@@ -31,4 +35,4 @@ runs:
       env:
         SITES_TOKEN: ${{ inputs.token }}
       run: |
-        python $GITHUB_ACTION_PATH/upload.py --path=${{ inputs.path }} --remote-path=${{ inputs.remote_path }} --space=${{ inputs.space }} --name=${{ inputs.name }}
+        python $GITHUB_ACTION_PATH/upload.py --path=${{ inputs.path }} --remote-path=${{ inputs.remote_path }} --space=${{ inputs.space }} --name=${{ inputs.name }} --recursive=${{ inputs.recursive }}
