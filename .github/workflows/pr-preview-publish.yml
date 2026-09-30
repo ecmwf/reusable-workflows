@@ -75,3 +75,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # 4. Show the preview link on the run page
+      - name: Print preview link
+        if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+        env:
+          LINK_TEXT: ${{ inputs.link-text }}
+          URL: https://sites.ecmwf.int/${{ inputs.space }}/${{ inputs.name }}/${{ inputs.path }}/PR-${{ github.event.number }}
+        run: |
+          title=${LINK_TEXT//%/%25}; title=${title//,/%2C}; title=${title//:/%3A}
+          echo "::notice title=${title}::${URL}"
+          echo "## [${LINK_TEXT}](${URL})" >> "$GITHUB_STEP_SUMMARY"
+
