@@ -3,6 +3,8 @@
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 import uuid
@@ -17,6 +19,9 @@ MAX_WAIT = 1800  # 30 minutes
 POLL_INTERVAL = 10  # seconds
 GITHUB_API = "https://api.github.com"
 RUNS_PER_PAGE = 100
+# Used when the action's own ref is unknown or is a commit SHA (dispatch needs a branch or tag)
+FALLBACK_LOCK_REF = "v2"
+CHANNELS = ("test", "production")
 
 
 def gh_api_request(endpoint, method="GET", data=None, token=None):
@@ -75,22 +80,73 @@ def find_dispatched_run(dispatch_id, start_time, token):
         page += 1
 
 
+def _usable_ref(ref):
+    """A dispatch ref must be a branch or tag name, not empty and not a commit SHA."""
+    ref = (ref or "").strip()
+    if not ref or re.fullmatch(r"[0-9a-fA-F]{40}", ref):
+        return None
+    return ref
+
+
+def resolve_lock_ref(lock_ref=None, action_path=None):
+    """Pick the reusable-workflows ref to dispatch conda-index-lock.yml at.
+
+    The lock workflow must come from the same ref as this action, since they
+    agree on the dispatch inputs. github.action_ref can be empty inside
+    composite actions, so fall back to the ref in the action's checkout path
+    (.../_actions/ecmwf/reusable-workflows/<ref>/cd-actions/conda), then to v2.
+    """
+    ref = _usable_ref(lock_ref) or _usable_ref(os.environ.get("GITHUB_ACTION_REF"))
+    if ref:
+        return ref
+    action_path = action_path if action_path is not None else os.environ.get("GITHUB_ACTION_PATH", "")
+    marker = f"/_actions/{LOCK_REPO}/"
+    if marker in action_path:
+        rest = action_path.split(marker, 1)[1]
+        if "/cd-actions/" in rest:
+            ref = _usable_ref(rest.split("/cd-actions/", 1)[0])
+            if ref:
+                return ref
+    return FALLBACK_LOCK_REF
+
+
+def build_dispatch_payload(lock_ref, channel, artifact_name, caller_run_id, caller_repo, dispatch_id):
+    """Dispatch payload for conda-index-lock.yml. It never carries credentials."""
+    return {
+        "ref": lock_ref,
+        "inputs": {
+            "channel": channel,
+            "package_artifact_name": artifact_name,
+            "caller_run_id": caller_run_id,
+            "caller_repo": caller_repo,
+            "dispatch_id": dispatch_id,
+        },
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nexus-url", required=True)
-    parser.add_argument("--nexus-token", required=True)
+    parser.add_argument("--channel", required=True, choices=CHANNELS)
     parser.add_argument("--artifact-name", required=True)
     parser.add_argument("--caller-run-id", required=True)
     parser.add_argument("--caller-repo", required=True)
-    parser.add_argument("--gh-pat", required=True)
+    parser.add_argument("--lock-ref", default=None, help="reusable-workflows ref to dispatch the lock workflow at (default: this action's ref)")
     args = parser.parse_args()
+
+    # Read from the environment so the PAT never appears on a command line
+    gh_pat = os.environ.get("GH_PAT", "")
+    if not gh_pat:
+        print("Error: GH_PAT is not set", file=sys.stderr)
+        sys.exit(1)
+    lock_ref = resolve_lock_ref(args.lock_ref)
 
     print("=" * 50)
     print("Conda Index Lock Acquisition")
     print("=" * 50)
     print(f"Caller: {args.caller_repo} (run {args.caller_run_id})")
     print(f"Artifact: {args.artifact_name}")
-    print(f"Nexus: {args.nexus_url}")
+    print(f"Channel: {args.channel}")
+    print(f"Lock workflow: {LOCK_REPO}/{LOCK_WORKFLOW}@{lock_ref}")
     print()
 
     dispatch_id = f"{args.caller_repo.replace('/', '-')}-{args.caller_run_id}-{args.artifact_name}-{uuid.uuid4().hex[:12]}"
@@ -103,18 +159,10 @@ def main():
     gh_api_request(
         f"/repos/{LOCK_REPO}/actions/workflows/{LOCK_WORKFLOW}/dispatches",
         method="POST",
-        data={
-            "ref": "v2",
-            "inputs": {
-                "nexus_url": args.nexus_url,
-                "nexus_token": args.nexus_token,
-                "package_artifact_name": args.artifact_name,
-                "caller_run_id": args.caller_run_id,
-                "caller_repo": args.caller_repo,
-                "dispatch_id": dispatch_id,
-            },
-        },
-        token=args.gh_pat,
+        data=build_dispatch_payload(
+            lock_ref, args.channel, args.artifact_name, args.caller_run_id, args.caller_repo, dispatch_id
+        ),
+        token=gh_pat,
     )
 
     time.sleep(5)  # Wait for workflow to appear
@@ -124,7 +172,7 @@ def main():
     run_id = None
 
     for _ in range(60):
-        run_id = find_dispatched_run(dispatch_id, start_time, args.gh_pat)
+        run_id = find_dispatched_run(dispatch_id, start_time, gh_pat)
         if run_id:
             break
         time.sleep(2)
@@ -143,7 +191,7 @@ def main():
     interval = POLL_INTERVAL
 
     while elapsed < MAX_WAIT:
-        data = gh_api_request(f"/repos/{LOCK_REPO}/actions/runs/{run_id}", token=args.gh_pat)
+        data = gh_api_request(f"/repos/{LOCK_REPO}/actions/runs/{run_id}", token=gh_pat)
 
         status = data["status"]
         conclusion = data.get("conclusion")

@@ -27,13 +27,7 @@ inputs:
     required: false
     default: 'linux-64'
   gh_pat:
-    description: 'GitHub PAT token'
-    required: false
-  nexus_token:
-    description: 'Nexus upload token'
-    required: false
-  nexus_test_token:
-    description: 'Nexus test upload token'
+    description: 'GitHub PAT token, used to dispatch the conda-index-lock workflow (which holds the Nexus credentials)'
     required: false
   skip_installation_test:
     description: 'Skip testing package installation from Nexus'
@@ -70,11 +64,9 @@ runs:
         INPUT_CHANNELS: ${{ inputs.channels }}
         INPUT_CONDA_BUILD_ARGS: ${{ inputs.conda_build_args }}
         INPUT_PLATFORM: ${{ inputs.platform }}
-        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        # Intentional: conda uses test Nexus until prod conda repos exist
         # INPUT_TEST_NEXUS: ${{ inputs.test_nexus }}
         INPUT_TEST_NEXUS: 'true'
-        INPUT_NEXUS_TOKEN: ${{ inputs.nexus_token }}
-        INPUT_NEXUS_TEST_TOKEN: ${{ inputs.nexus_test_token }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}
       run: python3 "${{ github.action_path }}/scripts/parse_config.py"
 
@@ -226,23 +218,25 @@ runs:
     - name: Acquire lock and upload to Nexus
       if: ${{ inputs.dry_run != 'true' }}
       shell: bash -el {0}
+      env:
+        NEXUS_URL: ${{ steps.config.outputs.nexus_url }}
+        NEXUS_CHANNEL: ${{ steps.config.outputs.channel }}
+        ARTIFACT_NAME: ${{ github.run_id }}-${{ inputs.name }}
+        # The lock workflow is dispatched at this action's own ref, so both come from the same version
+        LOCK_REF: ${{ github.action_ref }}
+        GH_PAT: ${{ inputs.gh_pat }}
       run: |
-        nexus_url="${{ steps.config.outputs.nexus_url }}"
-        nexus_token="${{ steps.config.outputs.nexus_token }}"
-        artifact_name="${{ github.run_id }}-${{ inputs.name }}"
-
-        echo "Acquiring conda index lock and uploading to Nexus: $nexus_url"
-        echo "Artifact: $artifact_name"
+        echo "Acquiring conda index lock and uploading to Nexus: $NEXUS_URL"
+        echo "Artifact: $ARTIFACT_NAME"
         echo ""
 
-        # Run the lock acquisition script
+        # Run the lock acquisition script; the lock workflow reads the Nexus credentials itself
         python3 "${{ github.action_path }}/scripts/acquire_lock.py" \
-            --nexus-url "$nexus_url" \
-            --nexus-token "$nexus_token" \
-            --artifact-name "$artifact_name" \
-            --caller-run-id "${{ github.run_id }}" \
-            --caller-repo "${{ github.repository }}" \
-            --gh-pat "${{ inputs.gh_pat }}"
+            --channel "$NEXUS_CHANNEL" \
+            --artifact-name "$ARTIFACT_NAME" \
+            --caller-run-id "$GITHUB_RUN_ID" \
+            --caller-repo "$GITHUB_REPOSITORY" \
+            --lock-ref "$LOCK_REF"
 
         echo ""
         echo "All packages and indexes uploaded to Nexus successfully!"

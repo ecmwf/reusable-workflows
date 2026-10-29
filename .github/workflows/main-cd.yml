@@ -90,8 +90,6 @@ jobs:
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
           test_nexus: ${{ needs.detect-release-type.outputs.is_prerelease }}
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
-          nexus_token: ${{ secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN) || '' }}
-          nexus_test_token: ${{ secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN) || '' }}
           conda_dir: ${{ matrix.conda_dir }}
           channels: ${{ matrix.channels }}
           conda_build_args: ${{ matrix.conda_build_args }}

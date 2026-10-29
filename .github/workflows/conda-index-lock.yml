@@ -3,15 +3,16 @@ run-name: Conda index ${{ inputs.package_artifact_name }} from ${{ inputs.caller
 
 on:
   workflow_dispatch:
+    # No credentials are passed in: dispatch inputs show up in the run's metadata.
+    # The Nexus credentials come from the org secrets for the chosen channel.
     inputs:
-      nexus_url:
-        description: 'Nexus repository URL'
+      channel:
+        description: 'Conda channel to index (selects the Nexus URL from cd-actions/conda/config/nexus.yml and the credentials)'
         required: true
-        type: string
-      nexus_token:
-        description: 'Nexus authentication token (user:password)'
-        required: true
-        type: string
+        type: choice
+        options:
+          - test
+          - production
       package_artifact_name:
         description: 'Name of the artifact containing conda packages'
         required: true
@@ -35,11 +36,36 @@ concurrency:
   cancel-in-progress: false
   queue: max
 
+permissions:
+  contents: read
+
 jobs:
   index:
     name: Index Conda Repository
     runs-on: [self-hosted, platform-builder]
     steps:
+      - name: Validate request
+        shell: bash
+        env:
+          CALLER_REPO: ${{ inputs.caller_repo }}
+          CALLER_RUN_ID: ${{ inputs.caller_run_id }}
+          ARTIFACT_NAME: ${{ inputs.package_artifact_name }}
+        run: |
+          if [[ ! "$CALLER_REPO" =~ ^ecmwf/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::caller_repo must be an ecmwf repository, got '$CALLER_REPO'"
+            exit 1
+          fi
+          if [[ ! "$CALLER_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::caller_run_id must be numeric, got '$CALLER_RUN_ID'"
+            exit 1
+          fi
+          # The conda action names the artifact <caller run id>-<build name>
+          if [[ ! "$ARTIFACT_NAME" =~ ^${CALLER_RUN_ID}-[A-Za-z0-9._+-]+$ ]]; then
+            echo "::error::package_artifact_name must be '${CALLER_RUN_ID}-<build name>', got '$ARTIFACT_NAME'"
+            exit 1
+          fi
+          echo "Request OK: $ARTIFACT_NAME from $CALLER_REPO run $CALLER_RUN_ID"
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -70,6 +96,7 @@ jobs:
           REPO: ${{ inputs.caller_repo }}
           RUN_ID: ${{ inputs.caller_run_id }}
           ARTIFACT_NAME: ${{ inputs.package_artifact_name }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           eval "$(conda shell.bash hook)"
           conda activate "$INDEX_ENV"
@@ -80,16 +107,43 @@ jobs:
           import os
           import sys
           import zipfile
+          from urllib.parse import quote
+
           import requests
 
           repo = os.environ["REPO"]
           run_id = os.environ["RUN_ID"]
           artifact_name = os.environ["ARTIFACT_NAME"]
           token = os.environ["GH_TOKEN"]
+          headers = {"Authorization": f"Bearer {token}"}
+
+          # Production indexes only packages built from a tag of the caller repo
+          if os.environ["CHANNEL"] == "production":
+              resp = requests.get(f"https://api.github.com/repos/{repo}/actions/runs/{run_id}", headers=headers)
+              resp.raise_for_status()
+              run = resp.json()
+              head_branch = run.get("head_branch") or ""
+              head_sha = run.get("head_sha") or ""
+              tag_resp = requests.get(
+                  f"https://api.github.com/repos/{repo}/git/ref/tags/{quote(head_branch, safe='')}", headers=headers
+              )
+              if not head_branch or tag_resp.status_code != 200:
+                  print(f"Production indexing needs a caller run on a tag; run {run_id} is on '{head_branch}'", file=sys.stderr)
+                  sys.exit(1)
+              # A branch can share a tag's name, so the run must also be on the tag's commit.
+              # Annotated tags point to a tag object, which points to the commit.
+              target = tag_resp.json()["object"]
+              if target["type"] == "tag":
+                  obj_resp = requests.get(f"https://api.github.com/repos/{repo}/git/tags/{target['sha']}", headers=headers)
+                  obj_resp.raise_for_status()
+                  target = obj_resp.json()["object"]
+              if target["sha"] != head_sha:
+                  print(f"Run {run_id} is on {head_sha}, but tag {head_branch} points to {target['sha']}", file=sys.stderr)
+                  sys.exit(1)
+              print(f"Caller run is on tag {head_branch} ({head_sha})")
 
           # Get artifact list
           url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts"
-          headers = {"Authorization": f"Bearer {token}"}
           resp = requests.get(url, headers=headers)
           resp.raise_for_status()
 
@@ -126,9 +180,26 @@ jobs:
       - name: Rebuild conda index
         shell: bash -el {0}
         env:
-          NEXUS_URL: ${{ inputs.nexus_url }}
-          NEXUS_TOKEN: ${{ inputs.nexus_token }}
+          CHANNEL: ${{ inputs.channel }}
+          # Selected by name, so a missing production secret never falls back to the test one
+          NEXUS_USER: ${{ secrets[inputs.channel == 'production' && 'NEXUS_CONDA_UPLOAD_USER' || 'NEXUS_TEST_CONDA_UPLOAD_USER'] }}
+          NEXUS_PASSWORD: ${{ secrets[inputs.channel == 'production' && 'NEXUS_CONDA_UPLOAD_TOKEN' || 'NEXUS_TEST_CONDA_UPLOAD_TOKEN'] }}
         run: |
+          if [ -z "$NEXUS_USER" ] || [ -z "$NEXUS_PASSWORD" ]; then
+            echo "::error::No Nexus conda upload credentials available for channel '$CHANNEL'"
+            exit 1
+          fi
+          NEXUS_TOKEN="$NEXUS_USER:$NEXUS_PASSWORD"
+          echo "::add-mask::$NEXUS_TOKEN"
+
+          # The URL comes from this ref's config, never from the caller
+          NEXUS_URL=$(awk -v channel="$CHANNEL" '$0 ~ "^" channel ":" { found = 1; next } found && $1 == "url:" { print $2; exit }' \
+            "$GITHUB_WORKSPACE/cd-actions/conda/config/nexus.yml")
+          if [ -z "$NEXUS_URL" ]; then
+            echo "::error::No Nexus URL for channel '$CHANNEL' in cd-actions/conda/config/nexus.yml"
+            exit 1
+          fi
+
           eval "$(conda shell.bash hook)"
           conda activate "$INDEX_ENV"
 

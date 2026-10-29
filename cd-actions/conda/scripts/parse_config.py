@@ -46,13 +46,12 @@ def main():
 
     # Determine Nexus URL based on prerelease flag
     test_nexus = _bool_env("INPUT_TEST_NEXUS")
+    # Only the channel name is passed on; conda-index-lock.yml holds the credentials
+    channel = "test" if test_nexus else "production"
+    nexus_url = nexus_config[channel]["url"]
     if test_nexus:
-        nexus_url = nexus_config["test"]["url"]
-        nexus_token = os.environ.get("INPUT_NEXUS_TEST_TOKEN", "")
         print("Using test Nexus repository for pre-release")
     else:
-        nexus_url = nexus_config["production"]["url"]
-        nexus_token = os.environ.get("INPUT_NEXUS_TOKEN", "")
         print("Using production Nexus repository for standard release")
 
     meta_file = f"{conda_dir}/meta.yaml"
@@ -71,7 +70,7 @@ def main():
         f.write(f"conda_build_args={conda_build_args}\n")
         f.write(f"platform={platform}\n")
         f.write(f"nexus_url={nexus_url}\n")
-        f.write(f"nexus_token={nexus_token}\n")
+        f.write(f"channel={channel}\n")
 
     print(f"Conda dir: {conda_dir}")
     print(f"Meta file: {meta_file}")

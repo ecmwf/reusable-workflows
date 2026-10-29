@@ -60,13 +60,14 @@ on:
         required: false
         type: string
         default: ''
+      # Kept so existing callers do not break. Ignored: conda-index-lock.yml reads the Nexus credentials itself.
       nexus_token:
-        description: 'Nexus upload token as user:token (defaults to NEXUS_CONDA_UPLOAD secrets)'
+        description: 'Deprecated and ignored - the conda-index-lock workflow uses the NEXUS_CONDA_UPLOAD org secrets'
         required: false
         type: string
         default: ''
       nexus_test_token:
-        description: 'Nexus test upload token as user:token (defaults to NEXUS_TEST_CONDA_UPLOAD secrets)'
+        description: 'Deprecated and ignored - the conda-index-lock workflow uses the NEXUS_TEST_CONDA_UPLOAD org secrets'
         required: false
         type: string
         default: ''
@@ -127,8 +128,6 @@ jobs:
           nightly: ${{ steps.detect-release-type.outputs.is_nightly }}
           test_nexus: ${{ inputs.test_nexus != '' && inputs.test_nexus || steps.detect-release-type.outputs.is_prerelease }}
           gh_pat: ${{ inputs.gh_pat || secrets.GH_REPO_READ_TOKEN }}
-          nexus_token: ${{ inputs.nexus_token || (secrets.NEXUS_CONDA_UPLOAD_USER && secrets.NEXUS_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_CONDA_UPLOAD_USER, secrets.NEXUS_CONDA_UPLOAD_TOKEN)) || '' }}
-          nexus_test_token: ${{ inputs.nexus_test_token || (secrets.NEXUS_TEST_CONDA_UPLOAD_USER && secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN && format('{0}:{1}', secrets.NEXUS_TEST_CONDA_UPLOAD_USER, secrets.NEXUS_TEST_CONDA_UPLOAD_TOKEN)) || '' }}
           conda_dir: ${{ inputs.conda_dir }}
           channels: ${{ inputs.channels }}
           conda_build_args: ${{ inputs.conda_build_args }}
