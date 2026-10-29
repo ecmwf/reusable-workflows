@@ -37,6 +37,15 @@ jobs:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
+      - name: Check CD kill switch
+        if: ${{ vars.CD_KILL_SWITCH == 'on' }}
+        shell: bash
+        env:
+          REASON: ${{ vars.CD_KILL_SWITCH_REASON }}
+        run: |
+          echo "::error::CD is disabled by the CD_KILL_SWITCH variable: ${REASON:-no reason given}"
+          exit 1
+
       - name: Set env variables from input
         if: inputs.env_vars != ''
         env:

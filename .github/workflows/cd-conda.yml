@@ -86,6 +86,15 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
+      - name: Check CD kill switch
+        if: ${{ vars.CD_KILL_SWITCH == 'on' }}
+        shell: bash
+        env:
+          REASON: ${{ vars.CD_KILL_SWITCH_REASON }}
+        run: |
+          echo "::error::CD is disabled by the CD_KILL_SWITCH variable: ${REASON:-no reason given}"
+          exit 1
+
       - name: Resolve Conda platform matrix
         id: plan
         uses: ecmwf/reusable-workflows/cd-actions/resolve-conda-platforms@v2

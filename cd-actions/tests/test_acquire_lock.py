@@ -161,5 +161,5 @@ def test_conda_index_lock_takes_no_credentials_as_inputs():
     assert inputs["channel"]["options"] == ["test", "production"]
     assert workflow["permissions"] == {"contents": "read"}
     steps = workflow["jobs"]["index"]["steps"]
-    assert steps[0]["name"] == "Validate request"
+    assert [step["name"] for step in steps[:2]] == ["Check CD kill switch", "Validate request"]
     assert any("::add-mask::" in (step.get("run") or "") for step in steps)
