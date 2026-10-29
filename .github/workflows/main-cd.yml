@@ -102,8 +102,9 @@ jobs:
           name: ${{ matrix.name }}
           ref_name: ${{ needs.detect-release-type.outputs.ref_name }}
           dry_run: ${{ needs.detect-release-type.outputs.is_dry_run }}
-          pypi_token: ${{ secrets.PYPI_API_TOKEN }}
-          pypi_test_token: ${{ secrets.PYPI_TEST_API_TOKEN }}
+          # Dry runs never upload, so they never get upload credentials
+          pypi_token: ${{ needs.detect-release-type.outputs.is_dry_run == 'false' && secrets.PYPI_API_TOKEN || '' }}
+          pypi_test_token: ${{ needs.detect-release-type.outputs.is_dry_run == 'false' && secrets.PYPI_TEST_API_TOKEN || '' }}
           working_directory: ${{ matrix.working_directory }}
           buildargs: ${{ matrix.buildargs }}
           env_vars: ${{ matrix.env_vars }}
@@ -214,8 +215,9 @@ jobs:
           save_cache: ${{ matrix.save_cache }}
           recreate_cache: ${{ matrix.recreate_cache }}
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
-          nexus_token: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_token_secret_prod != '') && secrets[matrix.nexus_token_secret_prod] || secrets[matrix.nexus_token_secret_test] }}
-          nexus_url: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_url_secret_prod != '') && secrets[matrix.nexus_url_secret_prod] || secrets[matrix.nexus_url_secret_test] }}
+          # Dry runs never upload, so they never get upload credentials
+          nexus_token: ${{ needs.detect-release-type.outputs.is_dry_run == 'false' && ((needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_token_secret_prod != '') && secrets[matrix.nexus_token_secret_prod] || secrets[matrix.nexus_token_secret_test]) || '' }}
+          nexus_url: ${{ needs.detect-release-type.outputs.is_dry_run == 'false' && ((needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_url_secret_prod != '') && secrets[matrix.nexus_url_secret_prod] || secrets[matrix.nexus_url_secret_test]) || '' }}
 
   hpc-sync-tag:
     name: ${{ matrix.name || 'Sync and tag HPC module' }}
