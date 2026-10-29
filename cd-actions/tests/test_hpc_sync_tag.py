@@ -117,6 +117,23 @@ class TestResolveSyncTagOptions:
         with pytest.raises(SystemExit):
             _options(module_name="bad name")
 
+    @pytest.mark.parametrize(
+        "override",
+        [
+            {"ref_name": "release-$(touch${IFS}/tmp/cd-injected)"},
+            {"module_name": "eckit`id`"},
+            {"build_name": 'eckit"; id; "'},
+        ],
+    )
+    def test_shell_unsafe_names_fail_even_without_tagging(self, override):
+        with pytest.raises(SystemExit):
+            _options(dry_run=True, **override)
+
+    def test_branch_ref_with_slash_is_allowed_for_dry_runs(self):
+        options = _options(dry_run=True, ref_name="feature/cd-v3", build_name="eckit gnu 8.5")
+
+        assert options["do_tag"] is False
+
 
 class TestValidateModuleTagName:
     def test_empty_defaults_to_new(self):

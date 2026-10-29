@@ -83,6 +83,17 @@ def resolve_sync_tag_options(
     build_name="",
     lock=None,
 ):
+    # These values are rendered into the generated shell job, so reject anything that could be
+    # interpreted by the shell, whatever the release type.
+    for label, value, pattern in (
+        ("ref_name", ref_name, r"^[A-Za-z0-9._+/-]+$"),
+        ("module_name", module_name, r"^[A-Za-z0-9._+/-]+$"),
+        ("build_name", build_name, r"^[A-Za-z0-9._+/ -]*$"),
+    ):
+        if not re.match(pattern, value):
+            print(f"::error::{label} '{value}' contains characters that are not allowed. Allowed: {pattern}")
+            sys.exit(1)
+
     sync_clusters_map = hpc_config["sync_clusters"]
     sync_clusters = sync_clusters_map.get(site, sync_clusters_map.get("aa-batch", []))
     do_sync = not dry_run and sync_module and site != "ag-batch" and bool(sync_clusters)
