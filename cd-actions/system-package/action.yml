@@ -172,8 +172,10 @@ runs:
     - name: Derive build configuration
       id: config
       shell: bash
+      env:
+        INPUT_OS: ${{ inputs.os }}
       run: |
-        os="${{ inputs.os }}"
+        os="$INPUT_OS"
         case "$os" in
           debian-*|ubuntu-*)
             echo "cpack_generator=DEB" >> "$GITHUB_OUTPUT"
@@ -192,6 +194,21 @@ runs:
     - name: Generate CPack overrides
       id: overrides
       shell: python3 {0}
+      env:
+        CPACK_GENERATOR: ${{ steps.config.outputs.cpack_generator }}
+        INPUT_PACKAGE_DEPS: ${{ inputs.package_deps }}
+        INPUT_DESCRIPTION: ${{ inputs.description }}
+        REPO_DESCRIPTION: ${{ github.event.repository.description }}
+        INPUT_LICENSE: ${{ inputs.license }}
+        REPO_LICENSE: ${{ github.event.repository.license.spdx_id }}
+        INPUT_MAINTAINER: ${{ inputs.maintainer }}
+        INPUT_VENDOR: ${{ inputs.vendor }}
+        INPUT_HOMEPAGE_URL: ${{ inputs.homepage_url }}
+        INPUT_INSTALL_PREFIX: ${{ inputs.install_prefix }}
+        INPUT_DEB_SECTION: ${{ inputs.deb_section }}
+        INPUT_DEB_PRIORITY: ${{ inputs.deb_priority }}
+        INPUT_RPM_GROUP: ${{ inputs.rpm_group }}
+        INPUT_NIGHTLY: ${{ inputs.nightly }}
       run: |
         import os
         import sys
@@ -200,30 +217,33 @@ runs:
             """Escape backslashes, double-quotes, and semicolons for CMake strings."""
             return s.replace('\\', '\\\\').replace('"', '\\"').replace(';', '\\;')
 
-        cpack_generator = '${{ steps.config.outputs.cpack_generator }}'
-        package_deps = '''${{ inputs.package_deps }}'''.strip()
-        description = '''${{ inputs.description }}'''.strip()
+        def env(name):
+            return os.environ.get(name, '').strip()
+
+        cpack_generator = env('CPACK_GENERATOR')
+        package_deps = env('INPUT_PACKAGE_DEPS')
+        description = env('INPUT_DESCRIPTION')
 
         if not description:
-            description = '''${{ github.event.repository.description }}'''.strip()
+            description = env('REPO_DESCRIPTION')
 
-        license = '''${{ inputs.license }}'''.strip()
+        license = env('INPUT_LICENSE')
         if not license:
-            license = '''${{ github.event.repository.license.spdx_id }}'''.strip()
+            license = env('REPO_LICENSE')
         if license == 'NOASSERTION':
             license = ''
 
-        maintainer = '''${{ inputs.maintainer }}'''.strip()
-        vendor = '''${{ inputs.vendor }}'''.strip()
+        maintainer = env('INPUT_MAINTAINER')
+        vendor = env('INPUT_VENDOR')
 
-        homepage_url = '''${{ inputs.homepage_url }}'''.strip()
+        homepage_url = env('INPUT_HOMEPAGE_URL')
         if not homepage_url:
-            homepage_url = 'https://github.com/${{ github.repository }}'
+            homepage_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
 
-        install_prefix = '''${{ inputs.install_prefix }}'''.strip()
-        deb_section = '''${{ inputs.deb_section }}'''.strip()
-        deb_priority = '''${{ inputs.deb_priority }}'''.strip()
-        rpm_group = '''${{ inputs.rpm_group }}'''.strip()
+        install_prefix = env('INPUT_INSTALL_PREFIX')
+        deb_section = env('INPUT_DEB_SECTION')
+        deb_priority = env('INPUT_DEB_PRIORITY')
+        rpm_group = env('INPUT_RPM_GROUP')
 
         if cpack_generator == 'DEB':
             deps_var = 'CPACK_DEBIAN_PACKAGE_DEPENDS'
@@ -239,7 +259,7 @@ runs:
             with open('VERSION') as f:
                 version = f.read().strip()
 
-        if '${{ inputs.nightly }}' == 'true':
+        if env('INPUT_NIGHTLY') == 'true':
             if not version:
                 print("::error::Nightly builds need a VERSION file")
                 sys.exit(1)
@@ -325,12 +345,16 @@ runs:
     - name: Prepare cmake_options
       id: cmake-opts
       shell: bash
+      env:
+        OVERRIDES_FILE: ${{ steps.overrides.outputs.overrides_file }}
+        BUILD_TYPE: ${{ inputs.build_type }}
+        INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
       run: |
-        cmake_options="-C ${{ steps.overrides.outputs.overrides_file }}"
-        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}"
+        cmake_options="-C $OVERRIDES_FILE"
+        cmake_options="$cmake_options -DCMAKE_BUILD_TYPE=$BUILD_TYPE"
 
         # Convert line-separated options to space-separated
-        user_opts=$(echo "${{ inputs.cmake_options }}" | tr '\n' ' ' | xargs)
+        user_opts=$(echo "$INPUT_CMAKE_OPTIONS" | tr '\n' ' ' | xargs)
         if [ -n "$user_opts" ]; then
           cmake_options="$cmake_options $user_opts"
         fi
@@ -341,17 +365,21 @@ runs:
     - name: Set environment variables
       if: ${{ inputs.env != '' }}
       shell: bash
-      run: echo "${{ inputs.env }}" >> "$GITHUB_ENV"
+      env:
+        ENV_LINES: ${{ inputs.env }}
+      run: python3 "$GITHUB_ACTION_PATH/../lib/append_env.py"
 
     - name: Check version number
       if: ${{ inputs.skip_version_check != 'true' && inputs.dry_run != 'true' && inputs.nightly != 'true' }}
       shell: python3 {0}
+      env:
+        INPUT_REF_NAME: ${{ inputs.ref_name }}
       run: |
         import os
         import re
         import sys
 
-        tag = "${{ inputs.ref_name }}"
+        tag = os.environ["INPUT_REF_NAME"]
 
         def check_version():
             file_name = "VERSION"
@@ -419,21 +447,26 @@ runs:
 
     - name: Verify package
       shell: bash
+      env:
+        PACKAGE_PATH: ${{ steps.build.outputs.package_path }}
       run: |
-        if [ -z "${{ steps.build.outputs.package_path }}" ] || [ ! -f "${{ steps.build.outputs.package_path }}" ]; then
+        if [ -z "$PACKAGE_PATH" ] || [ ! -f "$PACKAGE_PATH" ]; then
           echo "::error::Built package not found!"
           exit 1
         fi
-        echo "Package built successfully: ${{ steps.build.outputs.package_path }}"
+        echo "Package built successfully: $PACKAGE_PATH"
 
     - name: Determine Docker image for install test
       id: docker-image
       if: ${{ inputs.install_test == 'true' }}
       shell: python3 {0}
+      env:
+        INPUT_OS: ${{ inputs.os }}
+        INSTALL_TEST_OS_IMAGE: ${{ inputs.install_test_os_image }}
       run: |
         import os
 
-        os_id = '${{ inputs.os }}'
+        os_id = os.environ.get('INPUT_OS', '')
 
         # Map OS names that differ from their Docker Hub image name.
         image_name_map = {
@@ -446,7 +479,8 @@ runs:
         is_library = '/' not in image_name
         docker_ref = f"{image_name}:{version}" if version else image_name
 
-        docker_image = "${{ inputs.install_test_os_image }}" if "${{ inputs.install_test_os_image }}" else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if is_library else ''}{docker_ref}"
+        install_test_os_image = os.environ.get('INSTALL_TEST_OS_IMAGE', '')
+        docker_image = install_test_os_image if install_test_os_image else f"eccr.ecmwf.int/docker-hub-proxy/{'library/' if is_library else ''}{docker_ref}"
 
         if docker_image:
             print(f"Mapped OS '{os_id}' to Docker image '{docker_image}'")
@@ -459,15 +493,21 @@ runs:
     - name: Test package installation in Docker
       if: ${{ inputs.install_test == 'true' && steps.docker-image.outputs.docker_image != '' }}
       shell: bash
+      env:
+        PACKAGE_PATH: ${{ steps.build.outputs.package_path }}
+        DOCKER_IMAGE: ${{ steps.docker-image.outputs.docker_image }}
+        CPACK_GENERATOR: ${{ steps.config.outputs.cpack_generator }}
+        INPUT_OS: ${{ inputs.os }}
+        INSTALL_TEST_COMMAND: ${{ inputs.install_test_command }}
       run: |
         set -euo pipefail
 
-        package_path="${{ steps.build.outputs.package_path }}"
+        package_path="$PACKAGE_PATH"
         package_name="$(basename "$package_path")"
-        docker_image="${{ steps.docker-image.outputs.docker_image }}"
-        cpack_generator="${{ steps.config.outputs.cpack_generator }}"
-        os_id="${{ inputs.os }}"
-        install_test_command="${{ inputs.install_test_command }}"
+        docker_image="$DOCKER_IMAGE"
+        cpack_generator="$CPACK_GENERATOR"
+        os_id="$INPUT_OS"
+        install_test_command="$INSTALL_TEST_COMMAND"
 
         echo "Testing package installation in Docker container"
         echo "  Image: $docker_image"
@@ -511,20 +551,25 @@ runs:
     - name: Upload to Nexus
       if: ${{ inputs.dry_run != 'true' }}
       shell: bash
+      env:
+        NEXUS_TOKEN: ${{ inputs.nexus_token }}
+        NEXUS_URL: ${{ inputs.nexus_url }}
+        PACKAGE_PATH: ${{ steps.build.outputs.package_path }}
+        UPLOAD_METHOD: ${{ steps.config.outputs.upload_method }}
       run: |
-        token="${{ inputs.nexus_token }}"
-        url="${{ inputs.nexus_url }}"
+        token="$NEXUS_TOKEN"
+        url="$NEXUS_URL"
 
         if [ -z "$token" ] || [ -z "$url" ]; then
           echo "::warning::No Nexus token or URL provided, skipping upload"
           exit 0
         fi
 
-        package_path="${{ steps.build.outputs.package_path }}"
+        package_path="$PACKAGE_PATH"
 
-        if [ "${{ steps.config.outputs.upload_method }}" == "multipart" ]; then
+        if [ "$UPLOAD_METHOD" == "multipart" ]; then
           response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${package_path}" "$url")
-        elif [ "${{ steps.config.outputs.upload_method }}" == "put" ]; then
+        elif [ "$UPLOAD_METHOD" == "put" ]; then
           file_name=$(basename "$package_path")
           response=$(curl -w "%{http_code}" --user "$token" --upload-file "${package_path}" "${url}/${file_name}")
         fi

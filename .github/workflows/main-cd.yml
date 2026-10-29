@@ -258,12 +258,12 @@ jobs:
 
       - name: Prepare release configuration
         id: prepare-config
+        env:
+          CONFIG: ${{ needs.load-config.outputs.config }}
+          IS_PRERELEASE: ${{ needs.detect-release-type.outputs.is_prerelease }}
         run: |
-          config='${{ needs.load-config.outputs.config }}'
-          is_prerelease='${{ needs.detect-release-type.outputs.is_prerelease }}'
-
           # Inject prerelease flag into config
-          updated_config=$(echo "$config" | yq eval ".release.config.prerelease = ($is_prerelease == \"true\")" -)
+          updated_config=$(echo "$CONFIG" | yq eval '.release.config.prerelease = (strenv(IS_PRERELEASE) == "true")' -)
 
           echo "config<<EOF" >> $GITHUB_OUTPUT
           echo "$updated_config" >> $GITHUB_OUTPUT

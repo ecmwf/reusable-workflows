@@ -45,8 +45,9 @@ runs:
     - name: Set environment variables from config
       if: inputs.env_vars != ''
       shell: bash
-      run: |
-        echo '${{ inputs.env_vars }}' >> $GITHUB_ENV
+      env:
+        ENV_LINES: ${{ inputs.env_vars }}
+      run: python3 "$GITHUB_ACTION_PATH/../lib/append_env.py"
 
     - name: Set nightly version
       if: ${{ inputs.nightly == 'true' }}
@@ -65,10 +66,13 @@ runs:
     - name: Build package with uv
       shell: bash
       working-directory: ${{ inputs.working_directory }}
+      env:
+        BUILDARGS: ${{ inputs.buildargs }}
       run: |
         echo "Building package with uv..."
-        echo "Build args: ${{ inputs.buildargs }}"
-        uv build ${{ inputs.buildargs }}
+        echo "Build args: $BUILDARGS"
+        mapfile -d '' -t buildargs < <(printf '%s' "$BUILDARGS" | xargs -r printf '%s\0')
+        uv build "${buildargs[@]}"
         echo ""
         echo "Built packages:"
         ls -lh dist/
@@ -89,10 +93,11 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       env:
         UV_PUBLISH_TOKEN: ${{ inputs.pypi_test_token }}
+        NIGHTLY: ${{ inputs.nightly }}
       run: |
         echo "Publishing to TestPyPI..."
         files=(dist/*)
-        if [ "${{ inputs.nightly }}" == "true" ]; then
+        if [ "$NIGHTLY" == "true" ]; then
           # Re-runs rebuild the same version, skip files already uploaded
           published=""
           for release in $(for wheel in dist/*.whl; do basename "$wheel" | cut -d- -f1,2; done | sort -u); do

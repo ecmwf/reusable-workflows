@@ -27,25 +27,29 @@ runs:
     - name: Check configuration file exists
       id: check-config
       shell: bash
+      env:
+        CONFIG_FILE: ${{ inputs.config_file }}
       run: |
-        if [[ ! -f "${{ inputs.config_file }}" ]]; then
-          echo "Configuration file ${{ inputs.config_file }} not found"
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+          echo "Configuration file $CONFIG_FILE not found"
           echo "Looking for alternative locations..."
           if [[ -f ".github/workflows/cd-config.yml" ]]; then
             echo "config_file=.github/workflows/cd-config.yml" >> $GITHUB_OUTPUT
           else
-            echo "No configuration file found. Please create ${{ inputs.config_file }}"
+            echo "No configuration file found. Please create $CONFIG_FILE"
             exit 1
           fi
         else
-          echo "config_file=${{ inputs.config_file }}" >> $GITHUB_OUTPUT
+          echo "config_file=$CONFIG_FILE" >> $GITHUB_OUTPUT
         fi
 
     - name: Load configuration
       id: load
       shell: bash
+      env:
+        CONFIG_FILE: ${{ steps.check-config.outputs.config_file }}
       run: |
-        config=$(cat "${{ steps.check-config.outputs.config_file }}")
+        config=$(cat "$CONFIG_FILE")
         echo "Raw configuration loaded"
         # Validate YAML syntax
         echo "$config" | yq > /dev/null
@@ -63,6 +67,8 @@ runs:
     - name: Parse release configuration
       id: parse-release
       shell: bash
+      env:
+        STEP_LOAD_CONFIG: ${{ steps.load.outputs.config }}
       run: |
-        enabled=$(echo '${{ steps.load.outputs.config }}' | yq '.release.enabled // false')
+        enabled=$(echo "$STEP_LOAD_CONFIG" | yq '.release.enabled // false')
         echo "enabled=$enabled" >> $GITHUB_OUTPUT

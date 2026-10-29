@@ -28,12 +28,15 @@ jobs:
       - name: Test tag name pattern
         if: ${{ ! inputs.skip_checks }}
         shell: python
+        env:
+          TAG_PATTERN: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
         run: |
+          import os
           import re
           import sys
 
-          tag_pattern = r"${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}"
-          ref = "${{ github.ref_name }}"
+          tag_pattern = os.environ.get("TAG_PATTERN", "")
+          ref = os.environ["GITHUB_REF_NAME"]
 
           if not tag_pattern:
             sys.exit(0)
@@ -44,8 +47,10 @@ jobs:
 
       - name: Test branch name pattern
         if: ${{ ! inputs.skip_checks && vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' }}
+        env:
+          BRANCH_PATTERN: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}
         run: |
-          git branch --all --list --format "%(refname:lstrip=3)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          git branch --all --list --format "%(refname:lstrip=3)" --contains "$GITHUB_REF_NAME" | grep -E "$BRANCH_PATTERN"
 
       - name: Setup Matrix
         id: matrix
@@ -89,6 +94,9 @@ jobs:
               compiler_cxx: icpc
               compiler_fc: ifort
               compiler_modules: prgenv/intel,intel/2021.4.0
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
+          INPUT_CONFIG_PATH: ${{ inputs.config_path }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           import json
           import os
@@ -96,9 +104,9 @@ jobs:
           import requests
           import yaml
 
-          input_platforms = """${{ inputs.platforms }}""".splitlines()
+          input_platforms = os.getenv("INPUT_PLATFORMS", "").splitlines()
           available_matrix = yaml.safe_load(os.getenv("MATRIX", ""))
-          input_config_path = "${{ inputs.config_path }}"
+          input_config_path = os.getenv("INPUT_CONFIG_PATH", "")
 
           if not input_platforms:
               print("::error::platforms input not provided.")
@@ -123,10 +131,10 @@ jobs:
               print(json.dumps(matrix, separators=(",", ":")), file=f)
               print("EOF", file=f)
 
-          owner_repo = "${{ github.repository }}"
+          owner_repo = os.environ["GITHUB_REPOSITORY"]
           owner, repo = owner_repo.split("/")
-          ref = "${{ github.sha }}"
-          token = "${{ github.token }}"
+          ref = os.environ["GITHUB_SHA"]
+          token = os.environ["GH_TOKEN"]
           url = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{input_config_path}"
           response = requests.get(url, headers={"Authorization": f"token {token}"})
 

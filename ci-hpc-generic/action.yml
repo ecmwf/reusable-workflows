@@ -36,8 +36,13 @@ runs:
         TEMPLATE_INPUT: ${{ inputs.template }}
         SBATCH_INPUT: ${{ inputs.sbatch_options }}
         TEMPLATE_DATA: ${{ inputs.template_data }}
+        INPUT_PATH: ${{ inputs.path }}
+        TROIKA_USER: ${{ inputs.troika_user }}
+        INPUT_SITE: ${{ inputs.site }}
+        INPUT_WORKDIR: ${{ inputs.workdir }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
       run: |
-        cd ${{ inputs.path }}
-        poetry run python -m build_package_hpc generic --troika-user=${{ inputs.troika_user }} --site=${{ inputs.site }} \
-        --workdir=${{ inputs.workdir }} \
-        --output-dir=${{ inputs.output_dir }}
+        cd "${INPUT_PATH/#\~/$HOME}"
+        poetry run python -m build_package_hpc generic --troika-user="$TROIKA_USER" --site="$INPUT_SITE" \
+        --workdir="$INPUT_WORKDIR" \
+        --output-dir="$INPUT_OUTPUT_DIR"

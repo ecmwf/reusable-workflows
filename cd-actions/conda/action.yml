@@ -73,8 +73,10 @@ runs:
     - name: Validate configuration files
       id: validate
       shell: bash -el {0}
+      env:
+        STEP_META_FILE: ${{ steps.config.outputs.meta_file }}
       run: |
-        meta_file="${{ steps.config.outputs.meta_file }}"
+        meta_file="$STEP_META_FILE"
 
         if [[ ! -f "$meta_file" ]]; then
             echo "Meta file not found: $meta_file"
@@ -105,8 +107,10 @@ runs:
 
     - name: Create conda environment
       shell: bash -el {0}
+      env:
+        INPUT_PLATFORM: ${{ inputs.platform }}
       run: |
-        safe_platform="$(echo '${{ inputs.platform }}' | tr -c 'A-Za-z0-9_.-' '-')"
+        safe_platform="$(echo "$INPUT_PLATFORM" | tr -c 'A-Za-z0-9_.-' '-')"
         BUILD_ENV="build-env-${GITHUB_RUN_ID}-${safe_platform}"
         echo "BUILD_ENV=$BUILD_ENV" >> "$GITHUB_ENV"
         mamba env create -n "$BUILD_ENV"
@@ -130,14 +134,20 @@ runs:
 
     - name: Build conda package
       shell: bash -el {0}
+      env:
+        STEP_META_DIR: ${{ steps.validate.outputs.meta_dir }}
+        STEP_CHANNELS: ${{ steps.config.outputs.channels }}
+        STEP_OUTPUT_FOLDER: ${{ steps.config.outputs.output_folder }}
+        STEP_BUILD_ARGS: ${{ steps.config.outputs.conda_build_args }}
+        STEP_PLATFORM: ${{ steps.config.outputs.platform }}
       run: |
         eval "$(conda shell.bash hook)"
         conda activate "$BUILD_ENV"
-        meta_dir="${{ steps.validate.outputs.meta_dir }}"
-        channels="${{ steps.config.outputs.channels }}"
-        output_folder="${{ steps.config.outputs.output_folder }}"
-        build_args="${{ steps.config.outputs.conda_build_args }}"
-        platform="${{ steps.config.outputs.platform }}"
+        meta_dir="$STEP_META_DIR"
+        channels="$STEP_CHANNELS"
+        output_folder="$STEP_OUTPUT_FOLDER"
+        build_args="$STEP_BUILD_ARGS"
+        platform="$STEP_PLATFORM"
         variant_file="$RUNNER_TEMP/conda-variant-${platform}.yml"
 
         cat > "$variant_file" <<EOF
@@ -163,16 +173,22 @@ runs:
 
     - name: List built packages
       shell: bash -el {0}
+      env:
+        STEP_OUTPUT_FOLDER: ${{ steps.config.outputs.output_folder }}
       run: |
-        output_folder="${{ steps.config.outputs.output_folder }}"
+        output_folder="$STEP_OUTPUT_FOLDER"
         echo "Built packages:"
         find "$output_folder" \( -name "*.tar.bz2" -o -name "*.conda" \) -type f | sort
 
     - name: Verify artifacts
       shell: bash -el {0}
+      env:
+        STEP_OUTPUT_FOLDER: ${{ steps.config.outputs.output_folder }}
+        STEP_PLATFORM: ${{ steps.config.outputs.platform }}
+        STEP_NIGHTLY: ${{ inputs.nightly }}
       run: |
-        output_folder="${{ steps.config.outputs.output_folder }}"
-        platform="${{ steps.config.outputs.platform }}"
+        output_folder="$STEP_OUTPUT_FOLDER"
+        platform="$STEP_PLATFORM"
         echo "Checking for conda packages in: $output_folder"
 
         packages=()
@@ -194,7 +210,7 @@ runs:
             fi
             echo "Verified package subdir: $package -> $subdir"
 
-            if [[ "${{ inputs.nightly }}" == "true" ]]; then
+            if [[ "$STEP_NIGHTLY" == "true" ]]; then
                 pkg_stem="$(basename "$package")"
                 pkg_stem="${pkg_stem%.conda}"
                 pkg_stem="${pkg_stem%.tar.bz2}"
@@ -244,9 +260,13 @@ runs:
     - name: Test package installation from Nexus
       if: ${{ inputs.dry_run != 'true' && inputs.skip_installation_test != 'true' }}
       shell: bash -el {0}
+      env:
+        STEP_OUTPUT_FOLDER: ${{ steps.config.outputs.output_folder }}
+        NEXUS_URL: ${{ steps.config.outputs.nexus_url }}
+        STEP_CHANNELS: ${{ steps.config.outputs.channels }}
       run: |
-        output_folder="${{ steps.config.outputs.output_folder }}"
-        nexus_url="${{ steps.config.outputs.nexus_url }}"
+        output_folder="$STEP_OUTPUT_FOLDER"
+        nexus_url="$NEXUS_URL"
 
         echo "Testing package installation from Nexus..."
 
@@ -275,7 +295,7 @@ runs:
             eval "$(conda shell.bash hook)"
 
             # Create environment and install the EXACT version from Nexus
-            channels="${{ steps.config.outputs.channels }}"
+            channels="$STEP_CHANNELS"
             if mamba create -n "$test_env" -c "$nexus_url" $channels "${pkg_base}=${pkg_version}" -y; then
                 echo "Successfully installed ${pkg_base}=${pkg_version} from Nexus"
 

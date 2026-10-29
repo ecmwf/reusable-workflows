@@ -15,6 +15,8 @@ jobs:
       - name: run build steps
         id: setup
         shell: python
+        env:
+          CONFIG_PATH: ${{ inputs.config }}
         run: |
           import json
           import os
@@ -22,7 +24,7 @@ jobs:
           import sys
           import yaml
 
-          config_path = "${{ inputs.config }}"
+          config_path = os.environ["CONFIG_PATH"]
           with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 

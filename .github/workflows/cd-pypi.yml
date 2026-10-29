@@ -39,9 +39,19 @@ jobs:
     steps:
       - name: Set env variables from input
         if: inputs.env_vars != ''
+        env:
+          ENV_VARS: ${{ inputs.env_vars }}
         run: |
-          for key in $(echo '${{ inputs.env_vars }}' | jq -r 'keys[]'); do
-            value=$(echo '${{ inputs.env_vars }}' | jq -r ".\"$key\"")
+          for key in $(echo "$ENV_VARS" | jq -r 'keys[]'); do
+            if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || [[ "${key^^}" =~ ^(PATH|BASH_ENV|ENV|NODE_OPTIONS|LD_.*|GITHUB_.*|RUNNER_.*|ACTIONS_.*)$ ]]; then
+              echo "::error::Refusing to set environment variable '$key'"
+              exit 1
+            fi
+            value=$(echo "$ENV_VARS" | jq -r --arg key "$key" '.[$key]')
+            if [[ "$value" == *$'\n'* ]]; then
+              echo "::error::Value of environment variable '$key' contains a newline"
+              exit 1
+            fi
             echo "$key=$value" >> $GITHUB_ENV
           done
         shell: bash
@@ -53,12 +63,15 @@ jobs:
       - name: Test tag name pattern
         if: ${{ !inputs.testpypi }}
         shell: python
+        env:
+          TAG_PATTERN: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
         run: |
+          import os
           import re
           import sys
 
-          tag_pattern = r"${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}"
-          ref = "${{ github.ref_name }}"
+          tag_pattern = os.environ.get("TAG_PATTERN", "")
+          ref = os.environ["GITHUB_REF_NAME"]
 
           if not tag_pattern:
             sys.exit(0)
@@ -69,9 +82,11 @@ jobs:
 
       - name: Test branch name pattern
         if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' && !inputs.testpypi }}
+        env:
+          BRANCH_PATTERN: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}
         run: |
-          echo "Checking that this release is being made from a main/master branch ( ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }} ) - will fail if not"
-          git branch --all --list --format "%(refname:lstrip=3)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          echo "Checking that this release is being made from a main/master branch ( $BRANCH_PATTERN ) - will fail if not"
+          git branch --all --list --format "%(refname:lstrip=3)" --contains "$GITHUB_REF_NAME" | grep -E "$BRANCH_PATTERN"
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -84,6 +99,8 @@ jobs:
           pip install setuptools wheel twine build
 
       - name: Check version
+        env:
+          TESTPYPI: ${{ inputs.testpypi }}
         run: |
           if [ -f "setup.py" ]; then
             if [ -f "pyproject.toml" ] ; then
@@ -94,8 +111,8 @@ jobs:
               fi
             fi
             version=$(python setup.py --version)
-            release=${{ github.ref_name }}
-            if [ "${{ inputs.testpypi }}" != "true" ] ; then test "$release" == "$version"; fi
+            release="$GITHUB_REF_NAME"
+            if [ "$TESTPYPI" != "true" ] ; then test "$release" == "$version"; fi
           fi
 
       - name: Build and publish to pypi
@@ -103,8 +120,10 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+          BUILDARGS: ${{ inputs.buildargs }}
         run: |
-          python -m build ${{ inputs.buildargs }}
+          mapfile -d '' -t buildargs < <(printf '%s' "$BUILDARGS" | xargs -r printf '%s\0')
+          python -m build "${buildargs[@]}"
           twine check dist/*
           twine upload dist/*
 
@@ -113,8 +132,10 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN }}
+          BUILDARGS: ${{ inputs.buildargs }}
         run: |
-          python -m build ${{ inputs.buildargs }}
+          mapfile -d '' -t buildargs < <(printf '%s' "$BUILDARGS" | xargs -r printf '%s\0')
+          python -m build "${buildargs[@]}"
           twine check dist/*
           # HINT: if your upload fails here due to "unsupported local version",
           # put `local_scheme = "no-local-version"` pyproject.toml's

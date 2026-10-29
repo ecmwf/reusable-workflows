@@ -70,12 +70,15 @@ jobs:
       - name: Test tag name pattern
         if: ${{ ! inputs.skip_checks }}
         shell: python
+        env:
+          TAG_PATTERN: ${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}
         run: |
+          import os
           import re
           import sys
 
-          tag_pattern = r"${{ vars.TAG_REGEX_FOR_DEPLOYMENT }}"
-          ref = "${{ github.ref_name }}"
+          tag_pattern = os.environ.get("TAG_PATTERN", "")
+          ref = os.environ["GITHUB_REF_NAME"]
 
           if not tag_pattern:
             sys.exit(0)
@@ -86,8 +89,10 @@ jobs:
 
       - name: Test branch name pattern
         if: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT != '' && (! inputs.skip_checks) }}
+        env:
+          BRANCH_PATTERN: ${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}
         run: |
-          git branch --all --list --format "%(refname:lstrip=3)" --contains "${{ github.ref_name }}" | grep -E "${{ vars.BRANCH_REGEX_FOR_DEPLOYMENT }}"
+          git branch --all --list --format "%(refname:lstrip=3)" --contains "$GITHUB_REF_NAME" | grep -E "$BRANCH_PATTERN"
 
   setup:
     name: setup
@@ -98,6 +103,10 @@ jobs:
       - name: Set Matrix
         id: set-matrix
         shell: bash -eux {0}
+        env:
+          CPACK_OPTIONS_DEB: ${{ inputs.cpack_options_deb }}
+          CPACK_OPTIONS_RPM: ${{ inputs.cpack_options_rpm }}
+          RESTRICT_MATRIX_JOBS: ${{ inputs.restrict_matrix_jobs }}
         run: |
           MATRIX=$(cat << 'EOS'
           name:
@@ -117,7 +126,7 @@ jobs:
               cpack_options: >
                 -D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int 
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
-                -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
+                -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
               upload_url: NEXUS_TEST_REPO_URL_DEBIAN_11
             - name: gnu@debian-12
@@ -131,7 +140,7 @@ jobs:
               cpack_options: >
                 -D CPACK_DEBIAN_PACKAGE_MAINTAINER=software@ecmwf.int 
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
-                -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
+                -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
               upload_url: NEXUS_TEST_REPO_URL_DEBIAN_12
             - name: gnu@rocky-8.6
@@ -143,8 +152,7 @@ jobs:
               compiler_fc: gfortran
               cpack_generator: RPM
               cpack_options: >
-                -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
-                ${{ inputs.cpack_options_rpm }}
+                -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
               upload_url: NEXUS_TEST_REPO_URL_ROCKY_8
             - name: gnu@rocky-9.5
@@ -156,16 +164,16 @@ jobs:
               compiler_fc: gfortran
               cpack_generator: RPM
               cpack_options: >
-                -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
-                ${{ inputs.cpack_options_rpm }}
+                -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
               upload_url: NEXUS_TEST_REPO_URL_ROCKY_9
           EOS
           )
-          RESTRICT_MATRIX_JOBS=$(cat << 'EOS'
-          ${{ inputs.restrict_matrix_jobs }}
-          EOS
-          )
+          # Append the user cpack options as data, never as YAML
+          MATRIX=$(echo "$MATRIX" | yq eval '
+            (.include[] | select(.cpack_generator == "DEB") | .cpack_options) |= (sub("\n$"; "") + " " + strenv(CPACK_OPTIONS_DEB)) |
+            (.include[] | select(.cpack_generator == "RPM") | .cpack_options) |= (sub("\n$"; "") + " " + strenv(CPACK_OPTIONS_RPM))
+          ' -)
           echo "MATRIX:"
           echo $MATRIX
           SELECT_NAME_COND="1 != 1"
@@ -193,7 +201,7 @@ jobs:
           import re
           import sys
 
-          tag = "${{ github.ref_name }}"
+          tag = os.environ["GITHUB_REF_NAME"]
 
           def check_version():
               file_name = "VERSION"
@@ -255,53 +263,32 @@ jobs:
           retention-days: 3
 
       - name: Upload
+        env:
+          PACKAGE_PATH: ${{ steps.build.outputs.package_path }}
+          MATRIX_OS: ${{ matrix.os }}
+          CPACK_GENERATOR: ${{ matrix.cpack_generator }}
+          UPLOAD_TOKEN: ${{ (matrix.os == 'debian-11' && secrets.token_debian_11) || (matrix.os == 'debian-12' && secrets.token_debian_12) || (matrix.os == 'rocky-8.6' && secrets.token_rocky_8) || (matrix.os == 'rocky-9.5' && secrets.token_rocky_9) || secrets[matrix.upload_token] }}
+          UPLOAD_URL: ${{ (matrix.os == 'debian-11' && secrets.url_debian_11) || (matrix.os == 'debian-12' && secrets.url_debian_12) || (matrix.os == 'rocky-8.6' && secrets.url_rocky_8) || (matrix.os == 'rocky-9.5' && secrets.url_rocky_9) || secrets[matrix.upload_url] }}
         run: |
-          if [ -z "${{ steps.build.outputs.package_path }}" ] || [ ! -f ${{ steps.build.outputs.package_path }} ]; then
+          if [ -z "$PACKAGE_PATH" ] || [ ! -f "$PACKAGE_PATH" ]; then
             echo "::error::Built package not found!"
             exit 1
           fi
 
-          os=${{ matrix.os }}
-          token=""
-          url=""
-
-          case "$os" in
-            "debian-11")
-              token=${{ secrets.token_debian_11 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_debian_11 || secrets[matrix.upload_url] }}
-            ;;
-
-            "debian-12")
-              token=${{ secrets.token_debian_12 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_debian_12 || secrets[matrix.upload_url] }}
-            ;;
-
-            "rocky-8.6")
-              token=${{ secrets.token_rocky_8 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_rocky_8 || secrets[matrix.upload_url] }}
-            ;;
-
-            "rocky-9.5")
-              token=${{ secrets.token_rocky_9 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_rocky_9 || secrets[matrix.upload_url] }}
-            ;;
-
-            *)
-              token=${{ secrets[matrix.upload_token] }}
-              url=${{ secrets[matrix.upload_url] }}
-            ;;
-          esac
+          os="$MATRIX_OS"
+          token="$UPLOAD_TOKEN"
+          url="$UPLOAD_URL"
 
           if [ -z "$token" ]; then
             echo "::warning::No upload token provided, skipping upload for $os"
             exit 0
           fi
 
-          if [ "${{ matrix.cpack_generator }}" == "DEB" ]; then
-            response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${{ steps.build.outputs.package_path }}" "$url")
-          elif [ "${{ matrix.cpack_generator }}" == "RPM" ]; then
-            file_name=$(basename "${{ steps.build.outputs.package_path }}")
-            response=$(curl -w "%{http_code}" --user "$token" --upload-file ${{ steps.build.outputs.package_path }} $url/$file_name)
+          if [ "$CPACK_GENERATOR" == "DEB" ]; then
+            response=$(curl -w "%{http_code}" --user "$token" -H "Content-Type: multipart/form-data" --data-binary "@${PACKAGE_PATH}" "$url")
+          elif [ "$CPACK_GENERATOR" == "RPM" ]; then
+            file_name=$(basename "$PACKAGE_PATH")
+            response=$(curl -w "%{http_code}" --user "$token" --upload-file "$PACKAGE_PATH" "$url/$file_name")
           fi
 
           status=$(echo $response | tail -c 4)

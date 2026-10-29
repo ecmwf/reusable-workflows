@@ -50,8 +50,10 @@ runs:
     - name: Install ecbuild
       if: ${{ github.repository != 'ecmwf/ecbuild' }}
       shell: bash
+      env:
+        ECBUILD_VERSION: ${{ inputs.ecbuild_version }}
       run: |
-        ecbuild_version="${{ inputs.ecbuild_version }}"
+        ecbuild_version="$ECBUILD_VERSION"
 
         if [ -z "$ecbuild_version" ]; then
           echo "Fetching latest ecbuild release from GitHub API..."
@@ -80,14 +82,16 @@ runs:
 
     - name: Run ecbuild
       shell: bash
+      env:
+        INPUT_CMAKE_OPTIONS: ${{ inputs.cmake_options }}
       run: |
         # Convert line-separated options to space-separated
-        cmake_options=$(echo "${{ inputs.cmake_options }}" | tr '\n' ' ' | xargs)
+        cmake_options=$(echo "$INPUT_CMAKE_OPTIONS" | tr '\n' ' ' | xargs)
 
         echo "Running ecbuild in build directory..."
         cd build
 
-        if [ "${{ github.repository }}" = "ecmwf/ecbuild" ]; then
+        if [ "$GITHUB_REPOSITORY" = "ecmwf/ecbuild" ]; then
             echo "Bootstrap mode: ecbuild configures its own CMAKE_MODULE_PATH"
             cmake_cmd="cmake ."
         else
@@ -143,8 +147,10 @@ runs:
     - name: Sanitize ref name
       id: sanitize
       shell: bash
+      env:
+        INPUT_REF_NAME: ${{ inputs.ref_name || github.ref_name }}
       run: |
-        ref_name="${{ inputs.ref_name || github.ref_name }}"
+        ref_name="$INPUT_REF_NAME"
         echo "safe_ref_name=${ref_name//\//-}" >> $GITHUB_OUTPUT
 
     - name: Upload artifacts
