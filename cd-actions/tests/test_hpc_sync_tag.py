@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -189,3 +192,176 @@ class TestMain:
 
         assert "do_run=false\n" in output
         assert self._extract(output, "template", "EOF") == ""
+
+
+class TestLockOptions:
+    def test_defaults(self):
+        lock = generate_template.resolve_lock_options(owner="me")
+
+        assert lock["root"] == "$HOME/.cd-locks"
+        assert lock["timeout"] == 1800
+        assert lock["stale_minutes"] == 120
+
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("", "$HOME/.cd-locks"),
+            ("~/locks", "$HOME/locks"),
+            ("$HOME/a/b/", "$HOME/a/b"),
+            ("/scratch/cd-locks", "/scratch/cd-locks"),
+        ],
+    )
+    def test_valid_lock_roots(self, raw, expected):
+        assert generate_template.validate_lock_root(raw) == expected
+
+    @pytest.mark.parametrize(
+        "raw", ["relative/path", "/tmp/$(id)", "/tmp/a b", "/tmp/../etc", "$HOMEX/a", '/tmp/"x"']
+    )
+    def test_invalid_lock_roots_fail(self, raw):
+        with pytest.raises(SystemExit):
+            generate_template.validate_lock_root(raw)
+
+    @pytest.mark.parametrize("raw", ["0", "-5", "ten", "1.5"])
+    def test_invalid_timeout_fails(self, raw):
+        with pytest.raises(SystemExit):
+            generate_template.resolve_lock_options(timeout=raw, owner="me")
+
+    def test_owner_cannot_break_out_of_quotes(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_REPOSITORY", "ecmwf/eckit")
+        monkeypatch.setenv("GITHUB_RUN_ID", "42")
+        monkeypatch.setenv("GITHUB_JOB", "sync'; rm -rf /; echo '")
+
+        owner = generate_template.lock_owner_from_env()
+
+        assert "'" not in owner and ";" not in owner
+        assert "repo=ecmwf/eckit" in owner
+        assert "https://github.com/ecmwf/eckit/actions/runs/42/attempts/1" in owner
+
+    def test_rendered_job_takes_the_lock_before_sync_and_tag(self):
+        rendered = _render(_options())
+
+        assert 'cd_lock_root="$HOME/.cd-locks"' in rendered
+        assert 'until mkdir "$cd_lock_dir"' in rendered
+        assert "trap cd_lock_release EXIT" in rendered
+        assert "$cd_lock_root/DISABLED" in rendered
+        assert rendered.index("trap cd_lock_release EXIT") < rendered.index("Synchronize module")
+        # The rendered job is rendered again by build-package-hpc, so it must not contain Jinja syntax
+        assert not any(d in rendered for d in ("{{", "{%", "{#"))
+
+    def test_main_passes_lock_inputs(self, tmp_path, monkeypatch):
+        output = TestMain()._run_main(
+            tmp_path,
+            monkeypatch,
+            INPUT_LOCK_ROOT="/scratch/locks",
+            INPUT_LOCK_TIMEOUT="60",
+            INPUT_LOCK_STALE_MINUTES="5",
+        )
+        template = TestMain._extract(output, "template", "EOF")
+
+        assert 'cd_lock_root="/scratch/locks"' in template
+        assert "cd_lock_timeout=60" in template
+        assert "cd_lock_stale_minutes=5" in template
+
+
+class TestLockScript:
+    """Run the rendered lock snippet in bash against a temporary lock root."""
+
+    @staticmethod
+    def _script(root, payload, owner="job", timeout=30, stale_minutes=120):
+        lock = generate_template.resolve_lock_options(
+            root=str(root), timeout=str(timeout), stale_minutes=str(stale_minutes), owner=owner, poll=1
+        )
+        template = JINJA_ENV.from_string("{% from 'lock.jinja' import acquire_lock %}{{ acquire_lock(lock) }}\n")
+        return template.render(lock=lock) + "\n" + payload + "\n"
+
+    @staticmethod
+    def _run(script, **kwargs):
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60, **kwargs)
+
+    def test_concurrent_runs_serialise(self, tmp_path):
+        root = tmp_path / "locks"
+        log = tmp_path / "log"
+        procs = []
+        for name in ("a", "b"):
+            payload = f'echo "start {name}" >> "{log}"; sleep 2; echo "end {name}" >> "{log}"'
+            procs.append(
+                subprocess.Popen(["bash", "-c", self._script(root, payload, owner=name)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            )
+        for proc in procs:
+            assert proc.wait(timeout=60) == 0, proc.stdout.read()
+
+        lines = log.read_text().split()
+        events = [" ".join(lines[i : i + 2]) for i in range(0, len(lines), 2)]
+        assert len(events) == 4
+        # Each start is directly followed by its own end
+        assert events[0].replace("start", "end") == events[1]
+        assert events[2].replace("start", "end") == events[3]
+        assert not (root / "modulemgr").exists()
+
+    def test_stale_lock_is_broken(self, tmp_path):
+        root = tmp_path / "locks"
+        lock_dir = root / "modulemgr"
+        lock_dir.mkdir(parents=True)
+        (lock_dir / "owner").write_text("old run\n")
+        old = time.time() - 3 * 3600
+        os.utime(lock_dir, (old, old))
+
+        result = self._run(self._script(root, "echo payload-ran", stale_minutes=1))
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "Breaking stale lock" in result.stdout
+        assert "payload-ran" in result.stdout
+        assert not lock_dir.exists()
+
+    def test_other_owners_lock_is_kept(self, tmp_path):
+        root = tmp_path / "locks"
+        lock_dir = root / "modulemgr"
+        lock_dir.mkdir(parents=True)
+        (lock_dir / "owner").write_text("someone else\n")
+
+        result = self._run(self._script(root, "echo payload-ran", timeout=2))
+
+        assert result.returncode == 1
+        assert "Timed out" in result.stdout
+        assert "payload-ran" not in result.stdout
+        assert (lock_dir / "owner").read_text() == "someone else\n"
+
+    def test_lock_taken_over_by_another_owner_is_not_removed_on_exit(self, tmp_path):
+        root = tmp_path / "locks"
+        lock_dir = root / "modulemgr"
+        # Simulate our lock being broken as stale and re-acquired by another job
+        payload = f'echo "someone else" > "{lock_dir}/owner"'
+
+        result = self._run(self._script(root, payload))
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (lock_dir / "owner").read_text() == "someone else\n"
+
+    def test_disabled_file_stops_the_job(self, tmp_path):
+        root = tmp_path / "locks"
+        root.mkdir()
+        (root / "DISABLED").write_text("incident 123\n")
+
+        result = self._run(self._script(root, "echo payload-ran"))
+
+        assert result.returncode == 1
+        assert "disabled" in result.stdout
+        assert "incident 123" in result.stdout
+        assert "payload-ran" not in result.stdout
+        assert not (root / "modulemgr").exists()
+
+    def test_disabled_while_waiting_stops_the_job_after_acquiring(self, tmp_path):
+        root = tmp_path / "locks"
+        lock_dir = root / "modulemgr"
+        lock_dir.mkdir(parents=True)
+        (lock_dir / "owner").write_text("other job\n")
+        # The other job finishes and an admin disables CD while we wait
+        holder = subprocess.Popen(["bash", "-c", f'sleep 2; echo stop > "{root}/DISABLED"; rm -rf "{lock_dir}"'])
+
+        result = self._run(self._script(root, "echo payload-ran"))
+        holder.wait()
+
+        assert result.returncode == 1
+        assert "disabled while waiting" in result.stdout
+        assert "payload-ran" not in result.stdout
+        assert not lock_dir.exists()

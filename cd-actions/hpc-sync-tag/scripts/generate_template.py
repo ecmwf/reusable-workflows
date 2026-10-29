@@ -10,6 +10,55 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 
+DEFAULT_LOCK_ROOT = "$HOME/.cd-locks"
+DEFAULT_LOCK_TIMEOUT = 1800
+DEFAULT_LOCK_STALE_MINUTES = 120
+
+
+def _positive_int(raw, name, default):
+    raw = str(raw).strip()
+    if not raw:
+        return default
+    if not re.match(r"^[0-9]+$", raw) or int(raw) <= 0:
+        print(f"::error::{name} must be a positive integer, got '{raw}'")
+        sys.exit(1)
+    return int(raw)
+
+
+def validate_lock_root(raw_root):
+    """Lock root on the HPC: an absolute path, or one under $HOME (or ~)."""
+    root = raw_root.strip() or DEFAULT_LOCK_ROOT
+    if root == "~" or root.startswith("~/"):
+        root = "$HOME" + root[1:]
+    root = root.rstrip("/") or "/"
+    if not re.match(r"^(\$HOME)?(/[A-Za-z0-9._-]+)+$", root) or "/../" in f"{root}/" or "/./" in f"{root}/":
+        print(f"::error::lock_root '{raw_root}' must be an absolute path or start with $HOME/, using only [A-Za-z0-9._-] in each part")
+        sys.exit(1)
+    return root
+
+
+def lock_owner_from_env():
+    """Who holds the lock: repo, run URL and job (the job script adds host, pid and time)."""
+    server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+    repository = os.environ.get("GITHUB_REPOSITORY", "unknown")
+    run_id = os.environ.get("GITHUB_RUN_ID", "0")
+    attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+    job = os.environ.get("GITHUB_JOB", "")
+    owner = f"repo={repository} run={server}/{repository}/actions/runs/{run_id}/attempts/{attempt} job={job}"
+    # Rendered inside single quotes in the job script
+    return re.sub(r"[^A-Za-z0-9._:/@=+ -]", "_", owner)
+
+
+def resolve_lock_options(*, root="", timeout="", stale_minutes="", owner=None, poll=10):
+    return {
+        "poll": poll,
+        "root": validate_lock_root(root),
+        "timeout": _positive_int(timeout, "lock_timeout", DEFAULT_LOCK_TIMEOUT),
+        "stale_minutes": _positive_int(stale_minutes, "lock_stale_minutes", DEFAULT_LOCK_STALE_MINUTES),
+        "owner": lock_owner_from_env() if owner is None else re.sub(r"[^A-Za-z0-9._:/@=+ -]", "_", owner),
+    }
+
+
 def validate_module_tag_name(raw_tag_name):
     raw_tag_name = raw_tag_name.strip()
     if not raw_tag_name:
@@ -32,6 +81,7 @@ def resolve_sync_tag_options(
     dry_run,
     hpc_config,
     build_name="",
+    lock=None,
 ):
     sync_clusters_map = hpc_config["sync_clusters"]
     sync_clusters = sync_clusters_map.get(site, sync_clusters_map.get("aa-batch", []))
@@ -68,6 +118,7 @@ def resolve_sync_tag_options(
         "sync_module": do_sync,
         "do_tag": do_tag,
         "tag_clusters": tag_clusters or [],
+        "lock": lock if lock is not None else resolve_lock_options(),
     }
 
 
@@ -100,6 +151,11 @@ def main():
     repository = os.environ["GITHUB_REPOSITORY"]
     module_name = os.environ.get("INPUT_MODULE_NAME", "").strip() or repository.split("/")[-1]
     module_tag_name = validate_module_tag_name(os.environ.get("INPUT_MODULE_TAG_NAME", "new"))
+    lock = resolve_lock_options(
+        root=os.environ.get("INPUT_LOCK_ROOT", ""),
+        timeout=os.environ.get("INPUT_LOCK_TIMEOUT", ""),
+        stale_minutes=os.environ.get("INPUT_LOCK_STALE_MINUTES", ""),
+    )
 
     ci_options = resolve_sync_tag_options(
         site=site,
@@ -112,6 +168,7 @@ def main():
         dry_run=dry_run,
         hpc_config=hpc_config,
         build_name=build_name,
+        lock=lock,
     )
     do_run = ci_options["sync_module"] or ci_options["do_tag"]
 
@@ -138,6 +195,7 @@ def main():
     print(f"Module: {module_name} @ {ref_name}")
     print(f"Do sync: {ci_options['sync_module']}")
     print(f"Do tag: {ci_options['do_tag']}")
+    print(f"Lock: {lock['root']}/modulemgr (timeout {lock['timeout']}s, stale after {lock['stale_minutes']} min)")
     if do_run:
         print("Generated template:")
         print(rendered)

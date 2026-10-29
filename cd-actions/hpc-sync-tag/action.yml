@@ -60,6 +60,22 @@ inputs:
     required: false
     default: ''
 
+  # Cross-repo lock: modulemgr and software-sync are not concurrency-safe
+  lock_root:
+    description: >-
+      Directory on the HPC that holds the sync/tag lock (<lock_root>/modulemgr) and the kill switch file
+      (<lock_root>/DISABLED). The default works because every v2 CD job runs as the same HPC user.
+    required: false
+    default: '$HOME/.cd-locks'
+  lock_timeout:
+    description: 'Seconds to wait for the lock before failing'
+    required: false
+    default: '1800'
+  lock_stale_minutes:
+    description: 'Minutes after which a held lock is treated as stale and broken'
+    required: false
+    default: '120'
+
 runs:
   using: composite
   steps:
@@ -77,6 +93,9 @@ runs:
         INPUT_TAG_MODULE: ${{ inputs.tag_module }}
         INPUT_MODULE_TAG_NAME: ${{ inputs.module_tag_name }}
         INPUT_QUEUE: ${{ inputs.queue }}
+        INPUT_LOCK_ROOT: ${{ inputs.lock_root }}
+        INPUT_LOCK_TIMEOUT: ${{ inputs.lock_timeout }}
+        INPUT_LOCK_STALE_MINUTES: ${{ inputs.lock_stale_minutes }}
         GITHUB_ACTION_PATH: ${{ github.action_path }}
       run: python3 "${{ github.action_path }}/scripts/generate_template.py"
 

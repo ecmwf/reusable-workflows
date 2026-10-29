@@ -1,7 +1,9 @@
 {% from 'sync-tag-commands.jinja' import sync_module_commands, module_tag_commands with context %}
+{% from 'lock.jinja' import acquire_lock %}
 echo "Sync/tag started: $(date -u)"
 echo "Job: {{ ci_options.build_name }}"
 echo "Module: {{ ci_options.module_name }} @ {{ ci_options.ref_name }}"
+{{ acquire_lock(ci_options.lock) }}
 {% if ci_options.sync_module %}
 {{ sync_module_commands(module_name=ci_options.module_name) }}
 {% endif %}

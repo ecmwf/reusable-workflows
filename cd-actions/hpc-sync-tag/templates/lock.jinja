@@ -1,0 +1,65 @@
+{# Cross-repo lock around modulemgr/software-sync, same protocol as ci-infrastructure remote_lock:
+   mkdir (atomic, no -p) plus an owner file, poll until the timeout, break a lock older than the
+   stale threshold, and on exit remove the lock only while the owner file is still ours.
+   A stale lock is renamed before it is deleted, so only one waiter can break it, and the holder
+   refreshes the lock's mtime every minute so a long-running job never looks stale.
+   <root>/DISABLED stops all sync/tag jobs (the HPC side of the CD kill switch). #}
+{% macro acquire_lock(lock) -%}
+cd_lock_root="{{ lock.root }}"
+cd_lock_dir="$cd_lock_root/modulemgr"
+cd_lock_timeout={{ lock.timeout }}
+cd_lock_stale_minutes={{ lock.stale_minutes }}
+cd_lock_poll={{ lock.poll | default(10) }}
+cd_lock_owner='{{ lock.owner }}'" host=$(hostname) pid=$$ at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+mkdir -p "$cd_lock_root"
+if [ -e "$cd_lock_root/DISABLED" ]; then
+  echo "::error::CD sync/tag is disabled on this HPC: $cd_lock_root/DISABLED exists"
+  cat "$cd_lock_root/DISABLED"
+  exit 1
+fi
+
+cd_lock_heartbeat_pid=""
+cd_lock_release() {
+  if [ -n "$cd_lock_heartbeat_pid" ]; then
+    kill "$cd_lock_heartbeat_pid" 2>/dev/null || true
+  fi
+  if [ "$(cat "$cd_lock_dir/owner" 2>/dev/null)" = "$cd_lock_owner" ]; then
+    rm -rf "$cd_lock_dir"
+    echo "Released lock $cd_lock_dir"
+  fi
+}
+
+cd_lock_waited=0
+until mkdir "$cd_lock_dir" 2>/dev/null; do
+  if [ -n "$(find "$cd_lock_dir" -maxdepth 0 -mmin +"$cd_lock_stale_minutes" 2>/dev/null)" ]; then
+    echo "::warning::Breaking stale lock $cd_lock_dir (older than $cd_lock_stale_minutes min), held by: $(cat "$cd_lock_dir/owner" 2>/dev/null)"
+    cd_lock_stale="$cd_lock_dir.stale.$$"
+    if mv "$cd_lock_dir" "$cd_lock_stale" 2>/dev/null; then
+      rm -rf "$cd_lock_stale"
+    fi
+    continue
+  fi
+  if [ "$cd_lock_waited" -ge "$cd_lock_timeout" ]; then
+    echo "::error::Timed out after ${cd_lock_waited}s waiting for lock $cd_lock_dir, held by: $(cat "$cd_lock_dir/owner" 2>/dev/null)"
+    exit 1
+  fi
+  echo "Waiting for lock $cd_lock_dir, held by: $(cat "$cd_lock_dir/owner" 2>/dev/null)"
+  sleep "$cd_lock_poll"
+  cd_lock_waited=$((cd_lock_waited + cd_lock_poll))
+done
+printf '%s\n' "$cd_lock_owner" > "$cd_lock_dir/owner"
+trap cd_lock_release EXIT
+# Heartbeat: keep the lock fresh while we own it. Detached from stdout/stderr so it never holds the job's pipes open.
+( while sleep 60; do
+    [ "$(cat "$cd_lock_dir/owner" 2>/dev/null)" = "$cd_lock_owner" ] || exit 0
+    touch "$cd_lock_dir"
+  done ) </dev/null >/dev/null 2>&1 &
+cd_lock_heartbeat_pid=$!
+echo "Acquired lock $cd_lock_dir as: $cd_lock_owner"
+if [ -e "$cd_lock_root/DISABLED" ]; then
+  echo "::error::CD sync/tag was disabled while waiting for the lock: $cd_lock_root/DISABLED exists"
+  cat "$cd_lock_root/DISABLED"
+  exit 1
+fi
+{%- endmacro %}
