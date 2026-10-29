@@ -25,7 +25,7 @@ def main():
     conda_dir = os.environ.get("INPUT_CONDA_DIR", "./.cd/conda")
     channels_input = os.environ.get(
         "INPUT_CHANNELS",
-        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        # Intentional: conda uses test Nexus until prod conda repos exist
         "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public",
     )
     platform = os.environ.get("INPUT_PLATFORM", "linux-64") or "linux-64"

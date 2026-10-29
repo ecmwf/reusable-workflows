@@ -92,7 +92,7 @@ class TestGenerateMatrixBasic:
             ]
         }
         matrix = generate_matrix(config)
-        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        # Intentional: conda uses test Nexus until prod conda repos exist
         assert (
             matrix["include"][0]["channels"]
             == "conda-forge\nhttps://nexus-test.ecmwf.int/repository/conda-ecmwf-public"

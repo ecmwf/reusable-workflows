@@ -23,7 +23,7 @@ conda:
   conda_dir: ./.cd/conda
   channels:
     - conda-forge
-    # TEMPORARY: forward prod nexus -> test nexus (revert me)
+    # Intentional: conda uses test Nexus until prod conda repos exist
     - https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
   conda_build_args:
     - --no-anaconda-upload

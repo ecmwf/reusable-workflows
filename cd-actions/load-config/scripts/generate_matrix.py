@@ -131,7 +131,7 @@ CONDA_FIELDS = [
     Field(
         "channels",
         default_key="channels",
-        # TEMPORARY: forward prod nexus -> test nexus (revert me)
+        # Intentional: conda uses test Nexus until prod conda repos exist
         fallback=["conda-forge", "https://nexus-test.ecmwf.int/repository/conda-ecmwf-public"],
         transform=list_to_line_separated,
     ),

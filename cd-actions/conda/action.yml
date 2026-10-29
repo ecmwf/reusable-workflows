@@ -44,7 +44,7 @@ inputs:
   channels:
     description: 'Conda channels to use as line-separated values'
     required: false
-    # TEMPORARY: forward prod nexus -> test nexus (revert me)
+    # Intentional: conda uses test Nexus until prod conda repos exist
     default: |
       conda-forge
       https://nexus-test.ecmwf.int/repository/conda-ecmwf-public
