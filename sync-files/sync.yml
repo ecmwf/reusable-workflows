@@ -152,7 +152,6 @@ group:
       .github/CODEOWNERS
       .github/workflows/push-to-private.yml
       .github/workflows/python-publish.yml
-      .github/workflows/python-pull-request.yml
       .github/workflows/readthedocs-pr-update.yml
       .github/workflows/release-please.yml
   - source: sync-files/general/python/LICENSE
@@ -176,7 +175,6 @@ group:
       .github/labeler.yml
       .github/workflows/push-to-private.yml
       .github/workflows/python-publish.yml
-      .github/workflows/python-pull-request.yml
       .github/workflows/readthedocs-pr-update.yml
       .github/workflows/release-please.yml
   - source: sync-files/general/python/LICENSE
