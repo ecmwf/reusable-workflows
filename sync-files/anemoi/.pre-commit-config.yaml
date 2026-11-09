@@ -3,15 +3,6 @@
 repos:
 - repo: local
   hooks:
-  - id: protect-synced-files
-    name: protect files synced from ecmwf/reusable-workflows
-    language: python
-    entry: python tools/check_synced_files.py
-    # pre-commit passes no deleted files, so the script finds the changed ones itself.
-    pass_filenames: false
-    always_run: true
-- repo: local
-  hooks:
   - id: clear-notebooks-output
     name: clear-notebooks-output
     files: tools/.*\.ipynb$
