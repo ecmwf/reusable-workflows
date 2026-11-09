@@ -7,32 +7,9 @@ repos:
     name: protect files synced from ecmwf/reusable-workflows
     language: python
     entry: python tools/check_synced_files.py
-    files: |
-      (?x)^(
-        \.gitignore
-        |\.pre-commit-config\.yaml
-        |\.release-please-config\.json
-        |CONTRIBUTORS\.md
-        |LICENSE
-        |README\.md
-        |\.github/CODEOWNERS
-        |\.github/dependabot\.yml
-        |\.github/labeler\.yml
-        |\.github/pull_request_template\.md
-        |\.github/workflows/inactivity-bot\.yml
-        |\.github/workflows/pr-conventional-commit\.yml
-        |\.github/workflows/pr-label-ats\.yml
-        |\.github/workflows/pr-label-file-based\.yml
-        |\.github/workflows/pr-protect-synced-files\.yml
-        |\.github/workflows/push-to-private\.yml
-        |\.github/workflows/python-publish\.yml
-        |\.github/workflows/python-pull-request\.yml
-        |\.github/workflows/readthedocs-pr-update\.yml
-        |\.github/workflows/release-please\.yml
-        |tools/check_synced_files\.py
-        |tools/pre-commit-copyright-notice\.txt
-        |(graphs|models|training)/(CONTRIBUTORS\.md|LICENSE)
-      )$
+    # pre-commit passes no deleted files, so the script finds the changed ones itself.
+    pass_filenames: false
+    always_run: true
 - repo: local
   hooks:
   - id: clear-notebooks-output

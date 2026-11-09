@@ -10,12 +10,39 @@
 """Reject changes to files synced from ecmwf/reusable-workflows, unless whitelisted."""
 
 import os
+import re
 import subprocess
 import sys
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
+SYNCED: Final[re.Pattern[str]] = re.compile(
+    r"""(?x)
+      \.gitignore
+    | \.pre-commit-config\.yaml
+    | \.release-please-config\.json
+    | CONTRIBUTORS\.md
+    | LICENSE
+    | README\.md
+    | \.github/CODEOWNERS
+    | \.github/dependabot\.yml
+    | \.github/labeler\.yml
+    | \.github/pull_request_template\.md
+    | \.github/workflows/inactivity-bot\.yml
+    | \.github/workflows/pr-conventional-commit\.yml
+    | \.github/workflows/pr-label-ats\.yml
+    | \.github/workflows/pr-label-file-based\.yml
+    | \.github/workflows/pr-protect-synced-files\.yml
+    | \.github/workflows/push-to-private\.yml
+    | \.github/workflows/python-publish\.yml
+    | \.github/workflows/python-pull-request\.yml
+    | \.github/workflows/readthedocs-pr-update\.yml
+    | \.github/workflows/release-please\.yml
+    | tools/check_synced_files\.py
+    | tools/pre-commit-copyright-notice\.txt
+    | (graphs|models|training)/(CONTRIBUTORS\.md|LICENSE)
+    """
+)
 WHITELIST: Final[Path] = Path(".github/synced-files-whitelist")
 SYNC_FILES_URL: Final[str] = "https://github.com/ecmwf/reusable-workflows/tree/main/sync-files"
 SYNC_CONFIG_URL: Final[str] = "https://github.com/ecmwf/reusable-workflows/blob/main/sync-files/sync.yml"
@@ -28,12 +55,16 @@ def git_lines(*args: str) -> list[str]:
 
 
 def changed_files() -> set[str]:
-    """Paths changed in the pre-commit ref range, else relative to HEAD incl. untracked."""
+    """Paths changed, deleted included, in the pre-commit ref range, else relative to HEAD incl. untracked."""
+    # --no-renames: a renamed file would list under its new path only.
     from_ref = os.environ.get("PRE_COMMIT_FROM_REF")
     to_ref = os.environ.get("PRE_COMMIT_TO_REF")
     if from_ref and to_ref:
-        return set(git_lines("diff", "--name-only", f"{from_ref}...{to_ref}"))
-    return {*git_lines("diff", "--name-only", "HEAD"), *git_lines("ls-files", "--others", "--exclude-standard")}
+        return set(git_lines("diff", "--name-only", "--no-renames", f"{from_ref}...{to_ref}"))
+    return {
+        *git_lines("diff", "--name-only", "--no-renames", "HEAD"),
+        *git_lines("ls-files", "--others", "--exclude-standard"),
+    }
 
 
 def read_whitelist() -> set[str]:
@@ -44,9 +75,9 @@ def read_whitelist() -> set[str]:
     return {Path(entry).as_posix() for entry in entries if entry}
 
 
-def main(filenames: Sequence[str]) -> int:
+def main() -> int:
     """Report changed, not whitelisted synced files."""
-    protected = sorted(set(filenames) & changed_files() - read_whitelist())
+    protected = sorted({f for f in changed_files() if SYNCED.fullmatch(f)} - read_whitelist())
     if not protected:
         return 0
 
@@ -67,4 +98,4 @@ Either
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
