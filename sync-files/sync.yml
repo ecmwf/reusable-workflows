@@ -119,7 +119,6 @@ group:
     exclude: |
       .release-please-config.json
       .github/CODEOWNERS
-      .github/workflows/downstream-ci-hpc.yml
       .github/workflows/pr-label-ats.yml
       .github/workflows/push-to-private.yml
   - source: sync-files/general/python/LICENSE
@@ -170,7 +169,6 @@ group:
       README.md
       .release-please-config.json
       .github/CODEOWNERS
-      .github/workflows/downstream-ci-hpc.yml
       .github/workflows/push-to-private.yml
       .github/workflows/python-publish.yml
       .github/workflows/python-pull-request.yml
@@ -195,7 +193,6 @@ group:
       .release-please-config.json
       .github/CODEOWNERS
       .github/labeler.yml
-      .github/workflows/downstream-ci-hpc.yml
       .github/workflows/push-to-private.yml
       .github/workflows/python-publish.yml
       .github/workflows/python-pull-request.yml

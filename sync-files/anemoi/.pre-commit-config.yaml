@@ -19,7 +19,6 @@ repos:
         |\.github/dependabot\.yml
         |\.github/labeler\.yml
         |\.github/pull_request_template\.md
-        |\.github/workflows/downstream-ci-hpc\.yml
         |\.github/workflows/inactivity-bot\.yml
         |\.github/workflows/pr-conventional-commit\.yml
         |\.github/workflows/pr-label-ats\.yml
@@ -42,7 +41,7 @@ repos:
     stages: [pre-commit]
     language: python
     entry: jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace
-    additional_dependencies: [jupyter]
+    additional_dependencies: [nbconvert]
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
   hooks:
