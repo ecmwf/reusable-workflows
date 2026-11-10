@@ -29,6 +29,7 @@ group:
     ecmwf/anemoi-transform
     ecmwf/anemoi-utils
     ecmwf/anemoi-plugins
+    ecmwf/anemoi-plugins-ecmwf
 
 # Init specific files once
 - files:
@@ -71,6 +72,23 @@ group:
       .github/workflows/push-to-private.yml
   repos: |
     ecmwf/anemoi-plugins
+
+# Anemoi plugins ecmwf specific
+- files:
+  - source: sync-files/anemoi/
+    dest: ./
+    template:
+      repo_name: anemoi-plugins-ecmwf
+      copyright_holder: ECMWF
+    exclude: |
+      README.md
+      .release-please-config.json
+      .github/workflows/pr-label-ats.yml
+      .github/workflows/push-to-private.yml
+      .github/workflows/python-publish.yml
+      .github/workflows/readthedocs-pr-update.yml
+  repos: |
+    ecmwf/anemoi-plugins-ecmwf
 
 
 # Anemoi inference specific
