@@ -211,7 +211,7 @@ jobs:
 
     - name: Codecov Upload
       if: inputs.codecov_upload && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
-      uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
 
   deploy:
     name: deploy
