@@ -53,7 +53,7 @@ repos:
     - --fix
     - --exit-non-zero-on-fix
     - --holder
-    - Anemoi contributors
+    - {{ copyright_holder | default("Anemoi contributors") }}
     - --license
     - tools/pre-commit-copyright-notice.txt
 - repo: https://github.com/tox-dev/pyproject-fmt
