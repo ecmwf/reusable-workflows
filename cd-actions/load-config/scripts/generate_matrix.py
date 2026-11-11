@@ -184,6 +184,7 @@ HPC_FIELDS = [
         transform=list_to_line_separated,
     ),
     Field("conda_deps", fallback=[], transform=list_to_line_separated),
+    Field("conda_env_file", fallback=""),
     Field("stages", fallback=[], transform=_json_dumps),
     Field("modules", fallback=[], transform=list_to_line_separated),
     Field("install_command", fallback=""),

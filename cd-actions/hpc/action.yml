@@ -123,6 +123,10 @@ inputs:
     description: 'Conda packages to install as line separated values (e.g., "package\npackage")'
     required: false
     default: ''
+  conda_env_file:
+    description: 'Path to a conda environment file for python packages, relative to the repository root. If set, the environment is created from this file and the python version is taken from it. `conda_deps` are installed on top.'
+    required: false
+    default: ''
 
   # Stage Configuration (for multi-stage builds)
   stages:
@@ -259,6 +263,7 @@ runs:
         INPUT_PYTHON_REQUIREMENTS: ${{ inputs.python_requirements }}
         INPUT_PYTHON_TOML_OPT_DEP_SECTIONS: ${{ inputs.python_toml_opt_dep_sections }}
         INPUT_CONDA_DEPS: ${{ inputs.conda_deps }}
+        INPUT_CONDA_ENV_FILE: ${{ inputs.conda_env_file }}
         INPUT_POST_SCRIPT: ${{ inputs.post_script }}
         INPUT_MKDIR: ${{ inputs.mkdir }}
         INPUT_PYTEST_CMD: ${{ inputs.pytest_cmd }}
