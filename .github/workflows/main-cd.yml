@@ -137,6 +137,7 @@ jobs:
           python_requirements: ${{ matrix.python_requirements }}
           python_toml_opt_dep_sections: ${{ matrix.python_toml_opt_dep_sections }}
           conda_deps: ${{ matrix.conda_deps }}
+          conda_env_file: ${{ matrix.conda_env_file }}
           stages: ${{ matrix.stages }}
           modules: ${{ matrix.modules }}
           install_command: ${{ matrix.install_command }}
