@@ -34,6 +34,11 @@ inputs:
   conda_deps:
     description: List of conda packages to be installed into the environment.
     required: false
+  conda_env_file:
+    description: |
+      Path to a conda environment file for python packages, relative to the repository root.
+      If set, the environment is created from this file and the python version is taken from it. `conda_deps` are installed on top.
+    required: false
   compiler:
     description: Compiler family.
     required: true
@@ -131,6 +136,7 @@ runs:
         --compiler-modules=${{ inputs.compiler_modules }} \
         --python=${{ inputs.python_version }} \
         --conda-deps="${{ inputs.conda_deps }}" \
+        ${{ inputs.conda_env_file && format('--conda-env-file={0}', inputs.conda_env_file) }} \
         ${{ inputs.python_requirements && format('--requirements={0}', inputs.python_requirements) }} \
         ${{ inputs.python_toml_opt_dep_sections && format('--toml-opt-dep-sections={0}', inputs.python_toml_opt_dep_sections) }} \
         --python-dependencies=${{ steps.inputs.outputs.py_deps }} \

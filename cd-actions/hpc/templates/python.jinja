@@ -9,7 +9,18 @@
     {{ git_fetch(package) }}
     {{ cd_pkg_subdir(package) }}
 
+    {% if ci_options.conda_env_file %}
+    {% set pip_cmd = "pip" %}
+    {% set python_build_cmd = "python -m build --sdist" %}
+
+    {{ start_group("Setup Conda environment from " + ci_options.conda_env_file) }}
+    module load conda/new
+    conda env create -y -p {{ ci_options.workdir }}/env_{{ package.name }} -f {{ ci_options.workdir }}/{{ package.name }}/{{ ci_options.conda_env_file }}
+    conda activate {{ ci_options.workdir }}/env_{{ package.name }}
     {% if ci_options.conda_deps %}
+    conda install -y {{ ci_options.conda_deps }} -c conda-forge
+    {% endif %}
+    {% elif ci_options.conda_deps %}
     {% set pip_cmd = "pip" %}
     {% set python_build_cmd = "python -m build --sdist" %}
 

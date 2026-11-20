@@ -89,6 +89,9 @@ def main():
     conda_deps_raw = os.environ.get("INPUT_CONDA_DEPS", "").strip()
     conda_deps_list = [d.strip() for d in conda_deps_raw.splitlines() if d.strip()]
     conda_deps = " ".join(conda_deps_list)
+    conda_env_file = os.environ.get("INPUT_CONDA_ENV_FILE", "").strip()
+    # A conda environment file also marks the main package as python (the version comes from the file)
+    is_python = bool(python_version or conda_env_file)
     post_script = os.environ.get("INPUT_POST_SCRIPT", "").strip() or None
     bundle_yml_input = os.environ.get("INPUT_BUNDLE_YML", "").strip()
     install_command = os.environ.get("INPUT_INSTALL_COMMAND", "").strip()
@@ -206,7 +209,7 @@ def main():
             )
 
         # Add main package (CMake) - always add for staged builds, or when no python_version
-        if use_staged or not python_version:
+        if use_staged or not is_python:
             packages.append(
                 {
                     "name": repo_name,
@@ -256,7 +259,7 @@ def main():
             )
 
         # Add main Python package
-        if python_version:
+        if is_python:
             packages.append(
                 {
                     "name": repo_name,
@@ -295,6 +298,7 @@ def main():
         "requirements_path": requirements_path,
         "toml_opt_dep_sections": toml_opt_dep_sections,
         "conda_deps": conda_deps,
+        "conda_env_file": conda_env_file,
         "post_script": post_script,
         "main_package_name": repo_name,
         "compiler": compiler,

@@ -202,6 +202,11 @@ on:
         required: false
         type: string
         default: ''
+      conda_env_file:
+        description: 'Path to a conda environment file for python packages, relative to the repository root. If set, the environment is created from this file and the python version is taken from it. `conda_deps` are installed on top.'
+        required: false
+        type: string
+        default: ''
       modules:
         description: 'Modules to load as line-separated values'
         required: false
@@ -288,6 +293,7 @@ jobs:
           python_requirements: ${{ inputs.python_requirements }}
           python_toml_opt_dep_sections: ${{ inputs.python_toml_opt_dep_sections }}
           conda_deps: ${{ inputs.conda_deps }}
+          conda_env_file: ${{ inputs.conda_env_file }}
           stages: ${{ inputs.stages }}
           modules: ${{ inputs.modules }}
           install_command: ${{ inputs.install_command }}
