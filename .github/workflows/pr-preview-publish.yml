@@ -39,6 +39,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       # 1. Download artifact containing HTML to publish if the PR is updated/opened/synced
       - name: Download artifact to publish
