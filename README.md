@@ -854,23 +854,6 @@ The user access token with read access to the source repository, must be URL-enc
 **Required** The user access token with write access to the target repository, must be URL-encoded.
 **Example:** `...`
 
-## label-pr.yml
-
-Manages labels on public pull requests. `contributor` label is added when a PR from public fork is opened. Removes label `approved-for-ci` when pull request HEAD changes.
-
-### Usage
-
-```yaml
-on:
-  # trigger the pull request is opened or pushed to
-  pull_request_target:
-    types: [opened, synchronize]
-
-jobs:
-  label:
-    uses: ecmwf/reusable-workflows/.github/workflows/pr-label.yml@v2
-```
-
 ## configure-git-auth
 
 A composite action that configures git to authenticate with GitHub using a Personal Access Token (PAT). It rewrites both HTTPS and SSH `github.com` URLs so that all subsequent git operations in the same job use token-based HTTPS authentication. This is useful when jobs need to install dependencies from private GitHub repositories.
