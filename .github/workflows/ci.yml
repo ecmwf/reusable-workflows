@@ -168,7 +168,7 @@ jobs:
     if: inputs.check_formatting
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ needs.setup.outputs.repository }}
           ref: ${{ needs.setup.outputs.ref }}
@@ -217,7 +217,7 @@ jobs:
     if: inputs.codecov_upload && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || contains(github.event_name, 'pull_request'))
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ needs.setup.outputs.repository }}
           ref: ${{ needs.setup.outputs.ref }}
@@ -262,7 +262,7 @@ jobs:
     runs-on: ${{ matrix.labels }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ needs.setup.outputs.repository }}
           ref: ${{ needs.setup.outputs.ref }}
