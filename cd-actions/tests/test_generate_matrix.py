@@ -191,6 +191,34 @@ class TestGenerateMatrixBasic:
         ]
         assert item["runner"] == ["self-hosted", "linux", "hpc"]
 
+    def test_hpc_conda_env_file_defaults_to_empty(self):
+        config = _load_config("cd-config-basic.yml")
+        matrix = generate_matrix(config)
+        item = _find_item(matrix, "hpc-build")
+
+        assert item["conda_env_file"] == ""
+
+    def test_hpc_conda_env_file_from_config(self):
+        config = {
+            "builds": [
+                {
+                    "name": "hpc-conda",
+                    "type": "hpc",
+                    "config": {
+                        "conda_env_file": "environment.yml",
+                        "conda_deps": ["rust"],
+                    },
+                },
+                {"name": "hpc-plain", "type": "hpc", "config": {}},
+            ]
+        }
+        matrix = generate_matrix(config)
+
+        item = _find_item(matrix, "hpc-conda")
+        assert item["conda_env_file"] == "environment.yml"
+        assert item["conda_deps"] == "rust"
+        assert _find_item(matrix, "hpc-plain")["conda_env_file"] == ""
+
     def test_tarball(self):
         config = _load_config("cd-config-basic.yml")
         matrix = generate_matrix(config)

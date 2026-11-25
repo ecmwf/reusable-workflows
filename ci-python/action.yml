@@ -19,6 +19,11 @@ inputs:
   conda_install:
     description: List of packages to install using conda
     required: false
+  conda_env_file:
+    description: |
+      Path to a conda environment file, relative to the repository root.
+      If set, the environment is created from this file and the python version is taken from it. `conda_install` packages are installed on top.
+    required: false
   checkout:
     description: Whether to checkout the repository.
     required: false
@@ -91,7 +96,18 @@ runs:
       id: setup_env
       shell: bash -e {0}
       run: |
-        if [ -n "${{ inputs.conda_install }}" ]; then
+        if [ -n "${{ inputs.conda_env_file }}" ]; then
+          # Use conda environment file if conda_env_file is set, python version is taken from the file
+          source /opt/conda/etc/profile.d/conda.sh
+          conda env create -p $RUNNER_TEMP/venv -f ${{ inputs.conda_env_file }}
+          conda activate $RUNNER_TEMP/venv
+          if [ -n "${{ inputs.conda_install }}" ]; then
+            conda install -y ${{ inputs.conda_install }}
+          fi
+          pip_command="pip"
+          use_conda="true"
+          build_command="python -m build --sdist"
+        elif [ -n "${{ inputs.conda_install }}" ]; then
           # Use conda if conda_install is set
           source /opt/conda/etc/profile.d/conda.sh
           conda create -y -p $RUNNER_TEMP/venv
