@@ -217,7 +217,8 @@ jobs:
           recreate_cache: ${{ matrix.recreate_cache }}
           gh_pat: ${{ secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_token_secret_prod != '') && secrets[matrix.nexus_token_secret_prod] || secrets[matrix.nexus_token_secret_test] }}
-          nexus_url: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_url_secret_prod != '') && secrets[matrix.nexus_url_secret_prod] || secrets[matrix.nexus_url_secret_test] }}
+          nexus_base: ${{ (needs.detect-release-type.outputs.is_prerelease == 'false' && matrix.nexus_token_secret_prod != '' && secrets[matrix.nexus_token_secret_prod] != '') && (vars.NEXUS_REPO_URL || 'nexus.ecmwf.int') || (vars.NEXUS_TEST_REPO_URL || 'nexus-test.ecmwf.int') }}
+          nexus_repository: ${{ matrix.nexus_repository }}
 
   hpc-sync-tag:
     name: ${{ matrix.name || 'Sync and tag HPC module' }}

@@ -47,20 +47,41 @@ class TestResolvePlatform:
             == "eccr.ecmwf.int/platform-builder/platform-builder:debian-12"
         )
         assert result["nexus_token_secret_prod"] == "NEXUS_REPO_UPLOAD_TOKEN"
-        assert result["nexus_url_secret_prod"] == "NEXUS_REPO_URL_DEBIAN_12"
         assert result["nexus_token_secret_test"] == "NEXUS_TEST_REPO_UPLOAD_TOKEN"
-        assert result["nexus_url_secret_test"] == "NEXUS_TEST_REPO_URL_DEBIAN_12"
+        assert result["nexus_repository"] == "private-debian-bookworm-stable"
 
     def test_ubuntu_2204_test_only(self):
         result = self._run("ubuntu-22.04")
         assert result["os"] == "ubuntu-22.04"
         assert result["nexus_token_secret_prod"] == ""
-        assert result["nexus_url_secret_prod"] == ""
         assert result["nexus_token_secret_test"] == "NEXUS_TEST_REPO_UPLOAD_TOKEN"
+        assert result["nexus_repository"] == "private-ubuntu-jammy-stable"
 
     def test_rocky_9_alias(self):
         result = self._run("rocky-9")
         assert result["os"] == "rocky-9.7"
+        assert result["nexus_repository"] == "private-rocky-stable/9/7/rpms/x86_64"
+
+    @pytest.mark.parametrize(
+        ("os_input", "directory"),
+        [
+            ("rocky-8", "8/10"),
+            ("rocky-8.7", "8/7"),
+            ("rocky-8.10", "8/10"),
+            ("rocky-9.7", "9/7"),
+            ("rocky-10", "10/1"),
+            ("rocky-10.1", "10/1"),
+        ],
+    )
+    def test_rocky_repository_follows_os_version(self, os_input, directory):
+        assert (
+            self._run(os_input)["nexus_repository"]
+            == f"private-rocky-stable/{directory}/rpms/x86_64"
+        )
+
+    def test_platform_without_repository_skips_upload(self):
+        for os_input in ("fedora-43", "centos-7"):
+            assert self._run(os_input)["nexus_repository"] == ""
 
     def test_unknown_os(self):
         os.environ["INPUT_OS"] = "unknown-os"

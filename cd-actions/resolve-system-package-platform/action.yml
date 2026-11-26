@@ -1,5 +1,5 @@
 name: Resolve System Package Platform
-description: Resolve a system-package OS alias to container image and Nexus secret names
+description: Resolve a system-package OS alias to container image and Nexus upload metadata
 
 inputs:
   os:
@@ -16,15 +16,12 @@ outputs:
   nexus_token_secret_prod:
     description: 'Production Nexus upload token secret name'
     value: ${{ steps.resolve.outputs.nexus_token_secret_prod }}
-  nexus_url_secret_prod:
-    description: 'Production Nexus repository URL secret name'
-    value: ${{ steps.resolve.outputs.nexus_url_secret_prod }}
   nexus_token_secret_test:
     description: 'Test Nexus upload token secret name'
     value: ${{ steps.resolve.outputs.nexus_token_secret_test }}
-  nexus_url_secret_test:
-    description: 'Test Nexus repository URL secret name'
-    value: ${{ steps.resolve.outputs.nexus_url_secret_test }}
+  nexus_repository:
+    description: 'Nexus repository path'
+    value: ${{ steps.resolve.outputs.nexus_repository }}
 
 runs:
   using: composite

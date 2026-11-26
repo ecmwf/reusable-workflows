@@ -215,9 +215,8 @@ class TestGenerateMatrixBasic:
         assert item["cmake_options"] == "-DENABLE_TESTS=OFF"
         assert item["build_type"] == "Debug"
         assert item["nexus_token_secret_prod"] == "NEXUS_REPO_UPLOAD_TOKEN"
-        assert item["nexus_url_secret_prod"] == "NEXUS_REPO_URL_DEBIAN_12"
         assert item["nexus_token_secret_test"] == "NEXUS_TEST_REPO_UPLOAD_TOKEN"
-        assert item["nexus_url_secret_test"] == "NEXUS_TEST_REPO_URL_DEBIAN_12"
+        assert item["nexus_repository"] == "private-debian-bookworm-stable"
         assert item["runner"] == ["self-hosted", "platform-builder-docker-xl"]
 
 
@@ -233,10 +232,11 @@ class TestGenerateMatrixSystemPackage:
         ubuntu = _find_item(matrix, "ubuntu-2204-build")
         assert ubuntu["os"] == "ubuntu-22.04"
         assert ubuntu["nexus_token_secret_prod"] == ""
-        assert ubuntu["nexus_url_secret_prod"] == ""
+        assert ubuntu["nexus_repository"] == "private-ubuntu-jammy-stable"
 
         rocky = _find_item(matrix, "rocky-9-build")
         assert rocky["os"] == "rocky-9.7"
+        assert rocky["nexus_repository"] == "private-rocky-stable/9/7/rpms/x86_64"
 
     def test_unknown_os_fails(self):
         config = {

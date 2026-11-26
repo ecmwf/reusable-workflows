@@ -22,6 +22,7 @@ from cd_helpers import (  # noqa: E402
     dict_to_env_lines,
     list_to_comma_separated,
     list_to_line_separated,
+    system_package_nexus_repository,
 )
 from conda_platforms import (  # noqa: E402
     conda_platform_matrix_entries,
@@ -341,9 +342,8 @@ def _resolve_system_package_platform(
         "container": container,
         "os": os_id,
         "nexus_token_secret_prod": platform_defaults.get("nexus_token_secret_prod", ""),
-        "nexus_url_secret_prod": platform_defaults.get("nexus_url_secret_prod", ""),
         "nexus_token_secret_test": platform_defaults["nexus_token_secret_test"],
-        "nexus_url_secret_test": platform_defaults["nexus_url_secret_test"],
+        "nexus_repository": system_package_nexus_repository(platform_defaults),
     }
 
 

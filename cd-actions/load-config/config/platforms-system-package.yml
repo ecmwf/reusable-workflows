@@ -1,85 +1,78 @@
+# Upload URL: https://<nexus host>/repository/<nexus_repository>
+# {major} and {minor} come from os. No nexus_repository means no upload.
+
 ubuntu-22.04:
   os: ubuntu-22.04
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_UBUNTU_2204
+  nexus_repository: private-ubuntu-jammy-stable
 
 ubuntu-24.04:
   os: ubuntu-24.04
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_UBUNTU_2404
+  nexus_repository: private-ubuntu-noble-stable
 
 debian-11:
   os: debian-11
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_DEBIAN_11
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_DEBIAN_11
+  nexus_repository: private-debian-bullseye-stable
 
 debian-12:
   os: debian-12
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_DEBIAN_12
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_DEBIAN_12
+  nexus_repository: private-debian-bookworm-stable
 
 debian-13:
   os: debian-13
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_DEBIAN_13
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_DEBIAN_13
+  nexus_repository: private-debian-trixie-stable
 
 rocky-8:
   os: rocky-8.10
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_8
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_8
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 rocky-8.7:
   os: rocky-8.7
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_8
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_8
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 rocky-8.10:
   os: rocky-8.10
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_8
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_8
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 rocky-9:
   os: rocky-9.7
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_9
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_9
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 rocky-9.7:
   os: rocky-9.7
   nexus_token_secret_prod: NEXUS_REPO_UPLOAD_TOKEN
-  nexus_url_secret_prod: NEXUS_REPO_URL_ROCKY_9
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_9
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 rocky-10:
   os: rocky-10.1
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_10
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 rocky-10.1:
   os: rocky-10.1
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_ROCKY_10
+  nexus_repository: private-rocky-stable/{major}/{minor}/rpms/x86_64
 
 fedora-43:
   os: fedora-43
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_FEDORA_43
 
 centos-7:
   os: centos-7
   nexus_token_secret_test: NEXUS_TEST_REPO_UPLOAD_TOKEN
-  nexus_url_secret_test: NEXUS_TEST_REPO_URL_CENTOS_7
