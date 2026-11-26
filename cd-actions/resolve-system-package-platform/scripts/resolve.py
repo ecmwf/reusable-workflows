@@ -7,6 +7,11 @@ from pathlib import Path
 
 import yaml
 
+ACTION_PATH = Path(os.environ.get("GITHUB_ACTION_PATH", Path(__file__).parent.parent))
+sys.path.insert(0, str(ACTION_PATH.parent / "lib"))
+
+from cd_helpers import system_package_nexus_repository  # noqa: E402
+
 
 def main() -> None:
     action_path = Path(os.environ["GITHUB_ACTION_PATH"])
@@ -29,9 +34,8 @@ def main() -> None:
         f.write(f"os={os_id}\n")
         f.write(f"container={container}\n")
         f.write(f"nexus_token_secret_prod={platform.get('nexus_token_secret_prod', '')}\n")
-        f.write(f"nexus_url_secret_prod={platform.get('nexus_url_secret_prod', '')}\n")
         f.write(f"nexus_token_secret_test={platform['nexus_token_secret_test']}\n")
-        f.write(f"nexus_url_secret_test={platform['nexus_url_secret_test']}\n")
+        f.write(f"nexus_repository={system_package_nexus_repository(platform)}\n")
 
     print(f"Resolved OS '{os_input}' to '{os_id}'")
     print(f"Container: {container}")

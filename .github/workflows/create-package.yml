@@ -119,7 +119,7 @@ jobs:
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              upload_url: NEXUS_TEST_REPO_URL_DEBIAN_11
+              upload_repository: private-debian-bullseye-stable
             - name: gnu@debian-12
               labels: [self-hosted, platform-builder-debian-12]
               os: debian-12
@@ -133,7 +133,7 @@ jobs:
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON ${{ inputs.cpack_options_deb }} 
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              upload_url: NEXUS_TEST_REPO_URL_DEBIAN_12
+              upload_repository: private-debian-bookworm-stable
             - name: gnu@rocky-8.6
               labels: [self-hosted, platform-builder-rocky-8.6]
               os: rocky-8.6
@@ -146,7 +146,7 @@ jobs:
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 ${{ inputs.cpack_options_rpm }}
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              upload_url: NEXUS_TEST_REPO_URL_ROCKY_8
+              upload_repository: private-rocky-stable/8/6/rpms/x86_64
             - name: gnu@rocky-9.5
               labels: [self-hosted, platform-builder-rocky-9.5]
               os: rocky-9.5
@@ -159,7 +159,7 @@ jobs:
                 -D CPACK_PACKAGING_INSTALL_PREFIX=/opt/ecmwf 
                 ${{ inputs.cpack_options_rpm }}
               upload_token: NEXUS_TEST_REPO_UPLOAD_TOKEN
-              upload_url: NEXUS_TEST_REPO_URL_ROCKY_9
+              upload_repository: private-rocky-stable/9/5/rpms/x86_64
           EOS
           )
           RESTRICT_MATRIX_JOBS=$(cat << 'EOS'
@@ -255,6 +255,9 @@ jobs:
           retention-days: 3
 
       - name: Upload
+        env:
+          NEXUS_BASE: ${{ vars.NEXUS_TEST_REPO_URL || 'nexus-test.ecmwf.int' }}
+          NEXUS_REPOSITORY: ${{ matrix.upload_repository }}
         run: |
           if [ -z "${{ steps.build.outputs.package_path }}" ] || [ ! -f ${{ steps.build.outputs.package_path }} ]; then
             echo "::error::Built package not found!"
@@ -268,29 +271,43 @@ jobs:
           case "$os" in
             "debian-11")
               token=${{ secrets.token_debian_11 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_debian_11 || secrets[matrix.upload_url] }}
+              url=${{ secrets.url_debian_11 }}
             ;;
 
             "debian-12")
               token=${{ secrets.token_debian_12 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_debian_12 || secrets[matrix.upload_url] }}
+              url=${{ secrets.url_debian_12 }}
             ;;
 
             "rocky-8.6")
               token=${{ secrets.token_rocky_8 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_rocky_8 || secrets[matrix.upload_url] }}
+              url=${{ secrets.url_rocky_8 }}
             ;;
 
             "rocky-9.5")
               token=${{ secrets.token_rocky_9 || secrets[matrix.upload_token] }}
-              url=${{ secrets.url_rocky_9 || secrets[matrix.upload_url] }}
+              url=${{ secrets.url_rocky_9 }}
             ;;
 
             *)
               token=${{ secrets[matrix.upload_token] }}
-              url=${{ secrets[matrix.upload_url] }}
+              url=""
             ;;
           esac
+
+          if [ -z "$url" ]; then
+            base="$NEXUS_BASE"
+            while [ "${base%/}" != "$base" ]; do base="${base%/}"; done
+            case "$base" in
+              *://*) ;;
+              *) base="https://$base" ;;
+            esac
+            case "${base#*://}" in
+              */*) ;;
+              *) base="$base/repository" ;;
+            esac
+            url="$base/$NEXUS_REPOSITORY"
+          fi
 
           if [ -z "$token" ]; then
             echo "::warning::No upload token provided, skipping upload for $os"

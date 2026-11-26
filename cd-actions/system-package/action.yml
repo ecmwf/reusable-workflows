@@ -157,8 +157,11 @@ inputs:
   nexus_token:
     description: 'Nexus credential (user:token)'
     required: false
-  nexus_url:
-    description: 'Nexus upload URL'
+  nexus_base:
+    description: 'Nexus host (e.g., nexus.ecmwf.int)'
+    required: false
+  nexus_repository:
+    description: 'Nexus repository path (e.g., private-debian-bookworm-stable)'
     required: false
 
 outputs:
@@ -511,12 +514,29 @@ runs:
     - name: Upload to Nexus
       if: ${{ inputs.dry_run != 'true' }}
       shell: bash
+      env:
+        NEXUS_BASE: ${{ inputs.nexus_base }}
+        NEXUS_REPOSITORY: ${{ inputs.nexus_repository }}
       run: |
         token="${{ inputs.nexus_token }}"
-        url="${{ inputs.nexus_url }}"
+        url=""
+
+        if [ -n "$NEXUS_BASE" ] && [ -n "$NEXUS_REPOSITORY" ]; then
+          base="$NEXUS_BASE"
+          while [ "${base%/}" != "$base" ]; do base="${base%/}"; done
+          case "$base" in
+            *://*) ;;
+            *) base="https://$base" ;;
+          esac
+          case "${base#*://}" in
+            */*) ;;
+            *) base="$base/repository" ;;
+          esac
+          url="$base/$NEXUS_REPOSITORY"
+        fi
 
         if [ -z "$token" ] || [ -z "$url" ]; then
-          echo "::warning::No Nexus token or URL provided, skipping upload"
+          echo "::warning::No Nexus token or repository configured, skipping upload"
           exit 0
         fi
 

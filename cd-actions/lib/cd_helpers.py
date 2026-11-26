@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -69,3 +70,16 @@ def dict_to_cmake_args(value: Any, name: str) -> str:
         return value
     else:
         raise ValueError(f"{name} must be a dict, got {type(value)}")
+
+
+def system_package_nexus_repository(platform: dict[str, Any]) -> str:
+    """Return the platform's Nexus repository path, with {major}/{minor} taken from its os."""
+    template = platform.get("nexus_repository", "")
+    if "{" not in template:
+        return template
+
+    os_id = platform["os"]
+    match = re.fullmatch(r".*-(\d+)\.(\d+)", os_id)
+    if not match:
+        raise ValueError(f"os '{os_id}' has no <major>.<minor> for '{template}'")
+    return template.format(major=match.group(1), minor=match.group(2))

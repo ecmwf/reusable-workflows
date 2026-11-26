@@ -18,6 +18,7 @@ from cd_helpers import (  # noqa: E402
     list_to_comma_separated,
     list_to_line_separated,
     load_yaml,
+    system_package_nexus_repository,
 )
 
 
@@ -113,3 +114,24 @@ class TestLoadYaml:
         path = tmp_path / "test.yml"
         path.write_text("key: value\nlist:\n  - one\n  - two\n")
         assert load_yaml(path) == {"key": "value", "list": ["one", "two"]}
+
+
+class TestSystemPackageNexusRepository:
+    def test_fixed_path_is_returned_as_is(self):
+        platform = {"os": "debian-12", "nexus_repository": "private-debian-bookworm-stable"}
+        assert (
+            system_package_nexus_repository(platform)
+            == "private-debian-bookworm-stable"
+        )
+
+    def test_missing_repository_is_empty(self):
+        assert system_package_nexus_repository({"os": "fedora-43"}) == ""
+
+    def test_version_placeholders_come_from_os(self):
+        platform = {"os": "rocky-8.10", "nexus_repository": "repo/{major}/{minor}/rpms"}
+        assert system_package_nexus_repository(platform) == "repo/8/10/rpms"
+
+    def test_placeholders_without_minor_version_fail(self):
+        platform = {"os": "fedora-43", "nexus_repository": "repo/{major}/{minor}"}
+        with pytest.raises(ValueError, match="major"):
+            system_package_nexus_repository(platform)

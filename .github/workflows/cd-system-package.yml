@@ -224,8 +224,8 @@ on:
         required: false
         type: string
         default: ''
-      nexus_url:
-        description: 'Nexus repository URL (defaults to platform-specific secret)'
+      nexus_base:
+        description: 'Nexus host (defaults to the NEXUS_REPO_URL / NEXUS_TEST_REPO_URL variable)'
         required: false
         type: string
         default: ''
@@ -238,9 +238,8 @@ jobs:
       os: ${{ steps.resolve.outputs.os }}
       container: ${{ steps.resolve.outputs.container }}
       nexus_token_secret_prod: ${{ steps.resolve.outputs.nexus_token_secret_prod }}
-      nexus_url_secret_prod: ${{ steps.resolve.outputs.nexus_url_secret_prod }}
       nexus_token_secret_test: ${{ steps.resolve.outputs.nexus_token_secret_test }}
-      nexus_url_secret_test: ${{ steps.resolve.outputs.nexus_url_secret_test }}
+      nexus_repository: ${{ steps.resolve.outputs.nexus_repository }}
     steps:
       - name: Resolve system package platform
         id: resolve
@@ -320,4 +319,5 @@ jobs:
           recreate_cache: ${{ inputs.recreate_cache }}
           gh_pat: ${{ inputs.gh_pat || secrets.GH_REPO_READ_TOKEN }}
           nexus_token: ${{ inputs.nexus_token || ((steps.detect-release-type.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_token_secret_prod != '') && secrets[needs.setup.outputs.nexus_token_secret_prod] || secrets[needs.setup.outputs.nexus_token_secret_test]) }}
-          nexus_url: ${{ inputs.nexus_url || ((steps.detect-release-type.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_url_secret_prod != '') && secrets[needs.setup.outputs.nexus_url_secret_prod] || secrets[needs.setup.outputs.nexus_url_secret_test]) }}
+          nexus_base: ${{ inputs.nexus_base || ((steps.detect-release-type.outputs.is_prerelease == 'false' && needs.setup.outputs.nexus_token_secret_prod != '' && secrets[needs.setup.outputs.nexus_token_secret_prod] != '') && (vars.NEXUS_REPO_URL || 'nexus.ecmwf.int') || (vars.NEXUS_TEST_REPO_URL || 'nexus-test.ecmwf.int')) }}
+          nexus_repository: ${{ needs.setup.outputs.nexus_repository }}
